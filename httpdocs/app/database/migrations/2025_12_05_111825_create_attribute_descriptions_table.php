@@ -11,24 +11,24 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('product_shops', function (Blueprint $table) {
+        Schema::create('attribute_descriptions', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('product_id')
+            $table->foreignId('attribute_id')
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            $table->foreignId('shop_id')
+            $table->foreignId('shop_language_id')
                 ->constrained()
                 ->cascadeOnUpdate()
-                ->cascadeOnDelete();
+                ->nullOnDelete();
 
-            $table->unsignedInteger('external_product_id')->nullable()->index();
+            $table->string('name')->nullable();
 
             $table->timestamps();
 
-            $table->unique(['product_id', 'shop_id'], 'product_id_shop_id_unique');
+            $table->unique(['attribute_id', 'shop_language_id']);
         });
     }
 
@@ -37,6 +37,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product_shops');
+        Schema::dropIfExists('attribute_descriptions');
     }
 };

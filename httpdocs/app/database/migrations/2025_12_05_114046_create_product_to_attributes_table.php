@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('product_descriptions', function (Blueprint $table) {
+        Schema::create('product_to_attributes', function (Blueprint $table) {
             $table->id();
 
             $table->foreignId('product_id')
@@ -19,20 +19,23 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            $table->foreignId('shop_language_id')
+            $table->foreignId('attribute_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->string('name')->nullable();
-            $table->text('description')->nullable();
-            $table->string('meta_title')->nullable();
-            $table->string('meta_description')->nullable();
-            $table->string('meta_keywords')->nullable();
+            $table->foreignId('shop_language_id')
+                ->nullable()
+                ->constrained()
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
+            $table->string('text', 3000)->nullable();
 
             $table->timestamps();
 
-            $table->unique(['product_id', 'shop_language_id']);
+            $table->unique(['product_id', 'attribute_id', 'shop_language_id']);
         });
     }
 
@@ -41,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product_descriptions');
+        Schema::dropIfExists('product_to_attributes');
     }
 };

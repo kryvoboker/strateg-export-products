@@ -17,18 +17,18 @@ return new class extends Migration
             $table->string('marked_to_shop')
                 ->nullable()
                 ->index()
-                ->comment('Indicates the shop where the product is marked can be exporting to. This field only for usability!');
+                ->comment('Indicates the shop where the product is marked was exported to. This field only for usability!');
 
             $table->string('model')->index()->nullable();
             $table->string('sku')->index()->nullable();
             $table->string('ean')->index()->nullable();
             $table->integer('quantity')->nullable(false)->default(0);
             $table->integer('minimum')->nullable(false)->default(1);
-            $table->string('image', 1000)->nullable();
+            $table->string('image', 3000)->nullable();
             $table->decimal('price', 15, 4)->default(0);
             $table->boolean('is_active')->default(false);
-            $table->dateTime('date_available')->nullable()->useCurrent();
-            $table->dateTime('date_added')->nullable()->useCurrent();
+            $table->timestamp('date_available')->nullable()->useCurrent();
+            $table->timestamp('date_added')->nullable()->useCurrent();
 
             $table->timestamps();
         });

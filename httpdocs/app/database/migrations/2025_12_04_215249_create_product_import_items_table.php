@@ -36,7 +36,7 @@ return new class extends Migration
                 ->nullable()
                 ->comment('Error message if the item processing failed');
 
-            $table->dateTime('processed_at')->nullable();
+            $table->timestamp('processed_at')->nullable();
 
             $table->timestamps();
 

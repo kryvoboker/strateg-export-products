@@ -47,8 +47,8 @@ return new class extends Migration
 
             $table->jsonb('options')->nullable();
 
-            $table->dateTime('started_at')->nullable();
-            $table->dateTime('finished_at')->nullable();
+            $table->timestamp('started_at')->nullable();
+            $table->timestamp('finished_at')->nullable();
 
             $table->timestamps();
         });

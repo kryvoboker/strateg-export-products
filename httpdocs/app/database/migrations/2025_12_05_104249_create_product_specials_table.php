@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('product_discounts', function (Blueprint $table) {
+        Schema::create('product_specials', function (Blueprint $table) {
             $table->id();
 
             $table->foreignId('product_id')
@@ -21,10 +21,6 @@ return new class extends Migration
 
             $table->unsignedInteger('user_group_id')
                 ->nullable()
-                ->default(1);
-
-            $table->unsignedInteger('quantity')
-                ->nullable(false)
                 ->default(1);
 
             $table->decimal('price', 15, 4)
@@ -49,6 +45,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product_discounts');
+        Schema::dropIfExists('product_specials');
     }
 };
