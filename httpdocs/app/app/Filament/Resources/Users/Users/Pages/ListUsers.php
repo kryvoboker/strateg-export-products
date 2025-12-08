@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Users\Users\Pages;
 
 use App\Filament\Resources\Users\Users\UserResource;
@@ -15,5 +17,25 @@ class ListUsers extends ListRecords
         return [
             CreateAction::make(),
         ];
+    }
+
+    /**
+     * Get page title
+     *
+     * @return string
+     */
+    public function getTitle(): string
+    {
+        return __('admin/users/users.navigation_label');
+    }
+
+    /**
+     * Get page heading
+     *
+     * @return string|null
+     */
+    public function getHeading(): ?string
+    {
+        return __('admin/users/users.navigation_label');
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\Users\Users;
 
 use App\Filament\Resources\Users\Users\Pages\CreateUser;
@@ -16,11 +18,9 @@ use Filament\Tables\Table;
 
 class UserResource extends Resource
 {
-    protected static ?string $model = User::class;
-
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    protected static ?string $recordTitleAttribute = 'email';
+    protected static ?string                $model                = User::class;
+    protected static string|BackedEnum|null $navigationIcon       = Heroicon::User;
+    protected static ?string                $recordTitleAttribute = 'full_name';
 
     public static function form(Schema $schema): Schema
     {
@@ -42,9 +42,49 @@ class UserResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListUsers::route('/'),
+            'index'  => ListUsers::route('/'),
             'create' => CreateUser::route('/create'),
-            'edit' => EditUser::route('/{record}/edit'),
+            'edit'   => EditUser::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Signature in the navigation menu (left panel)
+     *
+     * @return string
+     */
+    public static function getNavigationLabel(): string
+    {
+        return __('admin/users/users.navigation_label');
+    }
+
+    /**
+     * A single model name (e.g. in headings, "Create X" button)
+     *
+     * @return string
+     */
+    public static function getModelLabel(): string
+    {
+        return __('admin/users/users.labels.model');
+    }
+
+    /**
+     * Plural model name (e.g. in lists, section headings)
+     *
+     * @return string
+     */
+    public static function getPluralModelLabel(): string
+    {
+        return __('admin/users/users.labels.plural_model');
+    }
+
+    /**
+     * For the name of the parent menu item for the menu group
+     *
+     * @return string|null
+     */
+    public static function getNavigationGroup(): ?string
+    {
+        return __('admin/default.menu.item_users');
     }
 }
