@@ -15,7 +15,7 @@ use Illuminate\Validation\Rule;
 
 class CreateShopLanguage extends CreateRecord
 {
-    protected static string           $resource = ShopLanguageResource::class;
+    protected static string        $resource = ShopLanguageResource::class;
     public null|Model|ShopLanguage $record   = null;
 
     /**
@@ -44,7 +44,7 @@ class CreateShopLanguage extends CreateRecord
     private function validateShopLanguageBeforeCreate(array $data): void
     {
         $validator = Validator::make($data, [
-            'code'    => [
+            'code' => [
                 Rule::unique('shop_languages', 'code')
                     ->where(function ($query) use ($data) {
                         return $query->where('shop_id', $data['shop_id']);
