@@ -64,4 +64,3 @@ class ProductImportBatchResource extends Resource
         return __('admin/default.menu.item_catalog');
     }
 }
-

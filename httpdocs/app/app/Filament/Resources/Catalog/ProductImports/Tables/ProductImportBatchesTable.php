@@ -70,11 +70,6 @@ class ProductImportBatchesTable
                         'partial_failed' => __('admin/product_imports/batches.statuses.partial_failed'),
                         'canceled'       => __('admin/product_imports/batches.statuses.canceled'),
                     ]),
-            ])
-            ->actions([])
-            ->headerActions([
-                CreateAction::make()
-                    ->label(__('admin/product_imports/batches.actions.create')),
             ]);
     }
 }

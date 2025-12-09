@@ -7,14 +7,17 @@ namespace App\Filament\Resources\Catalog\ProductImports\Pages;
 use App\Enums\ProductImportBatchesSourceTypeEnum;
 use App\Enums\ProductImportBatchesStatusEnum;
 use App\Filament\Resources\Catalog\ProductImports\ProductImportBatchResource;
-use App\Jobs\ProcessProductImportBatch;
+use App\Jobs\ProcessProductImportBatchJob;
+use App\Models\Products\Imports\ProductImportBatch;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 
 class CreateProductImportBatch extends CreateRecord
 {
-    protected static string $resource = ProductImportBatchResource::class;
+    protected static string              $resource = ProductImportBatchResource::class;
+    public null|Model|ProductImportBatch $record   = null;
 
     public function getTitle(): string
     {
@@ -23,15 +26,15 @@ class CreateProductImportBatch extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $userId = Auth::id();
+        $user_id = Auth::id();
 
-        $sourceType = ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value;
-        $sourceName = null;
-        $sourcePath = null;
+        $source_type = ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value;
+        $source_name = null;
+        $source_path = null;
         $options    = [];
 
         // Define sheet keys to map inputs
-        $sheetDefs = [
+        $sheet_defs = [
             'products',
             'product_images',
             'product_descriptions',
@@ -46,32 +49,34 @@ class CreateProductImportBatch extends CreateRecord
         ];
 
         if (!empty($data['excel_file'])) {
-            $sourceType = ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value;
-            $sourcePath = $data['excel_file'];
-            $sourceName = basename((string)$sourcePath);
+            $source_type = ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value;
+            $source_path = $data['excel_file'];
+            $source_name = basename((string)$source_path);
 
-            $excelSheets = [];
-            foreach ($sheetDefs as $key) {
-                $excelSheets[$key] = [
+            $excel_sheets = [];
+
+            foreach ($sheet_defs as $key) {
+                $excel_sheets[$key] = [
                     'sheet_name' => Arr::get($data, "excel_{$key}_sheet"),
                     'range'      => Arr::get($data, "excel_{$key}_range"),
-                    'header_row' => (int) (Arr::get($data, "excel_{$key}_header_row") ?? 1),
+                    'header_row' => (int)(Arr::get($data, "excel_{$key}_header_row") ?? 1),
                 ];
             }
             $options['excel'] = [
-                'sheets' => $excelSheets,
+                'sheets' => $excel_sheets,
             ];
-        } elseif (!empty($data['sheets_url'])) {
-            $sourceType = ProductImportBatchesSourceTypeEnum::API->value;
-            $sourcePath = $data['sheets_url'];
-            $sourceName = 'Google Sheets';
+        } else if (!empty($data['sheets_url'])) {
+            $source_type = ProductImportBatchesSourceTypeEnum::API->value;
+            $source_path = $data['sheets_url'];
+            $source_name = 'Google Sheets';
 
             $gsheets = [];
-            foreach ($sheetDefs as $key) {
+
+            foreach ($sheet_defs as $key) {
                 $gsheets[$key] = [
                     'sheet_name' => Arr::get($data, "sheets_{$key}_sheet"),
                     'range'      => Arr::get($data, "sheets_{$key}_range"),
-                    'header_row' => (int) (Arr::get($data, "sheets_{$key}_header_row") ?? 1),
+                    'header_row' => (int)(Arr::get($data, "sheets_{$key}_header_row") ?? 1),
                 ];
             }
             $options['sheets'] = [
@@ -79,17 +84,17 @@ class CreateProductImportBatch extends CreateRecord
                 'sheets' => $gsheets,
             ];
         } else {
-            $sourceType = ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value;
-            $sourceName = 'Admin Panel';
+            $source_type       = ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value;
+            $source_name       = 'Admin Panel';
             $options['admin'] = [
                 'product'      => [
                     'model'     => Arr::get($data, 'admin_model'),
                     'sku'       => Arr::get($data, 'admin_sku'),
                     'ean'       => Arr::get($data, 'admin_ean'),
-                    'quantity'  => (int) (Arr::get($data, 'admin_quantity') ?? 0),
-                    'minimum'   => (int) (Arr::get($data, 'admin_minimum') ?? 1),
-                    'price'     => (float) (Arr::get($data, 'admin_price') ?? 0),
-                    'is_active' => (bool) (Arr::get($data, 'admin_is_active') ?? false),
+                    'quantity'  => (int)(Arr::get($data, 'admin_quantity') ?? 0),
+                    'minimum'   => (int)(Arr::get($data, 'admin_minimum') ?? 1),
+                    'price'     => (float)(Arr::get($data, 'admin_price') ?? 0),
+                    'is_active' => (bool)(Arr::get($data, 'admin_is_active') ?? false),
                     'note'      => Arr::get($data, 'admin_note'),
                 ],
                 'descriptions' => Arr::get($data, 'admin_descriptions', []),
@@ -103,10 +108,10 @@ class CreateProductImportBatch extends CreateRecord
         }
 
         return [
-            'user_id'         => $userId,
-            'source_type'     => $sourceType,
-            'source_name'     => $sourceName,
-            'source_path'     => $sourcePath,
+            'user_id'         => $user_id,
+            'source_type'     => $source_type,
+            'source_name'     => $source_name,
+            'source_path'     => $source_path,
             'status'          => ProductImportBatchesStatusEnum::NEW->value,
             'total_items'     => 0,
             'processed_items' => 0,
@@ -119,12 +124,13 @@ class CreateProductImportBatch extends CreateRecord
     {
         // Если источник — админка, выполняем синхронно, без постановки в очередь
         if ($this->record->source_type === ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value) {
-            (new ProcessProductImportBatch($this->record->id))->handle();
+            new ProcessProductImportBatchJob($this->record->id)->handle();
+
             return;
         }
 
         // Иначе добавляем задачу в очередь
-        ProcessProductImportBatch::dispatch($this->record->id);
+        ProcessProductImportBatchJob::dispatch($this->record->id);
     }
 
     protected function getCreatedNotificationTitle(): ?string

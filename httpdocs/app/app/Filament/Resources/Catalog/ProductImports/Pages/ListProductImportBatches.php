@@ -29,4 +29,3 @@ class ListProductImportBatches extends ListRecords
         return __('admin/product_imports/batches.navigation_label');
     }
 }
-

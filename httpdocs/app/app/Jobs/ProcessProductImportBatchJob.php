@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Psr\SimpleCache\CacheInterface as Psr16Cache;
 
-class ProcessProductImportBatch implements ShouldQueue
+class ProcessProductImportBatchJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

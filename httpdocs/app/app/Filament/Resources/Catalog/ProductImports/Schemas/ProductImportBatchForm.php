@@ -19,7 +19,7 @@ class ProductImportBatchForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $sheetDefs = [
+        $sheet_defs = [
             'products'               => 'Products',
             'product_images'         => 'Product Images',
             'product_descriptions'   => 'Product Descriptions',
@@ -33,9 +33,10 @@ class ProductImportBatchForm
             'category_descriptions'  => 'Category Descriptions',
         ];
 
-        $excelSheetTabs = [];
-        foreach ($sheetDefs as $key => $title) {
-            $excelSheetTabs[] = Tab::make($title)
+        $excel_sheet_tabs = [];
+
+        foreach ($sheet_defs as $key => $title) {
+            $excel_sheet_tabs[] = Tab::make($title)
                 ->schema([
                     TextInput::make("excel_{$key}_sheet")
                         ->label(__('admin/product_imports/batches.labels.sheet_name'))
@@ -51,9 +52,10 @@ class ProductImportBatchForm
                 ]);
         }
 
-        $gsheetTabs = [];
-        foreach ($sheetDefs as $key => $title) {
-            $gsheetTabs[] = Tab::make($title)
+        $gsheet_tabs = [];
+
+        foreach ($sheet_defs as $key => $title) {
+            $gsheet_tabs[] = Tab::make($title)
                 ->schema([
                     TextInput::make("sheets_{$key}_sheet")
                         ->label(__('admin/product_imports/batches.labels.sheet_name'))
@@ -89,7 +91,7 @@ class ProductImportBatchForm
                                     ->required(),
                                 Section::make(__('admin/product_imports/batches.sections.sheets_coordinates'))
                                     ->schema([
-                                        Tabs::make('excel_sheets_tabs')->tabs($excelSheetTabs)->contained(false),
+                                        Tabs::make('excel_sheets_tabs')->tabs($excel_sheet_tabs)->contained(false),
                                     ]),
                             ]),
 
@@ -102,7 +104,7 @@ class ProductImportBatchForm
                                     ->url(),
                                 Section::make(__('admin/product_imports/batches.sections.sheets_coordinates'))
                                     ->schema([
-                                        Tabs::make('gsheets_tabs')->tabs($gsheetTabs)->contained(false),
+                                        Tabs::make('gsheets_tabs')->tabs($gsheet_tabs)->contained(false),
                                     ]),
                             ]),
 
@@ -201,4 +203,3 @@ class ProductImportBatchForm
             ]);
     }
 }
-
