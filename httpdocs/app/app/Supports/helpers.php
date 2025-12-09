@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use Longman\TelegramBot\Entities\Document;
+use Longman\TelegramBot\Entities\Message;
+use Longman\TelegramBot\Entities\PhotoSize;
+use Longman\TelegramBot\Entities\Update;
+
 if (!function_exists('clear_telephone')) {
     /**
      * @param string|null $telephone
@@ -59,5 +64,65 @@ if (!function_exists('trim_strs_in_arr')) {
 
             return $item;
         }, $arr);
+    }
+}
+
+if (!function_exists('get_telegram_photo')) {
+    /**
+     * @param Update $update
+     *
+     * @return array<PhotoSize>|null
+     */
+    function get_telegram_photo(Update $update): ?array
+    {
+        return ($update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto());
+    }
+}
+
+if (!function_exists('get_telegram_message')) {
+    /**
+     * @param Update $update
+     *
+     * @return Message
+     */
+    function get_telegram_message(Update $update): Message
+    {
+        return ($update->getMessage() ?? $update->getEditedMessage());
+    }
+}
+
+if (!function_exists('get_telegram_doc')) {
+    /**
+     * @param Update $update
+     *
+     * @return Document|null
+     */
+    function get_telegram_doc(Update $update): ?Document
+    {
+        return ($update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument());
+    }
+}
+
+if (!function_exists('is_telegram_has_photo')) {
+    /**
+     * @param Update $update
+     *
+     * @return bool
+     */
+    function is_telegram_has_photo(Update $update): bool
+    {
+        return ($update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto()) !== null;
+    }
+}
+
+if (!function_exists('is_telegram_has_doc')) {
+    /**
+     * @param Update $update
+     *
+     * @return bool
+     */
+    function is_telegram_has_doc(Update $update): bool
+    {
+        return ($update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument()) !== null;
     }
 }

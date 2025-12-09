@@ -26,10 +26,10 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->json('raw_payload')->nullable();
+            $table->jsonb('raw_payload')->nullable();
             $table->string('status', 100)
                 ->nullable()
-                ->default(ProductImportItemsStatusEnum::SAVED->value)
+                ->default(ProductImportItemsStatusEnum::NEW->value)
                 ->index();
 
             $table->text('error_message')

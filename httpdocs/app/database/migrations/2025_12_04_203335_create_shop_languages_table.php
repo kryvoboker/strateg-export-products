@@ -17,13 +17,15 @@ return new class extends Migration
             $table->foreignId('shop_id')
                 ->constrained()
                 ->cascadeOnUpdate()
-                ->cascadeOnUpdate();
+                ->cascadeOnDelete();
 
-            $table->string('code', 10)->unique()->nullable(false);
+            $table->string('code', 10)->nullable(false);
             $table->string('name', 100)->nullable(false);
             $table->boolean('is_active')->default(true);
 
             $table->timestamps();
+
+            $table->unique(['shop_id', 'code']);
         });
     }
 

@@ -16,7 +16,7 @@ return new class extends Migration
 
             $table->string('name');
             $table->string('type', 50)->nullable(false);
-            $table->string('base_url')->nullable(false);
+            $table->string('base_url', 2000)->nullable(false);
             $table->boolean('is_active')->default(true);
             $table->json('options')->nullable();
 

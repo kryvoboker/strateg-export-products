@@ -6,7 +6,7 @@ namespace App\Enums;
 
 enum ProductImportItemsStatusEnum:string
 {
-    case SAVED      = 'saved';      // item data is saved but not yet processed
+    case NEW        = 'new';      // item data is saved but not yet processed
     case PROCESSING = 'processing'; // item is currently being processed
     case FAILED     = 'failed';
     case NORMALIZED = 'normalized'; // item data has been normalized

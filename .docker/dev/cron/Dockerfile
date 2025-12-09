@@ -13,7 +13,7 @@ RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/v0.2.3
 COPY --from=composer:2.8.8 /usr/bin/composer /usr/bin/composer
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions gd zip pdo pdo_pgsql pgsql sockets intl bcmath
+RUN install-php-extensions gd zip pdo pdo_pgsql pgsql sockets intl bcmath apcu
 
 # Import UID and GID
 ARG UID=1000
