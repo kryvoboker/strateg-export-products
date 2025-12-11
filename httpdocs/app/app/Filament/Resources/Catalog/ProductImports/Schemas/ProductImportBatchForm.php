@@ -14,63 +14,12 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Validation\Rules\File;
 
 class ProductImportBatchForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $sheet_defs = [
-            'products'               => 'Products',
-            'product_images'         => 'Product Images',
-            'product_descriptions'   => 'Product Descriptions',
-            'product_discounts'      => 'Product Discounts',
-            'product_specials'       => 'Product Specials',
-            'seo_urls'               => 'SEO URLs',
-            'attributes'             => 'Attributes',
-            'attribute_descriptions' => 'Attribute Descriptions',
-            'product_to_attributes'  => 'Product to Attributes',
-            'categories'             => 'Categories',
-            'category_descriptions'  => 'Category Descriptions',
-        ];
-
-        $excel_sheet_tabs = [];
-
-        foreach ($sheet_defs as $key => $title) {
-            $excel_sheet_tabs[] = Tab::make($title)
-                ->schema([
-                    TextInput::make("excel_{$key}_sheet")
-                        ->label(__('admin/product_imports/batches.labels.sheet_name'))
-                        ->default($title),
-                    TextInput::make("excel_{$key}_range")
-                        ->label(__('admin/product_imports/batches.labels.sheet_range'))
-                        ->placeholder('A1:H1000'),
-                    TextInput::make("excel_{$key}_header_row")
-                        ->numeric()
-                        ->minValue(1)
-                        ->label(__('admin/product_imports/batches.labels.header_row'))
-                        ->default(1),
-                ]);
-        }
-
-        $gsheet_tabs = [];
-
-        foreach ($sheet_defs as $key => $title) {
-            $gsheet_tabs[] = Tab::make($title)
-                ->schema([
-                    TextInput::make("sheets_{$key}_sheet")
-                        ->label(__('admin/product_imports/batches.labels.sheet_name'))
-                        ->default($title),
-                    TextInput::make("sheets_{$key}_range")
-                        ->label(__('admin/product_imports/batches.labels.sheet_range'))
-                        ->placeholder('A1:H1000'),
-                    TextInput::make("sheets_{$key}_header_row")
-                        ->numeric()
-                        ->minValue(1)
-                        ->label(__('admin/product_imports/batches.labels.header_row'))
-                        ->default(1),
-                ]);
-        }
-
         return $schema
             ->components([
                 Tabs::make(__('admin/product_imports/batches.navigation_label'))
@@ -85,14 +34,14 @@ class ProductImportBatchForm
                                         'application/vnd.ms-excel',
                                         '.xlsx', '.xls',
                                     ])
-                                    ->disk('local')
-                                    ->directory('imports/products')
-                                    ->preserveFilenames()
-                                    ->required(),
-                                Section::make(__('admin/product_imports/batches.sections.sheets_coordinates'))
-                                    ->schema([
-                                        Tabs::make('excel_sheets_tabs')->tabs($excel_sheet_tabs)->contained(false),
-                                    ]),
+                                    ->rules([
+                                        'nullable',
+                                        File::types(['xlsx', 'xls'])
+                                            ->max((int)config('app.sheets.upload.max_size_kb')),
+                                    ])
+                                    ->directory(config('app.sheets.sheet_path'))
+                                    ->maxSize((int)config('app.sheets.upload.max_size_kb'))
+                                    ->preserveFilenames() // not generate unique names,
                             ]),
 
                         Tab::make('sheets')
@@ -101,11 +50,8 @@ class ProductImportBatchForm
                                 TextInput::make('sheets_url')
                                     ->label(__('admin/product_imports/batches.labels.google_sheets_url'))
                                     ->placeholder('https://docs.google.com/spreadsheets/d/...')
-                                    ->url(),
-                                Section::make(__('admin/product_imports/batches.sections.sheets_coordinates'))
-                                    ->schema([
-                                        Tabs::make('gsheets_tabs')->tabs($gsheet_tabs)->contained(false),
-                                    ]),
+                                    ->url()
+                                    ->rules(['nullable', 'url', 'max:2000']),
                             ]),
 
                         Tab::make('admin')
@@ -199,7 +145,9 @@ class ProductImportBatchForm
                                             ])->columns(2),
                                     ]),
                             ]),
-                    ])->contained(false),
+                    ])
+                    ->columnSpanFull()
+                    ->contained(false),
             ]);
     }
 }

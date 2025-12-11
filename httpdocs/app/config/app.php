@@ -135,11 +135,6 @@ return [
         'telephone' => '/(^((\+?\d{2,}\s?)|(.*))\(?\d{3,}\)?\s?\d{3,}-?\d{2,}-?\d{2,}$)/',
         'password'  => '/^(?=.*\d)(?=.*[A-Z])(?=.*[a-z])(?=.*[^\w\s:])(\S)+$/',
     ],
-    'files'                     => [
-        'max_size_kb' => [
-            'max_upload_product_image' => (int)env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB
-        ],
-    ],
     'images'                    => [
         'product' => [
             'upload'                   => [
@@ -171,6 +166,25 @@ return [
             ],
             'image_path'               => env('AVATARS_PATH') . '/' . date('Y/m'),
         ]
+    ],
+    'sheets'                    => [
+        'upload'     => [
+            'max_size_kb' => (int)env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB,
+        ],
+        'sheet_path' => env('SHEETS_PATH') . '/' . date('Y/m'),
+        'defs'       => [
+            'products'               => 'Products',
+            'product_images'         => 'Product Images',
+            'product_descriptions'   => 'Product Descriptions',
+            'product_discounts'      => 'Product Discounts',
+            'product_specials'       => 'Product Specials',
+            'seo_urls'               => 'SEO URLs',
+            'attributes'             => 'Attributes',
+            'attribute_descriptions' => 'Attribute Descriptions',
+            'product_to_attributes'  => 'Product to Attributes',
+            'categories'             => 'Categories',
+            'category_descriptions'  => 'Category Descriptions',
+        ],
     ],
 
 ];

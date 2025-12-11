@@ -9,14 +9,9 @@ return [
         'model'            => 'Пакет імпорту',
         'plural_model'     => 'Пакети імпорту',
         'excel_file'       => 'EXCEL файл',
-        'excel_range'      => 'Діапазон (напр. A1:H1000)',
-        'header_row'       => 'Рядок заголовків',
         'google_sheets_url'=> 'Посилання на Google Sheets',
-        'sheet_name'       => 'Назва листа',
-        'sheet_range'      => 'Діапазон листа',
         'quantity'         => 'Кількість',
         'price'            => 'Ціна',
-        'note'             => 'Примітка',
     ],
 
     // Tabs/Sections/Actions
