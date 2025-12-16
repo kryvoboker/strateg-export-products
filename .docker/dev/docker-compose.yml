@@ -19,9 +19,13 @@ services:
       - ../../httpdocs/storage:/var/www/storage
       - ../../.docker/dev/php/php.ini:/usr/local/etc/php/php.ini:ro
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:true       # Disables setuid/setgid
+      - apparmor=docker-default      # Limits syscalls and file system
     cap_drop:
-      - ALL
+      - ALL # Removes Linux capabilities
+    tmpfs:
+      - /tmp # PHP temporary files (file_put_contents, tmpfile())
+      - /var/run # PHP-FPM sockets and pid files
     depends_on:
       - dev-strateg-export-products-postgresql
     networks:
@@ -49,9 +53,10 @@ services:
       - ../../httpdocs/storage:/var/www/storage:ro
       - ../../.docker/dev/cron/crontabs:/etc/crontabs
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:true       # Disables setuid/setgid
+      - apparmor=docker-default      # Limits syscalls and file system
     cap_drop:
-      - ALL
+      - ALL # Removes Linux capabilities
     depends_on:
       - dev-strateg-export-products-php-fpm
       - dev-strateg-export-products-postgresql
@@ -82,9 +87,12 @@ services:
       - ../../httpdocs/storage:/var/www/storage:ro
       - ../../.docker/dev/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:true       # Disables setuid/setgid
+      - apparmor=docker-default      # Limits syscalls and file system
     cap_drop:
-      - ALL
+      - ALL # Removes Linux capabilities
+    tmpfs:
+      - /tmp                    # Nginx temporary files
     depends_on:
       - dev-strateg-export-products-php-fpm
     networks:
@@ -110,9 +118,10 @@ services:
 #    volumes:
 #      - ../../.db:/var/lib/mysql
 #    security_opt:
-#      - no-new-privileges:true
+#      - no-new-privileges:true       # Disables setuid/setgid
+#      - apparmor=docker-default      # Limits syscalls and file system
 #    cap_drop:
-#      - ALL
+#      - ALL # Removes Linux capabilities
 #    networks:
 #      - dev-strateg-export-products-net
 
@@ -135,9 +144,10 @@ services:
     volumes:
       - ../../.db:/var/lib/postgresql/data
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:true       # Disables setuid/setgid
+      - apparmor=docker-default      # Limits syscalls and file system
     cap_drop:
-      - ALL
+      - ALL # Removes Linux capabilities
     networks:
       - dev-strateg-export-products-net
 

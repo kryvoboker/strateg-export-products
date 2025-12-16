@@ -1,2 +1,68 @@
-#httpdocs/vendor
-#httpdocs/node_modules
+# Git files
+.git
+.gitignore
+.github
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Docker files (exclude from build context except needed ones)
+.docker/dev
+!.docker/dev/mariadb/
+!.docker/dev/postgresql/
+!.docker/dev/php/
+!.docker/dev/nginx/
+!.docker/dev/cron/
+.docker/prod
+!.docker/prod/mariadb/
+!.docker/prod/postgresql/
+!.docker/prod/php/
+!.docker/prod/nginx/
+!.docker/prod/cron/
+docker-compose.override.yml
+
+# Node.js
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Composer
+vendor/
+
+# Logs
+*.log
+logs/
+
+# Database
+.db/
+*.sql
+*.sqlite
+
+# Cache and temp files
+storage/cache/*
+storage/logs/*
+httpdocs/system/storage/cache/*
+httpdocs/system/storage/logs/*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+README*
+LICENSE
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Test files
+tests/
+phpunit.xml
+.phpunit.result.cache

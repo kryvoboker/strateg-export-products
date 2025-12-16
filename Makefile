@@ -29,3 +29,93 @@ vite-build:
 
 spfdb:
 	chown -R ${id -u}:${id -g} db
+
+# Docker Slim optimization commands
+optimize-all:
+	@chmod +x .docker/prod/optimize-images.sh
+	@./.docker/prod/optimize-images.sh
+
+optimize-php:
+	@echo "Optimizing PHP-FPM image..."
+	@slim build \
+		--target dev-strateg-export-products-php-fpm:1.0 \
+		--tag dev-strateg-export-products-php-fpm:1.0-slim \
+		--http-probe=false \
+		--include-path /bin/bash \
+		--include-path /bin/ls \
+		--include-path /bin/grep \
+		--include-path /usr/local/bin \
+		--include-path /usr/local/lib \
+		--include-path /usr/local/etc/php \
+		--include-path /usr/bin \
+		--include-path /var/www \
+		--include-path /home/www-data \
+		--include-exe php-fpm \
+		--include-exe php \
+		--include-exe composer \
+		--include-exe node \
+		--include-exe npm \
+		--include-exe npx \
+		--include-exe bash \
+		--include-exe ls \
+		--continue-after 60
+
+optimize-nginx:
+	@echo "Optimizing Nginx image..."
+	@slim build \
+		--target dev-strateg-export-products-nginx:1.0 \
+		--tag dev-strateg-export-products-nginx:1.0-slim \
+		--http-probe=true \
+		--http-probe-cmd GET:/ \
+		--include-path /etc/nginx \
+		--include-path /usr/share/nginx \
+		--include-path /var/cache/nginx \
+		--include-path /var/log/nginx \
+		--include-path /var/www \
+		--include-exe nginx \
+		--continue-after 30
+
+optimize-cron:
+	@echo "Optimizing Cron image..."
+	@slim build \
+		--target dev-strateg-export-products-cron:1.0 \
+		--tag dev-strateg-export-products-cron:1.0-slim \
+		--http-probe=false \
+		--include-path /usr/local/bin \
+		--include-path /usr/local/lib \
+		--include-path /usr/bin \
+		--include-path /var/www \
+		--include-path /etc/crontabs \
+		--include-exe php \
+		--include-exe supercronic \
+		--include-exe composer \
+		--continue-after 60
+
+# Use slim images
+up-prod-slim:
+	docker compose -f .docker/prod/docker-compose.slim.yml up -d
+
+down-prod-slim:
+	docker compose -f .docker/prod/docker-compose.slim.yml down
+
+restart-prod-slim: down-prod-slim up-prod-slim
+
+# Show image sizes
+show-sizes:
+	@docker images | grep dev-strateg-export-products
+
+# Compare sizes with detailed breakdown
+compare-sizes:
+	@chmod +x .docker/prod/compare-sizes.sh
+	@./.docker/prod/compare-sizes.sh
+
+# Install docker-slim
+install-slim:
+	@echo "Installing docker-slim..."
+	@curl -L -o /tmp/ds.tar.gz https://github.com/slimtoolkit/slim/releases/download/1.40.11/dist_linux.tar.gz
+	@tar -xvzf /tmp/ds.tar.gz -C /tmp
+	@sudo mv /tmp/dist_linux/* /usr/local/bin/
+	@sudo chmod +x /usr/local/bin/slim
+	@rm -rf /tmp/dist_linux /tmp/ds.tar.gz
+	@echo "docker-slim installed successfully!"
+	@slim version
