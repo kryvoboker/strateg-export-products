@@ -10,6 +10,7 @@ use App\Filament\Resources\Catalog\ShopLanguages\Pages\EditShopLanguage;
 use App\Filament\Resources\Catalog\ShopLanguages\Pages\ListShopLanguages;
 use App\Filament\Resources\Catalog\ShopLanguages\Schemas\ShopLanguageForm;
 use App\Filament\Resources\Catalog\ShopLanguages\Tables\ShopLanguagesTable;
+use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
 use App\Models\Shops\ShopLanguage;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -20,6 +21,8 @@ use UnitEnum;
 
 class ShopLanguageResource extends Resource
 {
+    use TotalModelItemsResourceTrait;
+
     protected static ?string                $model                = ShopLanguage::class;
     protected static string|BackedEnum|null $navigationIcon       = Heroicon::Language;
     protected static ?string                $recordTitleAttribute = 'name';

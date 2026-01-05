@@ -9,6 +9,7 @@ use App\Filament\Resources\Catalog\ProductImports\Pages\CreateProductImportBatch
 use App\Filament\Resources\Catalog\ProductImports\Pages\ListProductImportBatches;
 use App\Filament\Resources\Catalog\ProductImports\Schemas\ProductImportBatchForm;
 use App\Filament\Resources\Catalog\ProductImports\Tables\ProductImportBatchesTable;
+use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
 use App\Models\Products\Imports\ProductImportBatch;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -19,6 +20,8 @@ use UnitEnum;
 
 class ProductImportBatchResource extends Resource
 {
+    use TotalModelItemsResourceTrait;
+
     protected static ?string                $model                = ProductImportBatch::class;
     protected static string|BackedEnum|null $navigationIcon       = Heroicon::RectangleStack;
     protected static ?string                $recordTitleAttribute = 'source_name';

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Users\Users\Tables;
 
+use App\Filament\Resources\Trait\Tables\BooleanTableTrait;
+use App\Filament\Resources\Trait\Tables\DateTableTrait;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
 
 class UsersTable
 {
+    use BooleanTableTrait, DateTableTrait;
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -54,10 +58,7 @@ class UsersTable
                         'style'    => 'object-fit: contain;',
                     ]),
 
-                IconColumn::make('is_active')
-                    ->label(__('admin/default.columns.is_active'))
-                    ->boolean()
-                    ->sortable(),
+                self::getIsActiveTableField(),
 
                 TextColumn::make('email_verified_at')
                     ->label(__('admin/default.columns.email_verified_at'))
@@ -65,11 +66,7 @@ class UsersTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('created_at')
-                    ->label(__('admin/default.columns.created_at'))
-                    ->date(config('app.datetime_format'), config('app.timezone'))
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                self::getCreatedAtTableField(),
             ])
             ->filters([
                 TernaryFilter::make('is_active')

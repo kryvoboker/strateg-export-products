@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Trait;
+namespace App\Filament\Resources\Trait\Forms;
 
 use App\Models\Settings\Language;
 use Filament\Forms\Components\Hidden;
@@ -20,7 +20,7 @@ trait MetaTextFormTrait
      *
      * @return array
      */
-    protected static function createMetaTextsLanguageTabs(Collection $active_languages): array
+    protected static function createMetaTextsLanguageFormTabs(Collection $active_languages): array
     {
         $tabs = [];
 
@@ -61,14 +61,14 @@ trait MetaTextFormTrait
      *
      * @return Tabs\Tab
      */
-    protected static function createMetaTextsTabs(Collection $active_languages): Tabs\Tab
+    protected static function createMetaTextsFormTabs(Collection $active_languages): Tabs\Tab
     {
         return Tabs\Tab::make(__('admin/default.tabs.meta_texts'))
             ->schema([
                 Section::make(__('admin/default.sections.meta_texts'))
                     ->schema([
                         Tabs::make('language_tabs_meta_texts')
-                            ->tabs(self::createMetaTextsLanguageTabs($active_languages))
+                            ->tabs(self::createMetaTextsLanguageFormTabs($active_languages))
                             ->activeTab(1)
                             ->contained(false)
                             ->persistTabInQueryString(),
@@ -84,7 +84,7 @@ trait MetaTextFormTrait
      *
      * @return array<Tabs\Tab>
      */
-    protected static function processCreateTranslationsTabs(Collection $active_languages): array
+    protected static function processCreateTranslationsFormTabs(Collection $active_languages): array
     {
         $tabs            = [];
         $total_languages = $active_languages->count();
@@ -128,14 +128,14 @@ trait MetaTextFormTrait
      *
      * @return Tabs\Tab
      */
-    protected static function createTranslationsTabs(Collection $active_languages): Tabs\Tab
+    protected static function createTranslationsFormTabs(Collection $active_languages): Tabs\Tab
     {
         return Tabs\Tab::make(__('admin/default.tabs.translations'))
             ->schema([
                 Section::make(__('admin/default.sections.translations'))
                     ->schema([
                         Tabs::make('LanguageTabs')
-                            ->tabs(self::processCreateTranslationsTabs($active_languages))
+                            ->tabs(self::processCreateTranslationsFormTabs($active_languages))
                             ->activeTab(1)
                             ->contained(false)
                             ->persistTabInQueryString(),

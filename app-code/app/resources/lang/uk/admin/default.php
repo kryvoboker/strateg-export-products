@@ -18,6 +18,7 @@ return [
         'password'              => 'Пароль',
         'password_confirmation' => 'Підтвердження пароля',
         'is_active'             => 'Активний',
+        'image'                 => 'Зображення',
     ],
 
     // Columns

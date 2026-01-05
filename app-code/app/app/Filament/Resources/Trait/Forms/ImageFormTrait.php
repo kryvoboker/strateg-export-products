@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Trait;
+namespace App\Filament\Resources\Trait\Forms;
 
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\FileUpload;
@@ -15,7 +15,7 @@ trait ImageFormTrait
      *
      * @return Field
      */
-    protected static function getImageField(array $params = []): Field
+    protected static function getImageFormField(array $params = []): Field
     {
         return FileUpload::make($params['field_name'] ?? 'image')
             ->label($params['label'] ?? __('admin/default.labels.image'))  // store under other folder

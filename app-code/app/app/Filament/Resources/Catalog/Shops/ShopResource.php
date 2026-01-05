@@ -11,6 +11,7 @@ use App\Filament\Resources\Catalog\Shops\Pages\ListShops;
 use App\Filament\Resources\Catalog\Shops\RelationManagers\ShopLanguagesRelationManager;
 use App\Filament\Resources\Catalog\Shops\Schemas\ShopForm;
 use App\Filament\Resources\Catalog\Shops\Tables\ShopsTable;
+use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
 use App\Models\Shops\Shop;
 use BackedEnum;
 use Filament\Resources\Pages\PageRegistration;
@@ -22,6 +23,8 @@ use UnitEnum;
 
 class ShopResource extends Resource
 {
+    use TotalModelItemsResourceTrait;
+
     protected static ?string                $model                = Shop::class;
     protected static string|BackedEnum|null $navigationIcon       = Heroicon::BuildingStorefront;
     protected static ?string                $recordTitleAttribute = 'name';

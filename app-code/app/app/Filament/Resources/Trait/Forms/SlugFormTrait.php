@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Trait;
+namespace App\Filament\Resources\Trait\Forms;
 
 use App\Models\Settings\Language;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Illuminate\Database\Eloquent\Collection;
 use Filament\Schemas\Components\Tabs;
+use Illuminate\Database\Eloquent\Collection;
 
 trait SlugFormTrait
 {
@@ -17,7 +17,7 @@ trait SlugFormTrait
      *
      * @return Tabs\Tab
      */
-    protected static function createSlugsTabs(Collection $active_languages): Tabs\Tab
+    protected static function createSlugsFormTabs(Collection $active_languages): Tabs\Tab
     {
         $schema_fields = [];
 

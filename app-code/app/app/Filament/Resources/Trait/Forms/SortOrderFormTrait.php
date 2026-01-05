@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Trait;
+namespace App\Filament\Resources\Trait\Forms;
 
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\TextInput;
@@ -14,7 +14,7 @@ trait SortOrderFormTrait
      *
      * @return Field
      */
-    protected static function getSortOrderField(array $params = []): Field
+    protected static function getSortOrderFormField(array $params = []): Field
     {
         return TextInput::make('sort_order')
             ->label(__('admin/default.labels.sort_order'))

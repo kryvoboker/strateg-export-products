@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Trait;
+namespace App\Filament\Resources\Trait\Forms;
 
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Toggle;
@@ -14,7 +14,7 @@ trait ToggleCheckboxFormTrait
      *
      * @return Field
      */
-    protected static function getIsActiveField(array $params = []): Field
+    protected static function getIsActiveFormField(array $params = []): Field
     {
         return Toggle::make('is_active')
             ->label(__('admin/default.labels.is_active'))
@@ -28,7 +28,7 @@ trait ToggleCheckboxFormTrait
      *
      * @return Field
      */
-    protected static function getIsNoIndexField(array $params = []): Field
+    protected static function getIsNoIndexFormField(array $params = []): Field
     {
         return Toggle::make('is_noindex')
             ->label(__('admin/default.labels.is_noindex'))
@@ -42,7 +42,7 @@ trait ToggleCheckboxFormTrait
      *
      * @return Field
      */
-    protected static function getIsDefaultField(array $params = []): Field
+    protected static function getIsDefaultFormField(array $params = []): Field
     {
         return Toggle::make('is_default')
             ->label(__('admin/default.labels.is_default'))
