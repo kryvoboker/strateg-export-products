@@ -12,18 +12,15 @@
 
 # Docker files (exclude from build context except needed ones)
 .docker/dev
-!.docker/dev/mariadb/
 !.docker/dev/postgresql/
 !.docker/dev/php/
 !.docker/dev/nginx/
 !.docker/dev/cron/
 .docker/prod
-!.docker/prod/mariadb/
 !.docker/prod/postgresql/
 !.docker/prod/php/
 !.docker/prod/nginx/
 !.docker/prod/cron/
-docker-compose.override.yml
 
 # Node.js
 node_modules
@@ -31,7 +28,7 @@ npm-debug.log
 yarn-error.log
 
 # Composer
-vendor/
+/app-code/app/vendor/
 
 # Logs
 *.log
@@ -43,10 +40,11 @@ logs/
 *.sqlite
 
 # Cache and temp files
-storage/cache/*
-storage/logs/*
-httpdocs/system/storage/cache/*
-httpdocs/system/storage/logs/*
+/app-code/storage/framework/cache/*
+/app-code/storage/logs/*
+/app-code/storage/framework/views/*
+/app-code/storage/framework/testing/*
+/app-code/storage/framework/sessions/*
 
 # OS files
 .DS_Store

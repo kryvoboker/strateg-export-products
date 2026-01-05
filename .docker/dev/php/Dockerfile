@@ -1,24 +1,29 @@
-FROM php:8.4-fpm
+FROM composer:2.9.2 AS composer
 
-WORKDIR /var/www/html
+FROM php:8.4-fpm-bookworm AS base
 
-RUN apt-get update \
-    && apt-get -y install curl ca-certificates unzip zip tzdata nano \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /var/www/app
 
+ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Kyiv
 
-# set time zone in container
-RUN ln -fs /usr/share/zoneinfo/Europe/Kyiv /etc/localtime \
-    && dpkg-reconfigure -f noninteractive tzdata
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends  \
+        curl  \
+        ca-certificates  \
+        unzip  \
+        zip  \
+        tzdata  \
+        nano \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=composer:2.8.8 /usr/bin/composer /usr/bin/composer
+RUN ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
+  && echo "date.timezone=${TZ}" > /usr/local/etc/php/conf.d/99-timezone.ini
+
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# Configure composer cache directory
-ENV COMPOSER_CACHE_DIR=/home/www-data/.composer/cache
-
-RUN install-php-extensions gd zip pdo pdo_pgsql pgsql xdebug xhprof sockets intl bcmath apcu
+RUN install-php-extensions gd zip pdo pdo_pgsql pgsql xdebug xhprof sockets intl bcmath apcu \
+    && rm -f /usr/local/bin/install-php-extensions
 
 RUN echo "xhprof.output_dir = /tmp/xhprof" >> /usr/local/etc/php/conf.d/docker-php-ext-xhprof.ini \
     && echo "xhprof.collect_additional_info = 1" >> /usr/local/etc/php/conf.d/docker-php-ext-xhprof.ini \
@@ -27,20 +32,20 @@ RUN echo "xhprof.output_dir = /tmp/xhprof" >> /usr/local/etc/php/conf.d/docker-p
 
 RUN docker-php-ext-enable xdebug xhprof
 
-# Install exact Node.js 24.11.0 from official tarball
-# This installs node and npm system-wide so www-data can run them
-RUN apt-get update \
-    && apt-get install -y curl xz-utils ca-certificates \
-    && export NODE_VERSION=24.11.0 \
-    && curl -fsSLO https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz \
-    && tar -xJf node-v${NODE_VERSION}-linux-x64.tar.xz -C /usr/local --strip-components=1 \
-    && rm node-v${NODE_VERSION}-linux-x64.tar.xz \
-    && apt-get purge -y --auto-remove xz-utils \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:24.11.0-bookworm-slim AS nodejs
 
-# Configure npm prefix for processes in the image and ensure PATH includes it
-ENV NPM_CONFIG_PREFIX=/home/www-data/.npm-global
-ENV PATH="/home/www-data/.npm-global/bin:${PATH}"
+FROM base AS development
+
+# Copy Node.js binaries from nodejs stage
+COPY --from=nodejs /usr/local/bin/node /usr/local/bin/node
+COPY --from=nodejs /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Re-create symlinks exactly like in official node image
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+# Composer from composer stage
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Import UID and GID from docker compose
 ARG UID=1000
@@ -51,24 +56,32 @@ ENV UID=${UID}
 ENV GID=${GID}
 ENV UMASK=${UMASK}
 
-RUN groupmod -o -g ${GID} www-data \
-  && usermod  -o -u ${UID} -g ${GID} www-data
+ENV USERNAME=www-data
+
+# Configure composer cache directory
+ENV HOME=/home/${USERNAME}
+ENV COMPOSER_HOME=${HOME}/.composer
+ENV COMPOSER_CACHE_DIR=${COMPOSER_HOME}/cache
+
+# Configure npm prefix for processes in the image and ensure PATH includes it
+ENV NPM_CONFIG_PREFIX=${HOME}/.npm-global
+ENV NPM_CONFIG_CACHE=${HOME}/.npm
+ENV PATH="${NPM_CONFIG_PREFIX}/bin:${PATH}"
+
+RUN groupmod -o -g ${GID} ${USERNAME} \
+  && usermod  -o -u ${UID} -g ${GID} ${USERNAME}
 
 # Create npm global directory for www-data and set ownership
-RUN mkdir -p /home/www-data/.npm-global /var/www/.npm \
-    && chown -R www-data:www-data /home/www-data/.npm-global \
-    && chown -R www-data:www-data /var/www/.npm
-
-RUN mkdir -p /home/www-data/.composer/cache \
-    && chown -R www-data:www-data /home/www-data/.composer \
-    && chmod -R 775 /home/www-data/.composer
+RUN mkdir -p ${NPM_CONFIG_PREFIX} ${NPM_CONFIG_CACHE} ${COMPOSER_CACHE_DIR} \
+  && chown -R ${USERNAME}:${USERNAME} ${COMPOSER_HOME} ${NPM_CONFIG_PREFIX} ${NPM_CONFIG_CACHE} \
+  && chmod -R 775 ${COMPOSER_HOME} ${NPM_CONFIG_CACHE} ${NPM_CONFIG_PREFIX}
 
 # Copy and set permissions for entrypoint script
 COPY .docker/dev/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-    && chown www-data:www-data /usr/local/bin/entrypoint.sh
+    && chown ${USERNAME}:${USERNAME} /usr/local/bin/entrypoint.sh
 
-USER www-data
+USER ${USERNAME}
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

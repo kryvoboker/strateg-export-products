@@ -1,9 +1,8 @@
 FROM nginx:1.29.1-alpine3.22
 
-WORKDIR /var/www/html
+WORKDIR /var/www/app
 
-RUN apk add --no-cache tzdata \
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache tzdata
 
 ENV TZ=Europe/Kyiv
 
@@ -20,24 +19,26 @@ ENV UID=${UID}
 ENV GID=${GID}
 ENV UMASK=${UMASK}
 
+ENV USERNAME=www-data
+
 # Create www-data user with proper shell (Debian syntax)
-RUN deluser www-data 2>/dev/null || true \
-    && delgroup www-data 2>/dev/null || true \
-    && addgroup -g ${GID} www-data \
-    && adduser -D -u ${UID} -G www-data -s /bin/sh www-data
+RUN deluser ${USERNAME} 2>/dev/null || true \
+    && delgroup ${USERNAME} 2>/dev/null || true \
+    && addgroup -g ${GID} ${USERNAME} \
+    && adduser -D -u ${UID} -G ${USERNAME} -s /bin/bash ${USERNAME}
 
 # Set proper permissions for nginx directories
-RUN chown -R www-data:www-data /var/cache/nginx /var/log/nginx /etc/nginx/conf.d \
+RUN chown -R ${USERNAME}:${USERNAME} /var/cache/nginx /var/log/nginx /etc/nginx/conf.d \
     && chmod -R 755 /var/cache/nginx /var/log/nginx
 
 # Copy and set permissions for entrypoint script
 COPY .docker/dev/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-    && chown www-data:www-data /usr/local/bin/entrypoint.sh
+    && chown ${USERNAME}:${USERNAME} /usr/local/bin/entrypoint.sh
 
 EXPOSE 80
 
-USER www-data
+USER ${USERNAME}
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -32,12 +32,12 @@ spfdb:
 
 # Docker Slim optimization commands
 optimize-all:
-	@chmod +x .docker/prod/optimize-images.sh
-	@./.docker/prod/optimize-images.sh
+	chmod +x .docker/prod/optimize-images.sh
+	./.docker/prod/optimize-images.sh
 
 optimize-php:
-	@echo "Optimizing PHP-FPM image..."
-	@slim build \
+	echo "Optimizing PHP-FPM image..."
+	slim build \
 		--target dev-strateg-export-products-php-fpm:1.0 \
 		--tag dev-strateg-export-products-php-fpm:1.0-slim \
 		--http-probe=false \
@@ -61,8 +61,8 @@ optimize-php:
 		--continue-after 60
 
 optimize-nginx:
-	@echo "Optimizing Nginx image..."
-	@slim build \
+	echo "Optimizing Nginx image..."
+	slim build \
 		--target dev-strateg-export-products-nginx:1.0 \
 		--tag dev-strateg-export-products-nginx:1.0-slim \
 		--http-probe=true \
@@ -76,8 +76,8 @@ optimize-nginx:
 		--continue-after 30
 
 optimize-cron:
-	@echo "Optimizing Cron image..."
-	@slim build \
+	echo "Optimizing Cron image..."
+	slim build \
 		--target dev-strateg-export-products-cron:1.0 \
 		--tag dev-strateg-export-products-cron:1.0-slim \
 		--http-probe=false \
@@ -102,20 +102,16 @@ restart-prod-slim: down-prod-slim up-prod-slim
 
 # Show image sizes
 show-sizes:
-	@docker images | grep dev-strateg-export-products
+	docker images | grep dev-strateg-export-products
 
 # Compare sizes with detailed breakdown
 compare-sizes:
-	@chmod +x .docker/prod/compare-sizes.sh
-	@./.docker/prod/compare-sizes.sh
+	chmod +x .docker/prod/compare-sizes.sh
+	./.docker/prod/compare-sizes.sh
 
 # Install docker-slim
 install-slim:
-	@echo "Installing docker-slim..."
-	@curl -L -o /tmp/ds.tar.gz https://github.com/slimtoolkit/slim/releases/download/1.40.11/dist_linux.tar.gz
-	@tar -xvzf /tmp/ds.tar.gz -C /tmp
-	@sudo mv /tmp/dist_linux/* /usr/local/bin/
-	@sudo chmod +x /usr/local/bin/slim
-	@rm -rf /tmp/dist_linux /tmp/ds.tar.gz
-	@echo "docker-slim installed successfully!"
-	@slim version
+	echo "Installing docker-slim..."
+	wget https://github.com/slimtoolkit/slim/releases/latest/download/dist_linux.tar.gz
+	echo "docker-slim installed successfully!"
+	slim --version

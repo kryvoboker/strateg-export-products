@@ -1,2 +1,0 @@
-# Run every day at 4 AM
-0 4 * * * /usr/local/bin/php -f /var/www/app/artisan app:update-currency-rates-command >> /var/log/cron/cron.log 2>&1
