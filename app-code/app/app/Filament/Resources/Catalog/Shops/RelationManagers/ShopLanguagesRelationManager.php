@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Shops\RelationManagers;
 
 use App\Filament\Resources\Catalog\ShopLanguages\Tables\ShopLanguagesTable;
+use App\Filament\Resources\Trait\Forms\CommonTextFormTrait;
+use App\Filament\Resources\Trait\Forms\ToggleCheckboxFormTrait;
 use App\Models\Shops\Shop;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -16,6 +16,8 @@ use Illuminate\Validation\Rule;
 
 class ShopLanguagesRelationManager extends RelationManager
 {
+    use CommonTextFormTrait, ToggleCheckboxFormTrait;
+
     protected static string $relationship = 'shopLanguage';
 
     /**
@@ -41,27 +43,28 @@ class ShopLanguagesRelationManager extends RelationManager
 
         // Custom inline form without shop selector; shop is inferred from relation.
         return $schema->components([
-            TextInput::make('code')
-                ->label(__('admin/shops/languages.labels.code'))
-                ->maxLength(10)
-                ->rules([
+            self::getTextFormField([
+                'field_name' => 'code',
+                'label'      => __('admin/shops/languages.labels.code'),
+                'max_length' => 10,
+                'placeholder'=> 'uk, en, de',
+                'rules'      => [
                     'required', 'string', 'max:10',
                     Rule::unique('shop_languages', 'code')->ignore($record?->id),
-                ])
-                ->placeholder('uk, en, de')
-                ->required(),
+                ],
+            ]),
 
-            TextInput::make('name')
-                ->label(__('admin/shops/languages.labels.name'))
-                ->maxLength(100)
-                ->rules(['required', 'string', 'max:100'])
-                ->placeholder('Українська')
-                ->required(),
+            self::getTextFormField([
+                'field_name' => 'name',
+                'label'      => __('admin/shops/languages.labels.name'),
+                'max_length' => 100,
+                'placeholder'=> 'Українська',
+                'rules'      => ['required', 'string', 'max:100'],
+            ]),
 
-            Toggle::make('is_active')
-                ->label(__('admin/default.labels.is_active'))
-                ->helperText(__('admin/shops/languages.helpers.is_active'))
-                ->default(true),
+            self::getIsActiveFormField([
+                'helper_text' => __('admin/shops/languages.helpers.is_active'),
+            ]),
         ]);
     }
 

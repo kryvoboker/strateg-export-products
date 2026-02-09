@@ -16,7 +16,7 @@ trait SlugTableTrait
      */
     protected static function getSlugTableField(array $params = []): Column
     {
-        return TextColumn::make($params['field_name'] ?? 'slugs')
+        return TextColumn::make($params['field_name'] ?? 'slugs.slug')
             ->label($params['label'] ?? __('admin/default.columns.slug'))
             ->searchable($params['searchable'] ?? true)
             ->sortable($params['sortable'] ?? true)

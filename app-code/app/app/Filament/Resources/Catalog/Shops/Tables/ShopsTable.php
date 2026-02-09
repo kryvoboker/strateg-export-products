@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Catalog\Shops\Tables;
 
+use App\Filament\Resources\Trait\Filters\BooleanFilterTrait;
+use App\Filament\Resources\Trait\Tables\BooleanTableTrait;
+use App\Filament\Resources\Trait\Tables\CommonTextTableTrait;
+use App\Filament\Resources\Trait\Tables\DateTableTrait;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -14,19 +18,21 @@ use Filament\Tables\Table;
 
 class ShopsTable
 {
+    use CommonTextTableTrait, BooleanTableTrait, DateTableTrait, BooleanFilterTrait;
+
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('name')
-                    ->label(__('admin/default.columns.name'))
-                    ->searchable()
-                    ->sortable(),
+                self::getTextTableField([
+                    'field_name' => 'name',
+                    'label'      => __('admin/default.columns.name'),
+                ]),
 
-                TextColumn::make('type')
-                    ->label(__('admin/shops/shops.columns.type'))
-                    ->searchable()
-                    ->sortable(),
+                self::getTextTableField([
+                    'field_name' => 'type',
+                    'label'      => __('admin/shops/shops.columns.type'),
+                ]),
 
                 TextColumn::make('base_url')
                     ->label(__('admin/shops/shops.columns.base_url'))
@@ -35,22 +41,12 @@ class ShopsTable
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                IconColumn::make('is_active')
-                    ->label(__('admin/default.columns.is_active'))
-                    ->boolean()
-                    ->sortable(),
+                self::getIsActiveTableField(),
 
-                TextColumn::make('created_at')
-                    ->label(__('admin/default.columns.created_at'))
-                    ->date(config('app.datetime_format'), config('app.timezone'))
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                self::getCreatedAtTableField(),
             ])
             ->filters([
-                TernaryFilter::make('is_active')
-                    ->label(__('admin/default.filters.active'))
-                    ->trueLabel(__('admin/default.filters.active_only'))
-                    ->falseLabel(__('admin/default.filters.inactive_only')),
+                self::getIsDefaultFilterField(),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -62,4 +58,3 @@ class ShopsTable
             ]);
     }
 }
-

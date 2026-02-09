@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Catalog\Shops\Schemas;
 
+use App\Filament\Resources\Trait\Forms\CommonTextFormTrait;
+use App\Filament\Resources\Trait\Forms\ToggleCheckboxFormTrait;
 use Filament\Forms\Components\KeyValue;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
 class ShopForm
 {
+    use CommonTextFormTrait, ToggleCheckboxFormTrait;
+
     /**
      * @param Schema $schema
      *
@@ -20,33 +22,33 @@ class ShopForm
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->label(__('admin/default.labels.name'))
-                    ->maxLength(255)
-                    ->rules(['required', 'string', 'max:255'])
-                    ->placeholder('My Awesome Shop')
-                    ->required(),
+                self::getTextFormField([
+                    'field_name'  => 'name',
+                    'label'       => __('admin/default.labels.name'),
+                    'max_length'  => 255,
+                    'placeholder' => 'My Awesome Shop',
+                    'rules'       => ['required', 'string', 'max:255'],
+                ]),
 
-                TextInput::make('type')
-                    ->label(__('admin/shops/shops.labels.type'))
-                    ->maxLength(50)
-                    ->rules(['required', 'string', 'max:50'])
-                    ->placeholder('opencart | shopify | custom')
-                    ->required(),
+                self::getTextFormField([
+                    'field_name'  => 'type',
+                    'label'       => __('admin/shops/shops.labels.type'),
+                    'max_length'  => 50,
+                    'placeholder' => 'opencart | shopify | custom',
+                    'rules'       => ['required', 'string', 'max:50'],
+                    'unique'      => null,
+                ]),
 
-                TextInput::make('base_url')
-                    ->label(__('admin/shops/shops.labels.base_url'))
-                    ->maxLength(255)
-                    ->rules(['required', 'url', 'max:255'])
-                    ->placeholder('https://example.com')
-                    ->required()
-                    ->columnSpanFull(),
+                self::getUrlFormField([
+                    'field_name'          => 'base_url',
+                    'label'               => __('admin/shops/shops.labels.base_url'),
+                    'is_column_span_full' => true,
+                ]),
 
-                Toggle::make('is_active')
-                    ->label(__('admin/default.labels.is_active'))
-                    ->helperText(__('admin/shops/shops.helpers.is_active'))
-                    ->default(true)
-                    ->columnSpanFull(),
+                self::getIsActiveFormField([
+                    'helper_text'         => __('admin/shops/shops.helpers.is_active'),
+                    'is_column_span_full' => true,
+                ]),
 
                 KeyValue::make('options')
                     ->label(__('admin/shops/shops.labels.options'))

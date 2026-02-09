@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Catalog\ShopLanguages\Schemas;
 
+use App\Filament\Resources\Trait\Forms\CommonTextFormTrait;
+use App\Filament\Resources\Trait\Forms\ToggleCheckboxFormTrait;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -11,6 +13,8 @@ use Filament\Schemas\Schema;
 
 class ShopLanguageForm
 {
+    use CommonTextFormTrait, ToggleCheckboxFormTrait;
+
     /**
      * @param Schema $schema
      *
@@ -27,26 +31,27 @@ class ShopLanguageForm
                     ->preload()
                     ->required(),
 
-                TextInput::make('code')
-                    ->label(__('admin/shops/languages.labels.code'))
-                    ->maxLength(10)
-                    ->placeholder('uk, en, de')
-                    ->rules(['required', 'string', 'max:10'])
-                    ->required(),
+                self::getTextFormField([
+                    'field_name'  => 'code',
+                    'label'       => __('admin/shops/languages.labels.code'),
+                    'max_length'  => 10,
+                    'placeholder' => 'uk, en, de',
+                    'rules'       => ['alpha', 'lowercase', 'max:10'],
+                ]),
 
-                TextInput::make('name')
-                    ->label(__('admin/shops/languages.labels.name'))
-                    ->maxLength(100)
-                    ->rules(['required', 'string', 'max:100'])
-                    ->placeholder('Українська')
-                    ->required()
-                    ->columnSpanFull(),
+                self::getTextFormField([
+                    'field_name'          => 'name',
+                    'label'               => __('admin/shops/languages.labels.name'),
+                    'max_length'          => 100,
+                    'rules'               => ['required', 'string', 'max:100'],
+                    'placeholder'         => 'Українська',
+                    'is_column_span_full' => true,
+                ]),
 
-                Toggle::make('is_active')
-                    ->label(__('admin/default.labels.is_active'))
-                    ->helperText(__('admin/shops/languages.helpers.is_active'))
-                    ->default(true)
-                    ->columnSpanFull(),
+                self::getIsActiveFormField([
+                    'helper_text'         => __('admin/shops/languages.helpers.is_active'),
+                    'is_column_span_full' => true,
+                ]),
             ]);
     }
 }

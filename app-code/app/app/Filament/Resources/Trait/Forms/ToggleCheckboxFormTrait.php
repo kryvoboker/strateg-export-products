@@ -16,11 +16,17 @@ trait ToggleCheckboxFormTrait
      */
     protected static function getIsActiveFormField(array $params = []): Field
     {
-        return Toggle::make('is_active')
+        $toggle_input = Toggle::make('is_active')
             ->label(__('admin/default.labels.is_active'))
             ->helperText($params['helper_text'] ?? null)
             ->default($params['default'] ?? true)
             ->required($params['required'] ?? true);
+
+        if (isset($params['is_column_span_full']) && $params['is_column_span_full'] === true) {
+            $toggle_input->columnSpanFull();
+        }
+
+        return $toggle_input;
     }
 
     /**
@@ -30,11 +36,17 @@ trait ToggleCheckboxFormTrait
      */
     protected static function getIsNoIndexFormField(array $params = []): Field
     {
-        return Toggle::make('is_noindex')
+        $toggle_input = Toggle::make('is_noindex')
             ->label(__('admin/default.labels.is_noindex'))
             ->helperText($params['helper_text'] ?? null)
             ->default($params['default'] ?? false)
             ->required($params['required'] ?? true);
+
+        if (isset($params['is_column_span_full']) && $params['is_column_span_full'] === true) {
+            $toggle_input->columnSpanFull();
+        }
+
+        return $toggle_input;
     }
 
     /**
@@ -44,7 +56,7 @@ trait ToggleCheckboxFormTrait
      */
     protected static function getIsDefaultFormField(array $params = []): Field
     {
-        return Toggle::make('is_default')
+        $toggle_input = Toggle::make('is_default')
             ->label(__('admin/default.labels.is_default'))
             ->helperText($params['helper_text'] ?? null)
             ->default($params['default'] ?? false)
@@ -56,5 +68,11 @@ trait ToggleCheckboxFormTrait
                     $set('is_active', true);
                 }
             });
+
+        if (isset($params['is_column_span_full']) && $params['is_column_span_full'] === true) {
+            $toggle_input->columnSpanFull();
+        }
+
+        return $toggle_input;
     }
 }

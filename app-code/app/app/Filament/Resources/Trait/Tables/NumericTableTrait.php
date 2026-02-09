@@ -14,13 +14,14 @@ trait NumericTableTrait
      *
      * @return Column
      */
-    protected static function getSortOrderTableField(array $params = []): Column
+    protected static function getNumericTableField(array $params = []): Column
     {
         $numeric_params = $params['numeric_params'] ?? [];
 
-        return TextColumn::make('sort_order')
-            ->label($params['label'] ?? __('admin/default.columns.sort_order'))
+        return TextColumn::make($params['filed_name'])
+            ->label($params['label'])
             ->numeric(...$numeric_params)
-            ->sortable($params['sortable'] ?? true);
+            ->sortable($params['sortable'] ?? true)
+            ->toggleable(isToggledHiddenByDefault: $params['is_toggled_hidden_by_default'] ?? false);
     }
 }

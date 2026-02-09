@@ -1,4 +1,5 @@
 name: "dev-strateg-export-products"
+
 services:
   dev-strateg-export-products-php-fpm:
     build:
@@ -15,9 +16,9 @@ services:
       - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
     volumes:
-      - ../../app-code/app:/var/www/app
-      - ../../app-code/httpdocs:/var/www/html
-      - ../../app-code/storage:/var/www/storage
+      - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app
+      - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs
+      - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage
       - ../../.docker/dev/php/php.ini:/usr/local/etc/php/php.ini:ro
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
@@ -51,9 +52,9 @@ services:
       - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
     volumes:
-      - ../../app-code/app:/var/www/app:ro
-      - ../../app-code/httpdocs:/var/www/html:ro
-      - ../../app-code/storage:/var/www/storage:ro
+      - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app:ro
+      - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
+      - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage:ro
       - ../../.docker/dev/cron/crontabs:/etc/crontabs
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
@@ -77,7 +78,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
-    image: dev-strateg-export-products-nginx:1.0-alpine
+    image: dev-strateg-export-products-nginx:1.0-alpine-slim
     container_name: dev-strateg-export-products-nginx
     env_file:
       - ../../.docker/dev/env/.env
@@ -86,10 +87,11 @@ services:
       - "traefik.http.routers.dev-strateg-export-products-nginx.rule=Host(`dev.strateg-export-products.com`)"
       - "traefik.http.routers.dev-strateg-export-products-nginx.entrypoints=web"
       - "traefik.http.services.dev-strateg-export-products-nginx.loadbalancer.server.port=80"
+      - "traefik.http.routers.dev-strateg-export-products-nginx.middlewares=global-ratelimit@file,global-inflight@file"
     volumes:
-      - ../../app-code/app:/var/www/app:ro
-      - ../../app-code/httpdocs:/var/www/html:ro
-      - ../../app-code/storage:/var/www/storage:ro
+      - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app:ro
+      - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
+      - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage:ro
       - ../../.docker/dev/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
@@ -126,7 +128,7 @@ services:
       - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
     volumes:
-      - ../../.db:/var/lib/postgresql/data
+      - ../../.db:/var/lib/postgresql
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system

@@ -3,6 +3,7 @@
 use App\Enums\ProductImportItemsStatusEnum;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -26,7 +27,7 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->jsonb('raw_payload')->nullable();
+            $table->jsonb('payload')->nullable();
             $table->string('status', 100)
                 ->nullable()
                 ->default(ProductImportItemsStatusEnum::NEW->value)
@@ -34,6 +35,7 @@ return new class extends Migration
 
             $table->text('error_message')
                 ->nullable()
+                ->index()
                 ->comment('Error message if the item processing failed');
 
             $table->timestamp('processed_at')->nullable();
@@ -41,6 +43,13 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['product_import_batch_id', 'status']);
+
+            // Create JSONB indexes using raw SQL
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_product_id ON product_import_items ((payload->>'product_id'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_model ON product_import_items ((payload->>'model'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_sku ON product_import_items ((payload->>'sku'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_ean ON product_import_items ((payload->>'ean'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_description_name ON product_import_items (LEFT(payload->'description'->>'name', 2000))");
         });
     }
 

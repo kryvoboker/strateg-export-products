@@ -4,51 +4,44 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Catalog\ShopLanguages\Tables;
 
+use App\Filament\Resources\Trait\Filters\BooleanFilterTrait;
+use App\Filament\Resources\Trait\Tables\BooleanTableTrait;
+use App\Filament\Resources\Trait\Tables\CommonTextTableTrait;
+use App\Filament\Resources\Trait\Tables\DateTableTrait;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class ShopLanguagesTable
 {
+    use CommonTextTableTrait, BooleanTableTrait, DateTableTrait, BooleanFilterTrait;
+
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('shop.name')
-                    ->label(__('admin/shops/languages.columns.shop'))
-                    ->sortable()
-                    ->searchable(),
+                self::getTextTableField([
+                    'field_name' => 'shop.name',
+                    'label'      => __('admin/shops/languages.columns.shop'),
+                ]),
 
-                TextColumn::make('code')
-                    ->label(__('admin/shops/languages.columns.code'))
-                    ->sortable()
-                    ->searchable(),
+                self::getTextTableField([
+                    'field_name' => 'code',
+                    'label'      => __('admin/shops/languages.columns.code'),
+                ]),
 
-                TextColumn::make('name')
-                    ->label(__('admin/shops/languages.columns.name'))
-                    ->sortable()
-                    ->searchable(),
+                self::getTextTableField([
+                    'field_name' => 'name',
+                    'label'      => __('admin/shops/languages.columns.name'),
+                ]),
 
-                IconColumn::make('is_active')
-                    ->label(__('admin/default.columns.is_active'))
-                    ->boolean()
-                    ->sortable(),
+                self::getIsActiveTableField(),
 
-                TextColumn::make('created_at')
-                    ->label(__('admin/default.columns.created_at'))
-                    ->date(config('app.datetime_format'), config('app.timezone'))
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                self::getCreatedAtTableField(),
             ])
             ->filters([
-                TernaryFilter::make('is_active')
-                    ->label(__('admin/default.filters.active'))
-                    ->trueLabel(__('admin/default.filters.active_only'))
-                    ->falseLabel(__('admin/default.filters.inactive_only')),
+                self::getIsActiveFilterField(),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -60,4 +53,3 @@ class ShopLanguagesTable
             ]);
     }
 }
-

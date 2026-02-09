@@ -8,6 +8,7 @@ build-dev:
 	docker compose -f .docker/dev/docker-compose.yml build
 
 restart-dev: down-dev up-dev
+rebuild-dev: down-dev build-dev up-dev
 
 up-prod:
 	docker compose -f .docker/prod/docker-compose.yml up -d
@@ -19,6 +20,7 @@ build-prod:
 	docker compose -f .docker/prod/docker-compose.yml build
 
 restart-prod: down-prod up-prod
+rebuild-prod: down-prod build-prod up-prod
 
 vite:
 	cd httpdocs/app && npm run dev
@@ -26,9 +28,6 @@ vite:
 vite-build:
 	cd httpdocs/app \
 	&& npm run build
-
-spfdb:
-	chown -R ${id -u}:${id -g} db
 
 # Docker Slim optimization commands
 optimize-all:

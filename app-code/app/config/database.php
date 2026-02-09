@@ -29,6 +29,8 @@ return [
     |
     */
 
+    'db_prefix' => env('DB_PREFIX', ''),
+
     'connections' => [
 
         'sqlite' => [
