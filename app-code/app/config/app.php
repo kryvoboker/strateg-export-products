@@ -123,8 +123,10 @@ return [
     */
 
     'maintenance' => [
-        'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
-        'store'  => env('APP_MAINTENANCE_STORE', 'database'),
+        'driver'        => env('APP_MAINTENANCE_DRIVER', 'file'),
+        'store'         => env('APP_MAINTENANCE_STORE', 'database'),
+        'support_email' => env('APP_MAINTENANCE_SUPPORT_EMAIL'),
+        'retry_after'   => (int)env('APP_MAINTENANCE_RETRY_AFTER'),
     ],
 
     'denied_delete_emails'      => [
