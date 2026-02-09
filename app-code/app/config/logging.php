@@ -7,6 +7,8 @@ use Monolog\Handler\SocketHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Handler\TelegramBotHandler;
+use Monolog\Processor\MemoryPeakUsageProcessor;
+use Monolog\Processor\MemoryUsageProcessor;
 use Monolog\Processor\PsrLogMessageProcessor;
 use Monolog\Processor\UidProcessor;
 use Monolog\Processor\WebProcessor;
@@ -141,11 +143,15 @@ return [
             'formatter_with' => [
                 'dateFormat' => 'Y-m-d H:i:s',
             ],
-            'processors'     => [UidProcessor::class, WebProcessor::class],
+            'processors'     => [
+                UidProcessor::class,
+                WebProcessor::class,
+                MemoryPeakUsageProcessor::class,
+                MemoryUsageProcessor::class,
+            ],
             'handler_with'   => [
                 'connectionString' => env('LOG_SOCKET_URL', '127.0.0.1:9913'),
             ],
-            //            'tap'            => [\App\Logging\CustomizeFormatter::class],
         ],
 
         'monolog_telegram_bot' => [
@@ -154,19 +160,24 @@ return [
             'handler'        => TelegramBotHandler::class,
             'formatter'      => LineFormatter::class,
             'formatter_with' => [
-                'format'                     => "[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n",
+                'format'                     => "[%datetime%] " . config('app.name') . " - %channel%.%level_name%: %message% %context% %extra%\n",
                 'dateFormat'                 => 'Y-m-d H:i:s',
                 'allowInlineLineBreaks'      => true,
                 'ignoreEmptyContextAndExtra' => true,
             ],
-            'processors'     => [UidProcessor::class, WebProcessor::class, PsrLogMessageProcessor::class],
+            'processors'     => [
+                UidProcessor::class,
+                WebProcessor::class,
+                PsrLogMessageProcessor::class,
+                MemoryPeakUsageProcessor::class,
+                MemoryUsageProcessor::class,
+            ],
             'handler_with'   => [
                 'apiKey'               => config('buggregator.telegram_token'),
                 'channel'              => config('buggregator.kamaz_id'),
                 'splitLongMessages'    => true,
                 'delayBetweenMessages' => 1,
             ],
-            //            'tap'            => [\App\Logging\CustomizeFormatter::class],
         ],
 
     ],

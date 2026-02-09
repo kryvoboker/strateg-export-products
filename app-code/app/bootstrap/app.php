@@ -19,7 +19,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
         //
     })->create();
 
-// TODO: need fix path
 // Override storage path immediately after app creation
 $new_storage_path = getenv('NEW_STORAGE_PATH');
 
@@ -27,7 +26,6 @@ if ($new_storage_path) {
     $app->useStoragePath($new_storage_path);
 }
 
-// TODO: need fix path
 // Override public path
 $new_public_path = getenv('NEW_PUBLIC_PATH');
 

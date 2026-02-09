@@ -55,7 +55,7 @@ class AppServiceProvider extends ServiceProvider
                 $bindings = $query->bindings;
 
                 // Replace placeholders with quoted bindings for readable SQL.
-                $sql_template = str_replace('?', '%s', $query->sql);
+                $sql_template = str_replace(['%', '?'], ['#', '%s'], $query->sql);
 
                 $sql = vsprintf($sql_template, array_map(function ($binding) {
                     if (is_string($binding)) {

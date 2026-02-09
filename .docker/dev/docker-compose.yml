@@ -84,6 +84,7 @@ services:
       - ../../.docker/dev/env/.env
     labels:
       - "traefik.enable=true"
+      - "traefik.network=traefik-network"
       - "traefik.http.routers.dev-strateg-export-products-nginx.rule=Host(`dev.strateg-export-products.com`)"
       - "traefik.http.routers.dev-strateg-export-products-nginx.entrypoints=web"
       - "traefik.http.services.dev-strateg-export-products-nginx.loadbalancer.server.port=80"
