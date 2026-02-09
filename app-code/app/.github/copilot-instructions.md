@@ -85,7 +85,11 @@ This application is a Laravel application and its main Laravel ecosystems packag
 
 ### Constructors
 - Use PHP 8 constructor property promotion in `__construct()`.
-    - <code-snippet>public function __construct(public GitHub $github) { }</code-snippet>
+    - <code-snippet> 
+
+            public function __construct(public GitHub $github) { } 
+  
+      </code-snippet>
 - Do not allow empty `__construct()` methods with zero parameters unless the constructor is private.
 
 ### Type Declarations
@@ -93,10 +97,12 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - Use appropriate PHP type hints for method parameters.
 
 <code-snippet name="Explicit Return Types and Method Params" lang="php">
-protected function isAccessible(User $user, ?string $path = null): bool
-{
-    ...
-}
+
+    protected function isAccessible(User $user, ?string $path = null): bool
+    {
+        ...
+    }
+
 </code-snippet>
 
 ## Comments
@@ -200,24 +206,35 @@ protected function isAccessible(User $user, ?string $path = null): bool
 - Prefer lifecycle hooks like `mount()`, `updatedFoo()` for initialization and reactive side effects:
 
 <code-snippet name="Lifecycle Hook Examples" lang="php">
-    public function mount(User $user) { $this->user = $user; }
-    public function updatedSearch() { $this->resetPage(); }
+
+    public function mount(User $user) { 
+        $this->user = $user; 
+    }
+
+    public function updatedSearch() { 
+        $this->resetPage(); 
+    }
+
 </code-snippet>
 
 ## Testing Livewire
 
 <code-snippet name="Example Livewire Component Test" lang="php">
+
     Livewire::test(Counter::class)
         ->assertSet('count', 0)
         ->call('increment')
         ->assertSet('count', 1)
         ->assertSee(1)
         ->assertStatus(200);
+
 </code-snippet>
 
 <code-snippet name="Testing Livewire Component Exists on Page" lang="php">
+
     $this->get('/posts/create')
-    ->assertSeeLivewire(CreatePost::class);
+        ->assertSeeLivewire(CreatePost::class);
+
 </code-snippet>
 
 === livewire/v3 rules ===
@@ -242,17 +259,19 @@ protected function isAccessible(User $user, ?string $path = null): bool
 - You can listen for `livewire:init` to hook into Livewire initialization, and `fail.status === 419` for the page expiring:
 
 <code-snippet name="Livewire Init Hook Example" lang="js">
-document.addEventListener('livewire:init', function () {
-    Livewire.hook('request', ({ fail }) => {
-        if (fail && fail.status === 419) {
-            alert('Your session expired');
-        }
-    });
+
+    document.addEventListener('livewire:init', function () {
+        Livewire.hook('request', ({ fail }) => {
+            if (fail && fail.status === 419) {
+                alert('Your session expired');
+            }
+        });
 
     Livewire.hook('message.failed', (message, component) => {
         console.error(message);
     });
 });
+
 </code-snippet>
 
 === pint/core rules ===
@@ -292,11 +311,13 @@ document.addEventListener('livewire:init', function () {
 - When listing items, use gap utilities for spacing; don't use margins.
 
 <code-snippet name="Valid Flex Gap Spacing Example" lang="html">
+
     <div class="flex gap-8">
         <div>Superior</div>
         <div>Michigan</div>
         <div>Erie</div>
     </div>
+
 </code-snippet>
 
 ### Dark Mode
@@ -311,37 +332,43 @@ document.addEventListener('livewire:init', function () {
 - In Tailwind v4, configuration is CSS-first using the `@theme` directive — no separate `tailwind.config.js` file is needed.
 
 <code-snippet name="Extending Theme in CSS" lang="css">
-@theme {
-  --color-brand: oklch(0.72 0.11 178);
-}
+
+    @theme {
+      --color-brand: oklch(0.72 0.11 178);
+    }
+
 </code-snippet>
 
 - In Tailwind v4, you import Tailwind using a regular CSS `@import` statement, not using the `@tailwind` directives used in v3:
 
 <code-snippet name="Tailwind v4 Import Tailwind Diff" lang="diff">
+
    - @tailwind base;
    - @tailwind components;
    - @tailwind utilities;
    + @import "tailwindcss";
+
 </code-snippet>
 
 ### Replaced Utilities
 - Tailwind v4 removed deprecated utilities. Do not use the deprecated option; use the replacement.
 - Opacity values are still numeric.
 
-| Deprecated |	Replacement |
-|------------+--------------|
-| bg-opacity-* | bg-black/* |
-| text-opacity-* | text-black/* |
-| border-opacity-* | border-black/* |
-| divide-opacity-* | divide-black/* |
-| ring-opacity-* | ring-black/* |
-| placeholder-opacity-* | placeholder-black/* |
-| flex-shrink-* | shrink-* |
-| flex-grow-* | grow-* |
-| overflow-ellipsis | text-ellipsis |
-| decoration-slice | box-decoration-slice |
-| decoration-clone | box-decoration-clone |
+```
+| Deprecated            |	Replacement         |
+|--------------------+--------------------------|
+| bg-opacity-*          | bg-black/*            |
+| text-opacity-*        | text-black/*          |
+| border-opacity-*      | border-black/*        |
+| divide-opacity-*      | divide-black/*        |
+| ring-opacity-*        | ring-black/*          |
+| placeholder-opacity-* | placeholder-black/*   |
+| flex-shrink-*         | shrink-*              |
+| flex-grow-*           | grow-*                |
+| overflow-ellipsis     | text-ellipsis         |
+| decoration-slice      | box-decoration-slice  |
+| decoration-clone      | box-decoration-clone  |
+```
 
 === filament/filament rules ===
 
@@ -370,10 +397,12 @@ document.addEventListener('livewire:init', function () {
 - Determine if you can use the `relationship()` method on form components when you need `options` for a select, checkbox, repeater, or when building a `Fieldset`:
 
 <code-snippet name="Relationship example for Form Select" lang="php">
-Forms\Components\Select::make('user_id')
-    ->label('Author')
-    ->relationship('author')
-    ->required(),
+
+    Forms\Components\Select::make('user_id')
+        ->label('Author')
+        ->relationship('author')
+        ->required();
+
 </code-snippet>
 
 ## Testing
@@ -383,7 +412,8 @@ Forms\Components\Select::make('user_id')
 
 ### Example Tests
 
-<code-snippet name="Filament Table Test" lang="php">
+<code-snippet lang="php">
+
     livewire(ListUsers::class)
         ->assertCanSeeTableRecords($users)
         ->searchTable($users->first()->name)
@@ -392,9 +422,11 @@ Forms\Components\Select::make('user_id')
         ->searchTable($users->last()->email)
         ->assertCanSeeTableRecords($users->take(-1))
         ->assertCanNotSeeTableRecords($users->take($users->count() - 1));
+
 </code-snippet>
 
 <code-snippet name="Filament Create Resource Test" lang="php">
+
     livewire(CreateUser::class)
         ->fillForm([
             'name' => 'Howdy',
@@ -408,20 +440,25 @@ Forms\Components\Select::make('user_id')
         'name' => 'Howdy',
         'email' => 'howdy@example.com',
     ]);
+
 </code-snippet>
 
 <code-snippet name="Testing Multiple Panels (setup())" lang="php">
+
     use Filament\Facades\Filament;
 
     Filament::setCurrentPanel('app');
+
 </code-snippet>
 
 <code-snippet name="Calling an Action in a Test" lang="php">
+
     livewire(EditInvoice::class, [
         'invoice' => $invoice,
     ])->callAction('send');
 
     expect($invoice->refresh())->isSent()->toBeTrue();
+
 </code-snippet>
 
 ### Important Version 4 Changes
@@ -439,4 +476,5 @@ Forms\Components\Select::make('user_id')
 - Table columns: `Tables/Columns/`
 - Table filters: `Tables/Filters/`
 - Actions: `Actions/`
+
 </laravel-boost-guidelines>
