@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class ProductExportItem extends Model
 {
@@ -57,6 +58,16 @@ class ProductExportItem extends Model
             ->whereRaw("(payload->>'shop_id')::int = ?", [$shop_id]);
     }
 
+    public function scopeForOperation(Builder $query, string $operation): Builder
+    {
+        $operation = Str::lower(Str::trim($operation));
+        if ($operation === '') {
+            return $query;
+        }
+
+        return $query->whereRaw("(payload->>'operation') = ?", [$operation]);
+    }
+
     /**
      * @return array{total:int, processing:int, failed:int, exported:int}
      */
@@ -75,6 +86,38 @@ class ProductExportItem extends Model
         $status_rows = self::query()
             ->selectRaw('status, COUNT(*) AS status_total')
             ->where('product_import_batch_id', $batch_id)
+            ->groupBy('status')
+            ->get();
+
+        $total = (int) $status_rows->sum(static fn ($row): int => (int) ($row->status_total ?? 0));
+
+        return [
+            'total' => $total,
+            'processing' => (int) ($status_rows->firstWhere('status', \App\Enums\Product\Export\ProductExportItemsStatusEnum::PROCESSING->value)->status_total ?? 0),
+            'failed' => (int) ($status_rows->firstWhere('status', \App\Enums\Product\Export\ProductExportItemsStatusEnum::FAILED->value)->status_total ?? 0),
+            'exported' => (int) ($status_rows->firstWhere('status', \App\Enums\Product\Export\ProductExportItemsStatusEnum::EXPORTED->value)->status_total ?? 0),
+        ];
+    }
+
+    /**
+     * @return array{total:int, processing:int, failed:int, exported:int}
+     */
+    public static function getBatchStatusCountersByOperation(int $batch_id, string $operation): array
+    {
+        if ($batch_id <= 0) {
+            return [
+                'total' => 0,
+                'processing' => 0,
+                'failed' => 0,
+                'exported' => 0,
+            ];
+        }
+
+        /** @var Collection<int, object{status:string,status_total:int}> $status_rows */
+        $status_rows = self::query()
+            ->selectRaw('status, COUNT(*) AS status_total')
+            ->where('product_import_batch_id', $batch_id)
+            ->forOperation($operation)
             ->groupBy('status')
             ->get();
 

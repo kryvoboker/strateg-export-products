@@ -6,6 +6,7 @@ namespace App\Models\Users;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Products\Imports\ProductImportBatch;
+use App\Models\Products\Updates\ProductUpdateBatch;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -110,5 +111,13 @@ class User extends Authenticatable implements FilamentUser
     public function productImportBatches(): HasMany
     {
         return $this->hasMany(ProductImportBatch::class);
+    }
+
+    /**
+     * @return HasMany<ProductUpdateBatch>
+     */
+    public function productUpdateBatches(): HasMany
+    {
+        return $this->hasMany(ProductUpdateBatch::class);
     }
 }

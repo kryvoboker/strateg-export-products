@@ -1,7 +1,7 @@
 <?php
 
-use App\Enums\Product\Import\ProductImportBatchesSourceTypeEnum;
-use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -13,7 +13,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('product_import_batches', function (Blueprint $table) {
+        Schema::create('product_update_batches', function (Blueprint $table) {
             $table->id();
 
             $table->foreignId('user_id')
@@ -23,7 +23,7 @@ return new class extends Migration
 
             $table->string('source_type', 100)
                 ->nullable(false)
-                ->default(ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value)
+                ->default(ProductUpdateBatchesSourceTypeEnum::EXCEL_FILE->value)
                 ->index()
                 ->comment('Source type of the import batch');
 
@@ -37,7 +37,7 @@ return new class extends Migration
 
             $table->string('status', 100)
                 ->nullable(false)
-                ->default(ProductImportBatchesStatusEnum::NEW->value)
+                ->default(ProductUpdateBatchesStatusEnum::NEW->value)
                 ->index()
                 ->comment('Status of the import batch');
 
@@ -59,6 +59,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('product_import_batches');
+        Schema::dropIfExists('product_update_batches');
     }
 };

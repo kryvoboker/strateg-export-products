@@ -332,7 +332,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             : Str::rtrim($base_url, '/') . '/' . Str::ltrim($endpoint, '/');
 
         $request = Http::timeout($timeout)
-            ->acceptJson();
+            ->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
 
         $api_token = Str::trim((string)Arr::get($options, 'api_token', ''));

@@ -8,6 +8,7 @@ use App\Models\Attributes\Attribute;
 use App\Models\Categories\Category;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportItem;
+use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
 use App\Models\Trait\DescriptionsTrait;
 use Illuminate\Database\Eloquent\Model;
@@ -93,6 +94,14 @@ class Product extends Model
     public function importItems(): HasMany
     {
         return $this->hasMany(ProductImportItem::class);
+    }
+
+    /**
+     * @return HasMany<ProductUpdateItem>
+     */
+    public function updateItems(): HasMany
+    {
+        return $this->hasMany(ProductUpdateItem::class);
     }
 
     /**
