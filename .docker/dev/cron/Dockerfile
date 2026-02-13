@@ -1,6 +1,6 @@
 FROM composer:2.9.2 AS composer
 
-FROM php:8.4-cli-alpine3.22 AS php-cli
+FROM php:8.5-cli-alpine3.22 AS php-cli
 
 RUN apk add --no-cache \
   curl \
@@ -37,14 +37,10 @@ COPY --from=supercronic /usr/local/bin/supercronic /usr/local/bin/supercronic
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Import UID and GID
-ARG UID=1000
-ARG GID=1000
-ARG UMASK=0002
-
-ENV UID=${UID}
-ENV GID=${GID}
-ENV UMASK=${UMASK}
-ENV USERNAME=www-data
+ARG UID
+ARG GID
+ARG UMASK
+ARG USERNAME
 
 # Configure composer cache directory
 ENV HOME=/home/${USERNAME}

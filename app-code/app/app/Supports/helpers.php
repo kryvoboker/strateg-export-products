@@ -2,43 +2,34 @@
 
 declare(strict_types=1);
 
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Longman\TelegramBot\Entities\Document;
 use Longman\TelegramBot\Entities\Message;
 use Longman\TelegramBot\Entities\PhotoSize;
 use Longman\TelegramBot\Entities\Update;
 
-if (!function_exists('clear_telephone')) {
-    /**
-     * @param string|null $telephone
-     * @param bool        $is_delete_first_nums
-     *
-     * @return string
-     */
+if (! function_exists('clear_telephone')) {
     function clear_telephone(?string $telephone, bool $is_delete_first_nums = false): string
     {
-        if (!isset($telephone)) {
+        if (! isset($telephone)) {
             return '';
         }
 
         if ($is_delete_first_nums) {
-            return (string)(preg_replace(['/\D+/', '/^38/'], '', $telephone) ?: $telephone);
+            return (string) (preg_replace(['/\D+/', '/^38/'], '', $telephone) ?: $telephone);
         }
 
-        return (string)(preg_replace('/\D+/', '', $telephone) ?: $telephone);
+        return (string) (preg_replace('/\D+/', '', $telephone) ?: $telephone);
     }
 }
 
-if (!function_exists('parse_telephone')) {
-    /**
-     * @param string $telephone
-     *
-     * @return string
-     */
+if (! function_exists('parse_telephone')) {
     function parse_telephone(string $telephone): string
     {
         $telephone = clear_telephone($telephone, true);
 
-        $mask         = '+38 (___) ___-__-__';
+        $mask = '+38 (___) ___-__-__';
         $phone_length = \Illuminate\Support\Str::length($telephone);
 
         for ($index_number = 0; $index_number < $phone_length; $index_number++) {
@@ -49,12 +40,7 @@ if (!function_exists('parse_telephone')) {
     }
 }
 
-if (!function_exists('trim_strs_in_arr')) {
-    /**
-     * @param array $arr
-     *
-     * @return array
-     */
+if (! function_exists('trim_strs_in_arr')) {
     function trim_strs_in_arr(array $arr): array
     {
         return array_map(function ($item) {
@@ -67,62 +53,70 @@ if (!function_exists('trim_strs_in_arr')) {
     }
 }
 
-if (!function_exists('get_telegram_photo')) {
+if (! function_exists('get_telegram_photo')) {
     /**
-     * @param Update $update
-     *
      * @return array<PhotoSize>|null
      */
     function get_telegram_photo(Update $update): ?array
     {
-        return ($update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto());
+        return $update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto();
     }
 }
 
-if (!function_exists('get_telegram_message')) {
-    /**
-     * @param Update $update
-     *
-     * @return Message
-     */
+if (! function_exists('get_telegram_message')) {
     function get_telegram_message(Update $update): Message
     {
-        return ($update->getMessage() ?? $update->getEditedMessage());
+        return $update->getMessage() ?? $update->getEditedMessage();
     }
 }
 
-if (!function_exists('get_telegram_doc')) {
-    /**
-     * @param Update $update
-     *
-     * @return Document|null
-     */
+if (! function_exists('get_telegram_doc')) {
     function get_telegram_doc(Update $update): ?Document
     {
-        return ($update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument());
+        return $update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument();
     }
 }
 
-if (!function_exists('is_telegram_has_photo')) {
-    /**
-     * @param Update $update
-     *
-     * @return bool
-     */
+if (! function_exists('is_telegram_has_photo')) {
     function is_telegram_has_photo(Update $update): bool
     {
         return ($update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto()) !== null;
     }
 }
 
-if (!function_exists('is_telegram_has_doc')) {
-    /**
-     * @param Update $update
-     *
-     * @return bool
-     */
+if (! function_exists('is_telegram_has_doc')) {
     function is_telegram_has_doc(Update $update): bool
     {
         return ($update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument()) !== null;
+    }
+}
+
+if (! function_exists('get_now_date')) {
+    function get_now_date(?string $time_zone = null): Carbon|CarbonInterface
+    {
+        return now($time_zone ?: config('app.timezone'));
+    }
+}
+
+if (! function_exists('validate_url')) {
+    function validate_url(mixed $url): bool
+    {
+        if (is_string($url) === false) {
+            return false;
+        }
+
+        return filter_var($url, FILTER_VALIDATE_URL) !== false;
+    }
+}
+
+if (!function_exists('decode_html_entities')) {
+    /**
+     * @param string|null $string
+     *
+     * @return string
+     */
+    function decode_html_entities(?string $string): string
+    {
+        return html_entity_decode((string)$string, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

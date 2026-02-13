@@ -5,7 +5,8 @@
     ],
     "editors": [
         "codex",
-        "phpstorm"
+        "phpstorm",
+        "copilot",
     ],
     "guidelines": [
         "filament/filament"

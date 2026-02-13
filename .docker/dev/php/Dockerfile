@@ -1,8 +1,6 @@
 FROM composer:2.9.2 AS composer
 
-FROM php:8.4-fpm-bookworm AS php-fpm
-
-WORKDIR /var/webroot/sites/export-products.strateg.ua/app
+FROM php:8.5-fpm-bookworm AS php-fpm
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Kyiv
@@ -48,14 +46,10 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Import UID and GID from docker compose
-ARG UID=1000
-ARG GID=1000
-ARG UMASK=0002
-
-ENV UID=${UID}
-ENV GID=${GID}
-ENV UMASK=${UMASK}
-ENV USERNAME=www-data
+ARG UID
+ARG GID
+ARG UMASK
+ARG USERNAME=www-data
 
 # Configure composer cache directory
 ENV HOME=/home/${USERNAME}
@@ -80,6 +74,8 @@ COPY .docker/dev/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
   && chown ${UID}:${GID} /usr/local/bin/entrypoint.sh
+
+WORKDIR /var/webroot/sites/export-products.strateg.ua/app
 
 EXPOSE 9000
 

@@ -22,10 +22,14 @@ return new class extends Migration
             $table->string('code', 10)->nullable(false);
             $table->string('name', 100)->nullable(false);
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
 
             $table->timestamps();
 
             $table->unique(['shop_id', 'code']);
+            $table->index(['shop_id', 'is_default']);
+
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS " . config('database.db_prefix') . "shop_languages_shop_id_default_unique ON " . config('database.db_prefix') . "shop_languages (shop_id) WHERE is_default = true");
         });
     }
 

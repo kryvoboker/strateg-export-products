@@ -14,12 +14,14 @@ return new class extends Migration
         Schema::create('seo_urls', function (Blueprint $table) {
             $table->id();
 
+            $table->nullableMorphs('seoable');
+
             $table->foreignId('shop_language_id')
+                ->nullable()
                 ->constrained()
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->string('query_key')->nullable(false);
             $table->string('query_value')->nullable(false);
             $table->string('keyword')->nullable(false)->index();
             $table->unsignedSmallInteger('sort_order')->nullable(false)->default(1);
@@ -27,6 +29,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['query_key', 'query_value']);
+            $table->index(['seoable_type', 'seoable_id', 'query_key', 'query_value']);
             $table->index(['shop_language_id', 'query_key', 'query_value']);
         });
     }

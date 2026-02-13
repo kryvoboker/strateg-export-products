@@ -11,14 +11,10 @@ RUN cp /usr/share/zoneinfo/Europe/Kyiv /etc/localtime \
   && echo "Europe/Kyiv" > /etc/timezone
 
 # Import UID and GID
-ARG UID=1000
-ARG GID=1000
-ARG UMASK=0002
-
-ENV UID=${UID}
-ENV GID=${GID}
-ENV UMASK=${UMASK}
-ENV USERNAME=www-data
+ARG UID
+ARG GID
+ARG UMASK
+ARG USERNAME
 
 # Create www-data user with proper shell (Debian syntax)
 RUN deluser ${USERNAME} 2>/dev/null || true \

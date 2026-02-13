@@ -10,6 +10,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
+        USERNAME: ${USERNAME:-www-data}
     image: dev-strateg-export-products-php-fpm:1.0
     container_name: dev-strateg-export-products-php-fpm
     env_file:
@@ -45,6 +46,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
+        USERNAME: ${USERNAME:-www-data}
     image: dev-strateg-export-products-cron:1.0-alpine
     container_name: dev-strateg-export-products-cron
     restart: unless-stopped
@@ -54,7 +56,7 @@ services:
     volumes:
       - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app:ro
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
-      - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage:ro
+      - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage
       - ../../.docker/dev/cron/crontabs:/etc/crontabs
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
@@ -78,6 +80,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
+        USERNAME: ${USERNAME:-www-data}
     image: dev-strateg-export-products-nginx:1.0-alpine-slim
     container_name: dev-strateg-export-products-nginx
     env_file:
@@ -88,7 +91,7 @@ services:
       - "traefik.http.routers.dev-strateg-export-products-nginx.rule=Host(`dev.strateg-export-products.com`)"
       - "traefik.http.routers.dev-strateg-export-products-nginx.entrypoints=web"
       - "traefik.http.services.dev-strateg-export-products-nginx.loadbalancer.server.port=80"
-      - "traefik.http.routers.dev-strateg-export-products-nginx.middlewares=global-ratelimit@file,global-inflight@file"
+#      - "traefik.http.routers.dev-strateg-export-products-nginx.middlewares=global-ratelimit@file,global-inflight@file"
     volumes:
       - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app:ro
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
@@ -115,6 +118,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
+        USERNAME: ${USERNAME:-postgres}
     image: dev-strateg-export-products-postgresql:1.0-alpine
     container_name: dev-strateg-export-products-postgresql
     healthcheck:

@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('attributes', function (Blueprint $table) {
             $table->id();
 
+            $table->boolean('is_active')->nullable(false)->default(false);
             $table->smallInteger('sort_order')->nullable(false)->default(1);
 
             $table->timestamps();

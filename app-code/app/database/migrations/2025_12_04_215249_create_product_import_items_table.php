@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\ProductImportItemsStatusEnum;
+use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -45,11 +45,11 @@ return new class extends Migration
             $table->index(['product_import_batch_id', 'status']);
 
             // Create JSONB indexes using raw SQL
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_product_id ON product_import_items ((payload->>'product_id'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_model ON product_import_items ((payload->>'model'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_sku ON product_import_items ((payload->>'sku'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_ean ON product_import_items ((payload->>'ean'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_description_name ON product_import_items (LEFT(payload->'description'->>'name', 2000))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_product_id ON " . config('database.db_prefix') . "product_import_items ((payload->>'product_id'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_model ON " . config('database.db_prefix') . "product_import_items ((payload->>'model'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_sku ON " . config('database.db_prefix') . "product_import_items ((payload->>'sku'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_ean ON " . config('database.db_prefix') . "product_import_items ((payload->>'ean'))");
+            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_import_items_payload_description_name ON " . config('database.db_prefix') . "product_import_items (LEFT(payload->'description'->>'name', 2000))");
         });
     }
 

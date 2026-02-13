@@ -14,6 +14,11 @@ return new class extends Migration
         Schema::create('product_shop', function (Blueprint $table) {
             $table->id();
 
+            $table->foreignId('product_import_batch_id')
+                ->constrained()
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
+
             $table->foreignId('product_id')
                 ->constrained()
                 ->cascadeOnUpdate()
@@ -29,6 +34,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['product_id', 'shop_id']);
+            $table->unique(['product_import_batch_id', 'product_id']);
         });
     }
 

@@ -23,7 +23,7 @@ trait ImageFormTrait
             ->image() // accept images only
             ->directory($params['directory'] ?? config('app.images.product.image_path'))
             ->maxSize((int)($params['max_size'] ?? config('app.images.product.upload.max_size_kb')))
-            ->rules($params['rules'] ?? ['nullable', Rule::file()::types(['image/jpeg', 'image/png']), 'max:' . (int)config('app.images.product.upload.max_size_kb')])
+            ->rules($params['rules'] ?? ['nullable', Rule::file()->types(['jpeg', 'jpg', 'png'])->max((int)config('app.images.product.upload.max_size_kb'))])
             ->preserveFilenames() // not generate unique names
             ->imageEditor()
             ->imageEditorViewportWidth((int)($params['image_width'] ?? config('app.images.product.preview_in_page_in_admin.width')))

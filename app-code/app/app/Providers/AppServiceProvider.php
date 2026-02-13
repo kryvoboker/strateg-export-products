@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
+use App\Supports\Services\Ai\AiTranslationService;
+//use App\Supports\Services\Translations\Product\ProductAttributeTextAiTranslatorService;
+//use App\Supports\Services\Translations\Product\ProductDescriptionAiTranslatorService;
+//use App\Supports\Services\Translations\Product\ProductNameAiTranslatorService;
 use DateTimeInterface;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use OpenAI;
+use OpenAI\Client;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +36,22 @@ class AppServiceProvider extends ServiceProvider
                 'logging.channels.stack.path'  => $new_storage_path . '/logs/laravel.log',
             ]);
         }
+
+        $this->app->singleton(Client::class, function () {
+            $api_key = (string) config('open-ai.api_key');
+
+            if (empty($api_key)) {
+                throw new RuntimeException('OpenAI API key is not configured');
+            }
+
+            return OpenAI::client($api_key);
+        });
+
+        $this->app->singleton(AiTranslationService::class);
+        $this->app->singleton(AiTranslationPromptBuilderService::class);
+//        $this->app->singleton(ProductNameAiTranslatorService::class);
+//        $this->app->singleton(ProductDescriptionAiTranslatorService::class);
+//        $this->app->singleton(ProductAttributeTextAiTranslatorService::class);
     }
 
     /**

@@ -3,6 +3,7 @@
 return [
     // Menu items
     'menu'         => [
+        'item_shops'   => 'Магазини',
         'item_catalog' => 'Каталог',
         'item_users'   => 'Користувачі',
     ],
@@ -20,6 +21,7 @@ return [
         'is_active'             => 'Активний',
         'image'                 => 'Зображення',
         'base_url'              => 'Базовий URL',
+        'is_default'            => 'За замовчуванням',
     ],
 
     // Columns

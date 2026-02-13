@@ -26,22 +26,22 @@ class UsersTable
         return $table
             ->columns([
                 self::getTextTableField([
-                    'filed_name' => 'name',
+                    'field_name' => 'name',
                     'label'      => __('admin/default.columns.name'),
                 ]),
 
                 self::getTextTableField([
-                    'filed_name' => 'lastname',
+                    'field_name' => 'lastname',
                     'label'      => __('admin/default.columns.lastname'),
                 ]),
 
                 self::getTextTableField([
-                    'filed_name' => 'email',
+                    'field_name' => 'email',
                     'label'      => __('admin/default.columns.email'),
                 ]),
 
                 self::getTextTableField([
-                    'filed_name'                   => 'telephone',
+                    'field_name'                   => 'telephone',
                     'label'                        => __('admin/default.columns.telephone'),
                     'format_state_using_cb'        => function ($state) {
                         return parse_telephone($state);

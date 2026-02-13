@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Models\Users;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Products\Imports\ProductImportBatch;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
@@ -54,24 +56,16 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
-            'is_active'         => 'boolean',
-            'password'          => 'hashed',
+            'is_active' => 'boolean',
+            'password' => 'hashed',
         ];
     }
 
-    /**
-     * @param Panel $panel
-     *
-     * @return bool
-     */
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->is_active;
     }
 
-    /**
-     * @return void
-     */
     protected static function booted(): void
     {
         static::saving(function (User $user) {
@@ -83,30 +77,23 @@ class User extends Authenticatable implements FilamentUser
         });
     }
 
-    /**
-     * @return Attribute
-     */
     public function telephone(): Attribute
     {
         return Attribute::make(
-            set: fn(?string $value) => $value === null ? null : clear_telephone($value),
+            set: fn (?string $value) => $value === null ? null : clear_telephone($value),
         );
     }
 
     /**
      * For \App\Filament\Resources\Users\UserResource
-     *
-     * @return string
      */
     public function getFullNameAttribute(): string
     {
-        return trim($this->name . ' ' . ($this->lastname ?? ''));
+        return trim($this->name.' '.($this->lastname ?? ''));
     }
 
     /**
      * For \App\Filament\Resources\Users\UserForm
-     *
-     * @return string|null
      */
     public function getAvatarUrlAttribute(): ?string
     {
@@ -115,5 +102,13 @@ class User extends Authenticatable implements FilamentUser
         }
 
         return Storage::url($this->avatar);
+    }
+
+    /**
+     * @return HasMany<ProductImportBatch>
+     */
+    public function productImportBatches(): HasMany
+    {
+        return $this->hasMany(ProductImportBatch::class);
     }
 }

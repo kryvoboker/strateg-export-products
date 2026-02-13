@@ -129,6 +129,9 @@ return [
         'retry_after'   => (int)env('APP_MAINTENANCE_RETRY_AFTER'),
     ],
 
+    'allowed_projects_types'    => [
+        'opencart' => explode(',', env('ALLOWED_OPENCART_PROJECTS_TYPES', '')),
+    ],
     'denied_delete_emails'      => [
         'fast.kamaz@gmail.com'
     ],

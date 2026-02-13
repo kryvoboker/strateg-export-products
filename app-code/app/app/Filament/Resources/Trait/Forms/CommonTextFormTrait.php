@@ -22,7 +22,7 @@ trait CommonTextFormTrait
             ->label($params['label'])
             ->helperText($params['helper_text'] ?? null)
             ->maxLength($max_length)
-            ->placeholder($params['placeholder'])
+            ->placeholder($params['placeholder'] ?? null)
             ->rules($params['rules'] ?? ['string', "max:$max_length"])
             ->default($params['default'] ?? null)
             ->required($params['required'] ?? true);
@@ -111,12 +111,12 @@ trait CommonTextFormTrait
 
         $text_input = TextInput::make($params['field_name'] ?? 'base_url')
             ->label($params['label'] ?? __('admin/default.labels.base_url'))
+            ->helperText($params['helper_text'] ?? null)
             ->maxLength($max_length)
             ->url()
-            ->rules($params['rules'] ?? ['required', 'url', "max:$max_length"])
-            ->placeholder('https://example.com')
-            ->required($params['required'] ?? true)
-            ->columnSpanFull();
+            ->rules($params['rules'] ?? ['nullable', 'url', "max:$max_length"])
+            ->placeholder($params['placeholder'] ?? 'https://example.com')
+            ->required($params['required'] ?? true);
 
         if (isset($params['unique']['ignore_record'])) {
             $text_input->unique(ignoreRecord: $params['unique']['ignore_record']);

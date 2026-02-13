@@ -59,7 +59,7 @@ class UserForm
                     'label'        => __('admin/default.labels.avatar'),
                     'directory'    => config('app.images.user.image_path'),
                     'max_size'     => (int)config('app.images.user.upload.max_size_kb'),
-                    'rules'        => ['nullable', Rule::file()::types(['image/jpeg', 'image/png']), 'max:' . (int)config('app.images.user.upload.max_size_kb')],
+                    'rules'        => ['nullable', Rule::file()->types(['jpeg', 'jpg', 'png'])->max((int)config('app.images.user.upload.max_size_kb'))],
                     'image_width'  => (int)config('app.images.user.preview_in_page_in_admin.width'),
                     'image_height' => (int)config('app.images.user.preview_in_page_in_admin.height'),
                 ]),
