@@ -56,7 +56,7 @@ class ProductUpdateBatchesTable
                             return __('admin/product_updates/batches.statuses.updating_api');
                         }
 
-                        return __('admin/product_updates/batches.statuses.' . $state);
+                        return __('admin/product_updates/batches.statuses.'.$state);
                     })
                     ->sortable(),
                 TextColumn::make('total_items')->label(__('admin/product_imports/batches.columns.total_items'))->sortable(),
@@ -81,12 +81,12 @@ class ProductUpdateBatchesTable
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.status'))
                     ->options([
-                        ProductUpdateBatchesStatusEnum::NEW->value => __('admin/product_updates/batches.statuses.new'),
-                        ProductUpdateBatchesStatusEnum::PROCESSING->value => __('admin/product_updates/batches.statuses.processing'),
-                        ProductUpdateBatchesStatusEnum::COMPLETED->value => __('admin/product_updates/batches.statuses.completed'),
-                        ProductUpdateBatchesStatusEnum::FAILED->value => __('admin/product_updates/batches.statuses.failed'),
+                        ProductUpdateBatchesStatusEnum::NEW->value            => __('admin/product_updates/batches.statuses.new'),
+                        ProductUpdateBatchesStatusEnum::PROCESSING->value     => __('admin/product_updates/batches.statuses.processing'),
+                        ProductUpdateBatchesStatusEnum::COMPLETED->value      => __('admin/product_updates/batches.statuses.completed'),
+                        ProductUpdateBatchesStatusEnum::FAILED->value         => __('admin/product_updates/batches.statuses.failed'),
                         ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value => __('admin/product_updates/batches.statuses.partial_failed'),
-                        ProductUpdateBatchesStatusEnum::CANCELED->value => __('admin/product_updates/batches.statuses.canceled'),
+                        ProductUpdateBatchesStatusEnum::CANCELED->value       => __('admin/product_updates/batches.statuses.canceled'),
                     ]),
             ])
             ->recordActions([
@@ -171,22 +171,22 @@ class ProductUpdateBatchesTable
     }
 
     /**
-     * @param Collection<int, ProductUpdateBatch> $records
-     * @param list<int> $shop_ids
+     * @param  Collection<int, ProductUpdateBatch>  $records
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function queueUpdateForSelectedBatches(Collection $records, array $shop_ids): array
     {
         $summary = [
-            'batches_selected' => $records->count(),
-            'batches_skipped_processing' => 0,
-            'products_total' => 0,
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
+            'batches_selected'            => $records->count(),
+            'batches_skipped_processing'  => 0,
+            'products_total'              => 0,
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
-            'errors' => 0,
+            'errors'                      => 0,
         ];
 
         foreach ($records as $batch) {
@@ -235,12 +235,12 @@ class ProductUpdateBatchesTable
     private static function createUpdateItemAndDispatch(int $batch_id, int $product_id, int $shop_id): array
     {
         $summary = [
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
-            'errors' => 0,
+            'errors'                      => 0,
         ];
 
         try {
@@ -283,18 +283,19 @@ class ProductUpdateBatchesTable
 
             $update_item = ProductUpdateItem::query()->create([
                 'product_update_batch_id' => $batch_id,
-                'product_id' => $product_id,
-                'payload' => [
-                    'operation' => 'update',
-                    'shop_id' => $shop_id,
+                'product_id'              => $product_id,
+                'payload'                 => [
+                    'operation'            => 'update',
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => $product_id,
-                    'external_product_id' => $external_product_id,
+                    'target_product_id'    => $product_id,
+                    'external_product_id'  => $external_product_id,
                     'requested_by_user_id' => auth()->id(),
+                    'update_instructions'  => self::resolvePreparedUpdateInstructions($batch_id, $product_id),
                 ],
-                'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                 'error_message' => null,
-                'processed_at' => null,
+                'processed_at'  => null,
             ]);
 
             ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
@@ -309,7 +310,33 @@ class ProductUpdateBatchesTable
     }
 
     /**
-     * @param Collection<int, ProductUpdateBatch> $records
+     * @return array<string, mixed>
+     */
+    private static function resolvePreparedUpdateInstructions(int $batch_id, int $product_id): array
+    {
+        if ($batch_id <= 0 || $product_id <= 0) {
+            return [];
+        }
+
+        $prepared_item = ProductUpdateItem::query()
+            ->where('product_update_batch_id', $batch_id)
+            ->where('product_id', $product_id)
+            ->whereRaw("(payload->>'operation') = 'prepare_update'")
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $prepared_item instanceof ProductUpdateItem) {
+            return [];
+        }
+
+        $prepared_payload    = is_array($prepared_item->payload) ? $prepared_item->payload : [];
+        $update_instructions = Arr::get($prepared_payload, 'update_instructions', []);
+
+        return is_array($update_instructions) ? $update_instructions : [];
+    }
+
+    /**
+     * @param  Collection<int, ProductUpdateBatch>  $records
      * @return array<string, int>
      */
     private static function retryFailedUpdatesForBatches(Collection $records): array
@@ -324,7 +351,7 @@ class ProductUpdateBatchesTable
         if ($batch_ids === []) {
             return [
                 'failed_found' => 0,
-                'queued' => 0,
+                'queued'       => 0,
             ];
         }
 
@@ -338,9 +365,9 @@ class ProductUpdateBatchesTable
         $queued = 0;
         foreach ($failed_update_items as $failed_update_item) {
             $failed_update_item->update([
-                'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                 'error_message' => null,
-                'processed_at' => null,
+                'processed_at'  => null,
             ]);
 
             ProcessProductUpdateItemJob::dispatch((int) $failed_update_item->id);
@@ -358,8 +385,8 @@ class ProductUpdateBatchesTable
                 $batch->update([
                     'options' => [
                         ...($batch->options ?? []),
-                        'update_state' => 'processing',
-                        'update_started_at' => get_now_date()->toDateTimeString(),
+                        'update_state'       => 'processing',
+                        'update_started_at'  => get_now_date()->toDateTimeString(),
                         'update_finished_at' => null,
                     ],
                 ]);
@@ -368,7 +395,7 @@ class ProductUpdateBatchesTable
 
         return [
             'failed_found' => $failed_update_items->count(),
-            'queued' => $queued,
+            'queued'       => $queued,
         ];
     }
 
@@ -384,11 +411,11 @@ class ProductUpdateBatchesTable
         }
 
         $batch->update([
-            'status' => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            'status'  => ProductUpdateBatchesStatusEnum::PROCESSING->value,
             'options' => [
                 ...($batch->options ?? []),
-                'update_state' => 'processing',
-                'update_started_at' => get_now_date()->toDateTimeString(),
+                'update_state'       => 'processing',
+                'update_started_at'  => get_now_date()->toDateTimeString(),
                 'update_finished_at' => null,
             ],
         ]);
@@ -398,4 +425,3 @@ class ProductUpdateBatchesTable
         ]);
     }
 }
-

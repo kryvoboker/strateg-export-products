@@ -12,14 +12,17 @@ use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
 use App\Models\Trait\DescriptionsTrait;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RuntimeException;
 
 class Product extends Model
 {
     use DescriptionsTrait;
 
     protected $fillable = [
+        'product_import_item_id',
         'marked_to_shop',
         'model',
         'sku',
@@ -39,12 +42,13 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'integer',
-            'minimum' => 'integer',
-            'price' => 'decimal:4',
-            'is_active' => 'boolean',
-            'date_available' => 'datetime',
-            'date_added' => 'datetime',
+            'product_import_item_id' => 'integer',
+            'quantity'               => 'integer',
+            'minimum'                => 'integer',
+            'price'                  => 'decimal:4',
+            'is_active'              => 'boolean',
+            'date_available'         => 'datetime',
+            'date_added'             => 'datetime',
         ];
     }
 
@@ -89,11 +93,11 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductImportItem>
+     * @return BelongsTo<ProductImportItem, $this>
      */
-    public function importItems(): HasMany
+    public function importItem(): BelongsTo
     {
-        return $this->hasMany(ProductImportItem::class);
+        return $this->belongsTo(ProductImportItem::class, 'product_import_item_id');
     }
 
     /**
@@ -181,21 +185,37 @@ class Product extends Model
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public static function createFromImportPayload(array $attributes, ?int $product_id = null): int
-    {
-        $now_date = get_now_date();
-        $attributes['created_at'] = $now_date;
-        $attributes['updated_at'] = $now_date;
+    public static function createFromImportPayload(
+        array $attributes,
+        int $product_import_item_id,
+        ?int $product_id = null
+    ): int {
+        if ($product_import_item_id <= 0) {
+            throw new RuntimeException('Invalid product_import_item_id for product creation');
+        }
+
+        $now_date                             = get_now_date();
+        $attributes['product_import_item_id'] = $product_import_item_id;
+        $attributes['created_at']             = $now_date;
+        $attributes['updated_at']             = $now_date;
 
         if ($product_id !== null) {
             $attributes['id'] = $product_id;
 
             static::query()->insert($attributes);
+            ProductImportItem::query()
+                ->whereKey($product_import_item_id)
+                ->update(['product_id' => $product_id]);
 
             return $product_id;
         }
 
-        return static::query()->insertGetId($attributes);
+        $inserted_product_id = (int) static::query()->insertGetId($attributes);
+        ProductImportItem::query()
+            ->whereKey($product_import_item_id)
+            ->update(['product_id' => $inserted_product_id]);
+
+        return $inserted_product_id;
     }
 
     public function getProductNameAttribute(): string

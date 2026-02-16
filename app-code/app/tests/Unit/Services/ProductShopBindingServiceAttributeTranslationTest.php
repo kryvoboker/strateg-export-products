@@ -11,8 +11,10 @@ use App\Models\Products\ProductToAttribute;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Catalog\ProductShopBindingService;
+use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Support\Facades\Facade;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -30,15 +32,19 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         $container = new Container();
         Container::setInstance($container);
+        Facade::setFacadeApplication($container);
+        $container->instance('config', new Repository([
+            'database.db_prefix' => '',
+        ]));
 
         $container->instance(AiTranslationPromptBuilderService::class, new AiTranslationPromptBuilderService());
         $container->instance(\App\Supports\Services\Ai\AiTranslationService::class, new FakeAiTranslationService());
 
         self::$capsule = new Capsule();
         self::$capsule->addConnection([
-            'driver' => 'sqlite',
+            'driver'   => 'sqlite',
             'database' => ':memory:',
-            'prefix' => '',
+            'prefix'   => '',
         ]);
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
@@ -94,6 +100,35 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             $table->timestamps();
             $table->unique(['product_id', 'attribute_id', 'shop_language_id']);
         });
+
+        $schema->create('categories', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('parent_id')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->boolean('is_active')->default(false);
+            $table->timestamps();
+        });
+
+        $schema->create('category_descriptions', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('category_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->string('h1_title')->nullable();
+            $table->string('meta_title')->nullable();
+            $table->string('meta_description')->nullable();
+            $table->string('meta_keywords')->nullable();
+            $table->timestamps();
+            $table->unique(['category_id', 'shop_language_id']);
+        });
+
+        $schema->create('category_product', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('product_id');
+            $table->unsignedInteger('category_id');
+            $table->timestamps();
+        });
     }
 
     protected function setUp(): void
@@ -109,52 +144,52 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
     public function test_it_splits_pipe_attributes_and_translates_to_shop_languages_using_default_source_language(): void
     {
-        $shop_id = 10;
+        $shop_id    = 10;
         $product_id = 101;
 
         $en_language = ShopLanguage::query()->create([
-            'shop_id' => $shop_id,
-            'code' => 'en',
-            'name' => 'English',
-            'is_active' => true,
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
             'is_default' => true,
         ]);
 
         $uk_language = ShopLanguage::query()->create([
-            'shop_id' => $shop_id,
-            'code' => 'uk',
-            'name' => 'Українська',
-            'is_active' => true,
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
             'is_default' => false,
         ]);
 
         ProductDescription::query()->create([
-            'product_id' => $product_id,
+            'product_id'       => $product_id,
             'shop_language_id' => (int) $en_language->id,
-            'name' => 'Phone',
-            'description' => 'Smart phone',
-            'meta_title' => 'Phone',
+            'name'             => 'Phone',
+            'description'      => 'Smart phone',
+            'meta_title'       => 'Phone',
             'meta_description' => 'Smart phone',
-            'meta_keywords' => 'phone',
+            'meta_keywords'    => 'phone',
         ]);
 
         $source_attribute = Attribute::query()->create([
-            'parent_id' => null,
+            'parent_id'  => null,
             'sort_order' => 1,
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         AttributeDescription::query()->create([
-            'attribute_id' => (int) $source_attribute->id,
+            'attribute_id'     => (int) $source_attribute->id,
             'shop_language_id' => (int) $en_language->id,
-            'name' => 'Color|Size',
+            'name'             => 'Color|Size',
         ]);
 
         ProductToAttribute::query()->create([
-            'product_id' => $product_id,
-            'attribute_id' => (int) $source_attribute->id,
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $source_attribute->id,
             'shop_language_id' => (int) $en_language->id,
-            'text' => 'Red|XL',
+            'text'             => 'Red|XL',
         ]);
 
         $service = new ProductShopBindingService();
@@ -213,7 +248,6 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
     private function invokePrivateMethod(object $target, string $method_name, array $arguments = []): mixed
     {
         $method = new ReflectionMethod($target, $method_name);
-        $method->setAccessible(true);
 
         return $method->invokeArgs($target, $arguments);
     }

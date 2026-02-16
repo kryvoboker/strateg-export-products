@@ -8,7 +8,10 @@ use App\Jobs\ProcessProductImportBatchJob;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Shops\ShopLanguage;
+use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Support\Facades\Facade;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -26,12 +29,19 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 
         self::$capsule = new Capsule();
         self::$capsule->addConnection([
-            'driver' => 'sqlite',
+            'driver'   => 'sqlite',
             'database' => ':memory:',
-            'prefix' => '',
+            'prefix'   => '',
         ]);
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
+
+        $container = new Container();
+        Container::setInstance($container);
+        Facade::setFacadeApplication($container);
+        $container->instance('config', new Repository([
+            'database.db_prefix' => '',
+        ]));
 
         $schema = self::$capsule->schema();
 
@@ -76,9 +86,9 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         ShopLanguage::query()->delete();
 
         ShopLanguage::query()->create([
-            'shop_id' => 1,
-            'code' => 'uk',
-            'name' => 'Українська',
+            'shop_id'   => 1,
+            'code'      => 'uk',
+            'name'      => 'Українська',
             'is_active' => true,
         ]);
     }
@@ -91,7 +101,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         $category_paths = $this->invokePrivateMethod(
             $job,
             'parseCategoryPathsFromRawValue',
-            ['Побутова техніка, Побутова техніка > Клімат, Електроніка, Побутова техніка > Клімат']
+            ['Побутова техніка | Побутова техніка > Клімат | Електроніка | Побутова техніка > Клімат']
         );
 
         self::assertSame(
@@ -111,7 +121,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         $leaf_category_id = (int) $this->invokePrivateMethod(
             $job,
             'resolveOrCreateCategoryIdByPath',
-            [['Смарт-пристрої', 'Розумний дім', 'Датчики']]
+            [['Smart devices', 'Smart home', 'Sensors']]
         );
 
         self::assertGreaterThan(0, $leaf_category_id);
@@ -119,17 +129,17 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         self::assertSame(3, CategoryDescription::query()->count());
 
         $leaf_category = Category::query()->findOrFail($leaf_category_id);
-        $mid_category = Category::query()->findOrFail((int) $leaf_category->parent_id);
+        $mid_category  = Category::query()->findOrFail((int) $leaf_category->parent_id);
         $root_category = Category::query()->findOrFail((int) $mid_category->parent_id);
 
-        self::assertSame('Датчики', CategoryDescription::query()->where('category_id', $leaf_category->id)->value('name'));
-        self::assertSame('Розумний дім', CategoryDescription::query()->where('category_id', $mid_category->id)->value('name'));
-        self::assertSame('Смарт-пристрої', CategoryDescription::query()->where('category_id', $root_category->id)->value('name'));
+        self::assertSame('Sensors', CategoryDescription::query()->where('category_id', $leaf_category->id)->value('name'));
+        self::assertSame('Smart home', CategoryDescription::query()->where('category_id', $mid_category->id)->value('name'));
+        self::assertSame('Smart devices', CategoryDescription::query()->where('category_id', $root_category->id)->value('name'));
 
         $same_leaf_category_id = (int) $this->invokePrivateMethod(
             $job,
             'resolveOrCreateCategoryIdByPath',
-            [['Смарт-пристрої', 'Розумний дім', 'Датчики']]
+            [['Smart devices', 'Smart home', 'Sensors']]
         );
 
         self::assertSame($leaf_category_id, $same_leaf_category_id);
@@ -138,7 +148,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         $another_leaf_category_id = (int) $this->invokePrivateMethod(
             $job,
             'resolveOrCreateCategoryIdByPath',
-            [['Смарт-пристрої', 'Розумний дім', 'Освітлення']]
+            [['Smart devices', 'Smart home', 'Lighting']]
         );
 
         self::assertGreaterThan(0, $another_leaf_category_id);
@@ -146,7 +156,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 
         $another_leaf = Category::query()->findOrFail($another_leaf_category_id);
         self::assertSame($mid_category->id, (int) $another_leaf->parent_id);
-        self::assertSame('Освітлення', CategoryDescription::query()->where('category_id', $another_leaf->id)->value('name'));
+        self::assertSame('Lighting', CategoryDescription::query()->where('category_id', $another_leaf->id)->value('name'));
     }
 
     /**
@@ -155,9 +165,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
     private function invokePrivateMethod(object $target, string $method_name, array $arguments = []): mixed
     {
         $method = new ReflectionMethod($target, $method_name);
-        $method->setAccessible(true);
 
         return $method->invokeArgs($target, $arguments);
     }
 }
-

@@ -51,7 +51,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 TextColumn::make('id')->label('ID')->sortable(),
                 TextColumn::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
-                    ->formatStateUsing(fn (string $state): string => __('admin/product_updates/batches.item_statuses.' . $state))
+                    ->formatStateUsing(fn (string $state): string => __('admin/product_updates/batches.item_statuses.'.$state))
                     ->badge()
                     ->sortable(),
                 TextColumn::make('product_id')
@@ -75,11 +75,11 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
                     ->options([
-                        ProductUpdateItemsStatusEnum::NEW->value => __('admin/product_updates/batches.item_statuses.new'),
+                        ProductUpdateItemsStatusEnum::NEW->value        => __('admin/product_updates/batches.item_statuses.new'),
                         ProductUpdateItemsStatusEnum::PROCESSING->value => __('admin/product_updates/batches.item_statuses.processing'),
                         ProductUpdateItemsStatusEnum::NORMALIZED->value => __('admin/product_updates/batches.item_statuses.normalized'),
-                        ProductUpdateItemsStatusEnum::SUCCESSED->value => __('admin/product_updates/batches.item_statuses.successed'),
-                        ProductUpdateItemsStatusEnum::FAILED->value => __('admin/product_updates/batches.item_statuses.failed'),
+                        ProductUpdateItemsStatusEnum::SUCCESSED->value  => __('admin/product_updates/batches.item_statuses.successed'),
+                        ProductUpdateItemsStatusEnum::FAILED->value     => __('admin/product_updates/batches.item_statuses.failed'),
                     ]),
                 SelectFilter::make('shop_id')
                     ->label(__('admin/product_imports/batches.filters.shop'))
@@ -109,16 +109,16 @@ class ProductUpdateItemsRelationManager extends RelationManager
                         $payload = $record->payload;
 
                         if (! is_array($payload) || $payload === []) {
-                            return new HtmlString('<p>' . __('admin/product_imports/batches.messages.payload_is_empty') . '</p>');
+                            return new HtmlString('<p>'.__('admin/product_imports/batches.messages.payload_is_empty').'</p>');
                         }
 
                         $formatted_json = json_encode(Arr::sortRecursive($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
                         return new HtmlString(
                             '<div class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-4">'
-                            . '<pre class="w-full text-sm text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">'
-                            . e((string) $formatted_json)
-                            . '</pre></div>'
+                            .'<pre class="w-full text-sm text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">'
+                            .e((string) $formatted_json)
+                            .'</pre></div>'
                         );
                     })
                     ->action(static fn (): null => null),
@@ -154,9 +154,9 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ->visible(fn (ProductUpdateItem $record): bool => $record->status === ProductUpdateItemsStatusEnum::FAILED->value)
                     ->action(function (ProductUpdateItem $record): void {
                         $record->update([
-                            'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                            'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                             'error_message' => null,
-                            'processed_at' => null,
+                            'processed_at'  => null,
                         ]);
 
                         ProcessProductUpdateItemJob::dispatch((int) $record->id);
@@ -165,7 +165,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             ->title(__('admin/product_updates/batches.messages.item_retry_queued'))
                             ->body(__('admin/product_updates/batches.messages.item_retry_result', [
                                 'failed_found' => 1,
-                                'queued' => 1,
+                                'queued'       => 1,
                             ]))
                             ->success()
                             ->send();
@@ -228,7 +228,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             $records_collection = collect($records);
 
                             $failed_found = 0;
-                            $queued = 0;
+                            $queued       = 0;
                             foreach ($records_collection as $record) {
                                 if (! $record instanceof ProductUpdateItem) {
                                     continue;
@@ -239,9 +239,9 @@ class ProductUpdateItemsRelationManager extends RelationManager
 
                                 $failed_found++;
                                 $record->update([
-                                    'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                                    'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                                     'error_message' => null,
-                                    'processed_at' => null,
+                                    'processed_at'  => null,
                                 ]);
                                 ProcessProductUpdateItemJob::dispatch((int) $record->id);
                                 $queued++;
@@ -251,7 +251,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                                 ->title(__('admin/product_updates/batches.messages.bulk_retry_queued'))
                                 ->body(__('admin/product_updates/batches.messages.bulk_retry_result', [
                                     'failed_found' => $failed_found,
-                                    'queued' => $queued,
+                                    'queued'       => $queued,
                                 ]))
                                 ->success()
                                 ->send();
@@ -286,23 +286,23 @@ class ProductUpdateItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param list<int> $shop_ids
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private function queueUpdateForSingleItem(ProductUpdateItem $record, array $shop_ids): array
     {
         $summary = [
-            'products_total' => 0,
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
+            'products_total'              => 0,
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
-            'errors' => 0,
+            'errors'                      => 0,
         ];
 
         $product_id = (int) ($record->product_id ?? 0);
-        $batch_id = (int) ($record->product_update_batch_id ?? 0);
+        $batch_id   = (int) ($record->product_update_batch_id ?? 0);
 
         if ($product_id <= 0 || $batch_id <= 0) {
             return $summary;
@@ -325,23 +325,23 @@ class ProductUpdateItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param Collection<int, ProductUpdateItem> $records
-     * @param list<int> $shop_ids
+     * @param  Collection<int, ProductUpdateItem>  $records
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private function queueUpdateForSelectedItems(Collection $records, array $shop_ids): array
     {
         $summary = [
-            'items_selected' => $records->count(),
-            'items_skipped_processing' => 0,
+            'items_selected'                => $records->count(),
+            'items_skipped_processing'      => 0,
             'items_skipped_without_product' => 0,
-            'products_total' => 0,
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
-            'skipped_without_external_id' => 0,
-            'errors' => 0,
+            'products_total'                => 0,
+            'updates_queued'                => 0,
+            'already_failed'                => 0,
+            'already_queued_or_exported'    => 0,
+            'skipped_not_bound'             => 0,
+            'skipped_without_external_id'   => 0,
+            'errors'                        => 0,
         ];
 
         foreach ($records as $record) {
@@ -351,11 +351,13 @@ class ProductUpdateItemsRelationManager extends RelationManager
 
             if ($record->status === ProductUpdateItemsStatusEnum::PROCESSING->value) {
                 $summary['items_skipped_processing']++;
+
                 continue;
             }
 
             if ((int) ($record->product_id ?? 0) <= 0) {
                 $summary['items_skipped_without_product']++;
+
                 continue;
             }
 
@@ -378,12 +380,12 @@ class ProductUpdateItemsRelationManager extends RelationManager
     private function queueUpdateForBatchProductShop(int $batch_id, int $product_id, int $shop_id): array
     {
         $summary = [
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
-            'errors' => 0,
+            'errors'                      => 0,
         ];
 
         $product_shop = ProductShop::query()
@@ -425,18 +427,19 @@ class ProductUpdateItemsRelationManager extends RelationManager
 
         $update_item = ProductUpdateItem::query()->create([
             'product_update_batch_id' => $batch_id,
-            'product_id' => $product_id,
-            'payload' => [
-                'operation' => 'update',
-                'shop_id' => $shop_id,
+            'product_id'              => $product_id,
+            'payload'                 => [
+                'operation'            => 'update',
+                'shop_id'              => $shop_id,
                 'requested_product_id' => $product_id,
-                'target_product_id' => $product_id,
-                'external_product_id' => $external_product_id,
+                'target_product_id'    => $product_id,
+                'external_product_id'  => $external_product_id,
                 'requested_by_user_id' => auth()->id(),
+                'update_instructions'  => $this->resolvePreparedUpdateInstructions($batch_id, $product_id),
             ],
-            'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+            'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
             'error_message' => null,
-            'processed_at' => null,
+            'processed_at'  => null,
         ]);
 
         ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
@@ -445,6 +448,32 @@ class ProductUpdateItemsRelationManager extends RelationManager
         $this->markBatchAsUpdating($batch_id);
 
         return $summary;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolvePreparedUpdateInstructions(int $batch_id, int $product_id): array
+    {
+        if ($batch_id <= 0 || $product_id <= 0) {
+            return [];
+        }
+
+        $prepared_item = ProductUpdateItem::query()
+            ->where('product_update_batch_id', $batch_id)
+            ->where('product_id', $product_id)
+            ->whereRaw("(payload->>'operation') = 'prepare_update'")
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $prepared_item instanceof ProductUpdateItem) {
+            return [];
+        }
+
+        $prepared_payload    = is_array($prepared_item->payload) ? $prepared_item->payload : [];
+        $update_instructions = Arr::get($prepared_payload, 'update_instructions', []);
+
+        return is_array($update_instructions) ? $update_instructions : [];
     }
 
     private function markBatchAsUpdating(int $batch_id): void
@@ -459,14 +488,13 @@ class ProductUpdateItemsRelationManager extends RelationManager
         }
 
         $batch->update([
-            'status' => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            'status'  => ProductUpdateBatchesStatusEnum::PROCESSING->value,
             'options' => [
                 ...($batch->options ?? []),
-                'update_state' => 'processing',
-                'update_started_at' => get_now_date()->toDateTimeString(),
+                'update_state'       => 'processing',
+                'update_started_at'  => get_now_date()->toDateTimeString(),
                 'update_finished_at' => null,
             ],
         ]);
     }
 }
-

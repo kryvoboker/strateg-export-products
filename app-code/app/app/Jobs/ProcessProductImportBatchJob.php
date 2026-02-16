@@ -4,21 +4,40 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\Attributes\{Attribute, AttributeDescription};
-use App\Models\Categories\{Category, CategoryDescription, CategoryProduct};
-use App\Models\Products\Imports\{ProductImportBatch, ProductImportItem};
-use App\Models\Products\{Product, ProductDescription, ProductDiscount, ProductImage, ProductSpecial, ProductToAttribute};
+use App\Enums\Product\Import\ProductImportBatchesSourceTypeEnum;
+use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
+use App\Enums\Product\Import\ProductImportItemsStatusEnum;
+use App\Models\Attributes\Attribute;
+use App\Models\Attributes\AttributeDescription;
+use App\Models\Categories\Category;
+use App\Models\Categories\CategoryDescription;
+use App\Models\Categories\CategoryProduct;
+use App\Models\Products\Imports\ProductImportBatch;
+use App\Models\Products\Imports\ProductImportItem;
+use App\Models\Products\Product;
+use App\Models\Products\ProductDescription;
+use App\Models\Products\ProductDiscount;
+use App\Models\Products\ProductImage;
+use App\Models\Products\ProductSpecial;
+use App\Models\Products\ProductToAttribute;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\ShopLanguage;
-use App\Supports\Services\SeoSlug\{DefaultSeoSlugService, EnSeoSlugService, RuSeoSlugService, UaSeoSlugService};
+use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
+use App\Supports\Services\SeoSlug\EnSeoSlugService;
+use App\Supports\Services\SeoSlug\RuSeoSlugService;
+use App\Supports\Services\SeoSlug\UaSeoSlugService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\{InteractsWithQueue, SerializesModels};
-use Illuminate\Support\{Arr, Str};
-use Illuminate\Support\Facades\{DB, File, Log, Storage};
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use App\Enums\Product\Import\{ProductImportBatchesSourceTypeEnum, ProductImportBatchesStatusEnum, ProductImportItemsStatusEnum};
 use RuntimeException;
 use Throwable;
 
@@ -96,12 +115,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value  => $this->prepareItemsFromExcelBatch($batch),
                 ProductImportBatchesSourceTypeEnum::API->value         => $this->prepareItemsFromGoogleSheetsBatch($batch),
                 ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value => $this->prepareItemsFromManualBatch($batch),
-                default                                                => throw new RuntimeException('Unknown source type: ' . $batch->source_type),
+                default                                                => throw new RuntimeException('Unknown source type: '.$batch->source_type),
             };
 
             $total_items = count($items_payloads);
 
-            $this->storeBatchItems((int)$batch->id, $items_payloads);
+            $this->storeBatchItems((int) $batch->id, $items_payloads);
 
             $batch_status = match (true) {
                 $total_items === 0 => ProductImportBatchesStatusEnum::FAILED,
@@ -141,7 +160,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
      */
     private function prepareItemsFromExcelBatch(ProductImportBatch $batch): array
     {
-        $source_path = Str::trim((string)($batch->source_path ?? ''));
+        $source_path = Str::trim((string) ($batch->source_path ?? ''));
 
         if ($source_path === '') {
             throw new RuntimeException('Excel source path is empty');
@@ -158,13 +177,13 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $options        = $batch->options ?? [];
         $exported_files = Arr::get($options, 'exported_files', []);
 
-        if (!is_array($exported_files) || $exported_files === []) {
+        if (! is_array($exported_files) || $exported_files === []) {
             throw new RuntimeException('Google Sheets exported files are missing');
         }
 
         $source_paths = array_values(array_filter(
-            array_map(static fn($path) => Str::trim((string)$path), $exported_files),
-            static fn($path) => $path !== ''
+            array_map(static fn ($path) => Str::trim((string) $path), $exported_files),
+            static fn ($path) => $path !== ''
         ));
 
         if ($source_paths === []) {
@@ -182,12 +201,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $options  = $batch->options ?? [];
         $raw_data = Arr::get($options, 'raw_data');
 
-        if (!is_array($raw_data) || $raw_data === []) {
+        if (! is_array($raw_data) || $raw_data === []) {
             throw new RuntimeException('Manual payload is empty');
         }
 
         $payload = [
-            'product'      => [
+            'product' => [
                 'product_id'     => null,
                 'model'          => Arr::get($raw_data, 'admin_model'),
                 'sku'            => Arr::get($raw_data, 'admin_sku'),
@@ -219,8 +238,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param list<string> $source_paths
-     *
+     * @param  list<string>  $source_paths
      * @return array{0: list<array<string, mixed>>, 1: int, 2: list<array<string, mixed>>}
      */
     private function prepareItemsFromExcelSources(array $source_paths): array
@@ -231,7 +249,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         foreach ($source_paths as $source_path) {
             [$file_payloads, $file_failed_rows, $file_failed_details] = $this->extractProductsFromExcelFile($source_path);
-            $failed_rows    += $file_failed_rows;
+            $failed_rows += $file_failed_rows;
             $failed_details = [...$failed_details, ...$file_failed_details];
             $all_payloads   = [...$all_payloads, ...$file_payloads];
         }
@@ -244,7 +262,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
      */
     private function extractProductsFromExcelFile(string $source_path): array
     {
-        if (!Storage::exists($source_path)) {
+        if (! Storage::exists($source_path)) {
             throw new RuntimeException("Source file does not exist: $source_path");
         }
 
@@ -277,8 +295,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, list<array<int, string>>> $sheets_rows
-     *
+     * @param  array<string, list<array<int, string>>>  $sheets_rows
      * @return array{0: list<array<string, mixed>>, 1: int, 2: list<array<string, mixed>>}
      */
     private function buildProductsPayloadFromSheetsRowBased(array $sheets_rows, string $source_path): array
@@ -306,7 +323,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
             }
 
             $payload = [
-                'product'      => [
+                'product' => [
                     'product_id'     => null,
                     'model'          => Arr::get($product_assoc, 'Model'),
                     'sku'            => Arr::get($product_assoc, 'SKU'),
@@ -360,15 +377,13 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param string                $sheet_name
-     * @param array<string, string> $row_assoc
-     *
+     * @param  array<string, string>  $row_assoc
      * @return array<string, mixed>
      */
     private function mapSheetRow(string $sheet_name, array $row_assoc): array
     {
         return match ($sheet_name) {
-            'Description'       => [
+            'Description' => [
                 'product_id'         => null,
                 'shop_language_code' => $this->normalizeLanguageCode(Arr::get($row_assoc, 'Shop Language Code', Arr::get($row_assoc, 'Language Code'))),
                 'name'               => Arr::get($row_assoc, 'Name'),
@@ -377,12 +392,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'meta_description'   => Arr::get($row_assoc, 'Meta Description'),
                 'meta_keywords'      => Arr::get($row_assoc, 'Meta Keywords'),
             ],
-            'Image'             => [
+            'Image' => [
                 'product_id' => null,
                 'image'      => Arr::get($row_assoc, 'Image'),
                 'sort_order' => Arr::get($row_assoc, 'Sort Order'),
             ],
-            'Product Category'  => [
+            'Product Category' => [
                 'product_id'    => null,
                 'category_name' => Arr::get($row_assoc, 'Category Name'),
             ],
@@ -392,7 +407,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'attribute_name'     => Arr::get($row_assoc, 'Attribute Name'),
                 'attribute_text'     => Arr::get($row_assoc, 'Attribute Text', Arr::get($row_assoc, 'Attibute Text')),
             ],
-            'Seo Url'           => [
+            'Seo Url' => [
                 'product_id'         => null,
                 'shop_language_code' => $this->normalizeLanguageCode(Arr::get($row_assoc, 'Shop Language Code', Arr::get($row_assoc, 'Language Code'))),
                 'query_key'          => Arr::get($row_assoc, 'Query Key'),
@@ -400,7 +415,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'keyword'            => Arr::get($row_assoc, 'Keyword'),
                 'sort_order'         => Arr::get($row_assoc, 'Sort Order'),
             ],
-            'Special'           => [
+            'Special' => [
                 'product_id'    => null,
                 'user_group_id' => Arr::get($row_assoc, 'User Group Id'),
                 'price'         => Arr::get($row_assoc, 'Price'),
@@ -408,7 +423,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'date_start'    => Arr::get($row_assoc, 'Date Start'),
                 'date_end'      => Arr::get($row_assoc, 'Date End'),
             ],
-            'Discount'          => [
+            'Discount' => [
                 'product_id'    => null,
                 'user_group_id' => Arr::get($row_assoc, 'User Group Id'),
                 'quantity'      => Arr::get($row_assoc, 'Quantity'),
@@ -417,13 +432,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'date_start'    => Arr::get($row_assoc, 'Date Start'),
                 'date_end'      => Arr::get($row_assoc, 'Date End'),
             ],
-            default             => [],
+            default => [],
         };
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function normalizeOrGenerateSeoUrls(array $payload): array
@@ -433,11 +447,11 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         $seo_urls   = array_values(Arr::get($payload, 'seo_urls', []));
         $base_text  = $this->resolveBaseTextForSlug($payload);
-        $product_id = (string)(Arr::get($payload, 'product.product_id') ?? '');
+        $product_id = (string) (Arr::get($payload, 'product.product_id') ?? '');
         $uk_keyword = $this->generateKeywordForLanguage($base_text, 'uk');
 
         if ($uk_keyword === '') {
-            $uk_keyword = $this->normalizeSeoKeyword('product-' . $product_id);
+            $uk_keyword = $this->normalizeSeoKeyword('product-'.$product_id);
         }
 
         if ($seo_urls === []) {
@@ -449,14 +463,14 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     'query_value'        => $product_id,
                     'keyword'            => $uk_keyword,
                     'sort_order'         => 1,
-                ]
+                ],
             ];
 
             return $payload;
         }
 
         foreach ($seo_urls as $index => $seo_row) {
-            if (!is_array($seo_row)) {
+            if (! is_array($seo_row)) {
                 $seo_urls[$index] = [];
 
                 continue;
@@ -468,7 +482,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 $language_code = $default_language_code;
             }
 
-            $keyword = $this->normalizeSeoKeyword((string)Arr::get($seo_row, 'keyword', ''));
+            $keyword = $this->normalizeSeoKeyword((string) Arr::get($seo_row, 'keyword', ''));
 
             if ($keyword === '') {
                 $keyword = $uk_keyword;
@@ -487,15 +501,14 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         $payload['seo_urls'] = array_values(array_filter(
             $seo_urls,
-            static fn($seo_row) => is_array($seo_row) && Str::trim((string)Arr::get($seo_row, 'keyword', '')) !== ''
+            static fn ($seo_row) => is_array($seo_row) && Str::trim((string) Arr::get($seo_row, 'keyword', '')) !== ''
         ));
 
         return $payload;
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
+     * @param  array<string, mixed>  $payload
      * @return list<string>
      */
     private function resolveLanguageCodes(array $payload): array
@@ -503,7 +516,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $codes = [];
 
         foreach (Arr::get($payload, 'descriptions', []) as $description_row) {
-            if (!is_array($description_row)) {
+            if (! is_array($description_row)) {
                 continue;
             }
 
@@ -515,7 +528,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         foreach (Arr::get($payload, 'seo_urls', []) as $seo_row) {
-            if (!is_array($seo_row)) {
+            if (! is_array($seo_row)) {
                 continue;
             }
 
@@ -550,43 +563,43 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         $normalized_codes = array_values(array_filter(
-            array_map(fn($code) => $this->normalizeLanguageCode($code), $codes),
-            static fn($code) => $code !== ''
+            array_map(fn ($code) => $this->normalizeLanguageCode($code), $codes),
+            static fn ($code) => $code !== ''
         ));
 
         return array_values(array_unique($normalized_codes));
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function resolveBaseTextForSlug(array $payload): string
     {
         foreach (Arr::get($payload, 'descriptions', []) as $description_row) {
-            if (!is_array($description_row)) {
+            if (! is_array($description_row)) {
                 continue;
             }
 
-            $name = Str::trim((string)Arr::get($description_row, 'name', ''));
+            $name = Str::trim((string) Arr::get($description_row, 'name', ''));
 
             if ($name !== '') {
                 return $name;
             }
         }
 
-        $model = Str::trim((string)Arr::get($payload, 'product.model', ''));
+        $model = Str::trim((string) Arr::get($payload, 'product.model', ''));
 
         if ($model !== '') {
             return $model;
         }
 
-        $sku = Str::trim((string)Arr::get($payload, 'product.sku', ''));
+        $sku = Str::trim((string) Arr::get($payload, 'product.sku', ''));
 
         if ($sku !== '') {
             return $sku;
         }
 
-        return Str::trim((string)Arr::get($payload, 'product.product_id', 'product'));
+        return Str::trim((string) Arr::get($payload, 'product.product_id', 'product'));
     }
 
     private function generateKeywordForLanguage(string $base_text, string $language_code): string
@@ -602,7 +615,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
             return $this->normalizeSeoKeyword($base_slug);
         }
 
-        return $this->normalizeSeoKeyword($base_slug . '-' . $normalized_code);
+        return $this->normalizeSeoKeyword($base_slug.'-'.$normalized_code);
     }
 
     private function buildBaseSlug(string $base_text, string $language_code): string
@@ -635,7 +648,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
     private function normalizeLanguageCode(mixed $language_code): string
     {
-        return Str::lower(Str::trim((string)$language_code));
+        return Str::lower(Str::trim((string) $language_code));
     }
 
     private function normalizeBooleanValue(mixed $value): bool
@@ -645,16 +658,16 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         if (is_numeric($value)) {
-            return (int)$value > 0;
+            return (int) $value > 0;
         }
 
-        $normalized = Str::lower(Str::trim((string)$value));
+        $normalized = Str::lower(Str::trim((string) $value));
 
         return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 
     /**
-     * @param list<array<string, mixed>> $items_payloads
+     * @param  list<array<string, mixed>>  $items_payloads
      *
      * @throws Throwable
      */
@@ -703,7 +716,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     try {
                         $payload = is_array($item->payload) ? $item->payload : [];
 
-                        $resolved_product_id = $this->createProductForImportPayload($payload);
+                        $resolved_product_id = $this->createProductForImportPayload($item, $payload);
                         $normalized_payload  = $this->applyProductIdToPayload($payload, $resolved_product_id);
                         $this->persistProductRelatedData($resolved_product_id, $normalized_payload);
 
@@ -728,18 +741,20 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
-    private function createProductForImportPayload(array $payload): int
+    private function createProductForImportPayload(ProductImportItem $product_import_item, array $payload): int
     {
         $product_attributes = $this->buildProductAttributesForInsert($payload);
 
-        return Product::createFromImportPayload($product_attributes);
+        return Product::createFromImportPayload(
+            $product_attributes,
+            (int) $product_import_item->id
+        );
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function buildProductAttributesForInsert(array $payload): array
@@ -748,13 +763,13 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         return [
             'marked_to_shop' => null,
-            'model'          => Str::trim((string)Arr::get($product_data, 'model')),
-            'sku'            => Str::trim((string)Arr::get($product_data, 'sku')),
-            'ean'            => Str::trim((string)Arr::get($product_data, 'ean')),
-            'quantity'       => (int)Arr::get($product_data, 'quantity', 0),
-            'minimum'        => max((int)Arr::get($product_data, 'minimum', 1), 1),
-            'image'          => Str::trim((string)Arr::get($product_data, 'image')),
-            'price'          => (float)Arr::get($product_data, 'price', 0),
+            'model'          => Str::trim((string) Arr::get($product_data, 'model')),
+            'sku'            => Str::trim((string) Arr::get($product_data, 'sku')),
+            'ean'            => Str::trim((string) Arr::get($product_data, 'ean')),
+            'quantity'       => (int) Arr::get($product_data, 'quantity', 0),
+            'minimum'        => max((int) Arr::get($product_data, 'minimum', 1), 1),
+            'image'          => Str::trim((string) Arr::get($product_data, 'image')),
+            'price'          => (float) Arr::get($product_data, 'price', 0),
             'is_active'      => $this->normalizeBooleanValue(Arr::get($product_data, 'is_active', false)),
             'date_available' => Arr::get($product_data, 'date_available'),
             'date_added'     => Arr::get($product_data, 'date_added'),
@@ -762,8 +777,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function applyProductIdToPayload(array $payload, int $product_id): array
@@ -775,18 +789,18 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         foreach (self::SHEET_TO_PAYLOAD_LIST as $payload_key) {
             $rows = Arr::get($payload, $payload_key, []);
-            if (!is_array($rows)) {
+            if (! is_array($rows)) {
                 continue;
             }
 
             $payload[$payload_key] = array_map(function ($row) use ($product_id) {
-                if (!is_array($row)) {
+                if (! is_array($row)) {
                     return $row;
                 }
 
                 return [
                     ...$row,
-                    'product_id' => (string)$product_id,
+                    'product_id' => (string) $product_id,
                 ];
             }, $rows);
         }
@@ -795,7 +809,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function persistProductRelatedData(int $product_id, array $payload): void
     {
@@ -808,18 +822,14 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $this->upsertProductDiscounts($product_id, Arr::get($payload, 'discounts', []));
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $description_rows
-     */
     private function upsertProductDescriptions(int $product_id, mixed $description_rows): void
     {
-        if (!is_array($description_rows)) {
+        if (! is_array($description_rows)) {
             return;
         }
 
         foreach ($description_rows as $description_row) {
-            if (!is_array($description_row)) {
+            if (! is_array($description_row)) {
                 continue;
             }
 
@@ -839,24 +849,20 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $image_rows
-     */
     private function replaceProductImages(int $product_id, mixed $image_rows): void
     {
-        if (!is_array($image_rows)) {
+        if (! is_array($image_rows)) {
             return;
         }
 
         ProductImage::query()->where('product_id', $product_id)->delete();
 
         foreach ($image_rows as $image_row) {
-            if (!is_array($image_row)) {
+            if (! is_array($image_row)) {
                 continue;
             }
 
-            $image_path = Str::trim((string)Arr::get($image_row, 'image', ''));
+            $image_path = Str::trim((string) Arr::get($image_row, 'image', ''));
             if ($image_path === '') {
                 continue;
             }
@@ -864,34 +870,30 @@ class ProcessProductImportBatchJob implements ShouldQueue
             ProductImage::query()->create([
                 'product_id' => $product_id,
                 'image'      => $image_path,
-                'sort_order' => (int)Arr::get($image_row, 'sort_order', 1),
+                'sort_order' => (int) Arr::get($image_row, 'sort_order', 1),
             ]);
         }
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $category_rows
-     */
     private function syncProductCategories(int $product_id, mixed $category_rows): void
     {
-        if (!is_array($category_rows)) {
+        if (! is_array($category_rows)) {
             return;
         }
 
         $resolved_category_ids = [];
 
         foreach ($category_rows as $category_row) {
-            if (!is_array($category_row)) {
+            if (! is_array($category_row)) {
                 continue;
             }
 
-            $direct_category_id = (int)Arr::get($category_row, 'category_id', 0);
+            $direct_category_id = (int) Arr::get($category_row, 'category_id', 0);
             if ($direct_category_id > 0) {
                 $resolved_category_ids[] = $direct_category_id;
             }
 
-            $category_name = Str::trim((string)Arr::get($category_row, 'category_name', ''));
+            $category_name = Str::trim((string) Arr::get($category_row, 'category_name', ''));
             if ($category_name === '') {
                 continue;
             }
@@ -916,23 +918,19 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $attribute_rows
-     */
     private function upsertProductAttributes(int $product_id, mixed $attribute_rows): void
     {
-        if (!is_array($attribute_rows)) {
+        if (! is_array($attribute_rows)) {
             return;
         }
 
         foreach ($attribute_rows as $attribute_row) {
-            if (!is_array($attribute_row)) {
+            if (! is_array($attribute_row)) {
                 continue;
             }
 
-            $attribute_name = Str::trim((string)Arr::get($attribute_row, 'attribute_name', ''));
-            $attribute_text = Str::trim((string)Arr::get($attribute_row, 'attribute_text', Arr::get($attribute_row, 'text', '')));
+            $attribute_name = Str::trim((string) Arr::get($attribute_row, 'attribute_name', ''));
+            $attribute_text = Str::trim((string) Arr::get($attribute_row, 'attribute_text', Arr::get($attribute_row, 'text', '')));
             if ($attribute_name === '' || $attribute_text === '') {
                 continue;
             }
@@ -957,13 +955,11 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param int                  $product_id
-     * @param array<string, mixed> $payload
-     * @param mixed                $seo_rows
+     * @param  array<string, mixed>  $payload
      */
     private function upsertSeoUrls(int $product_id, array $payload, mixed $seo_rows): void
     {
-        if (!is_array($seo_rows)) {
+        if (! is_array($seo_rows)) {
             $seo_rows = [];
         }
 
@@ -975,16 +971,16 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $uk_keyword = $this->generateKeywordForLanguage($base_text, 'uk');
 
         if ($uk_keyword === '') {
-            $uk_keyword = $this->normalizeSeoKeyword('product-' . $product_id);
+            $uk_keyword = $this->normalizeSeoKeyword('product-'.$product_id);
         }
 
         foreach ($seo_rows as $seo_row) {
-            if (!is_array($seo_row)) {
+            if (! is_array($seo_row)) {
                 continue;
             }
 
-            $query_value = (string)$product_id;
-            $keyword     = $this->normalizeSeoKeyword((string)Arr::get($seo_row, 'keyword', ''));
+            $query_value = (string) $product_id;
+            $keyword     = $this->normalizeSeoKeyword((string) Arr::get($seo_row, 'keyword', ''));
 
             if ($keyword === '') {
                 $keyword = $uk_keyword;
@@ -999,35 +995,31 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 ],
                 [
                     'keyword'    => $keyword,
-                    'sort_order' => (int)Arr::get($seo_row, 'sort_order', 1) ?: 1,
+                    'sort_order' => (int) Arr::get($seo_row, 'sort_order', 1) ?: 1,
                 ]
             );
         }
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $special_rows
-     */
     private function upsertProductSpecials(int $product_id, mixed $special_rows): void
     {
-        if (!is_array($special_rows)) {
+        if (! is_array($special_rows)) {
             return;
         }
 
         foreach ($special_rows as $special_row) {
-            if (!is_array($special_row)) {
+            if (! is_array($special_row)) {
                 continue;
             }
 
             ProductSpecial::query()->updateOrCreate(
                 [
                     'product_id'    => $product_id,
-                    'user_group_id' => (int)Arr::get($special_row, 'user_group_id', 1),
+                    'user_group_id' => (int) Arr::get($special_row, 'user_group_id', 1),
                 ],
                 [
-                    'price'      => (float)Arr::get($special_row, 'price', 0),
-                    'priority'   => (int)Arr::get($special_row, 'priority', 1),
+                    'price'      => (float) Arr::get($special_row, 'price', 0),
+                    'priority'   => (int) Arr::get($special_row, 'priority', 1),
                     'date_start' => Arr::get($special_row, 'date_start') ?: get_now_date()->toDateTimeString(),
                     'date_end'   => Arr::get($special_row, 'date_end') ?: get_now_date()->toDateTimeString(),
                 ]
@@ -1035,30 +1027,26 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
     }
 
-    /**
-     * @param int   $product_id
-     * @param mixed $discount_rows
-     */
     private function upsertProductDiscounts(int $product_id, mixed $discount_rows): void
     {
-        if (!is_array($discount_rows)) {
+        if (! is_array($discount_rows)) {
             return;
         }
 
         foreach ($discount_rows as $discount_row) {
-            if (!is_array($discount_row)) {
+            if (! is_array($discount_row)) {
                 continue;
             }
 
             ProductDiscount::query()->updateOrCreate(
                 [
                     'product_id'    => $product_id,
-                    'user_group_id' => (int)Arr::get($discount_row, 'user_group_id', 1),
+                    'user_group_id' => (int) Arr::get($discount_row, 'user_group_id', 1),
                 ],
                 [
-                    'quantity'   => max((int)Arr::get($discount_row, 'quantity', 1), 1),
-                    'price'      => (float)Arr::get($discount_row, 'price', 0),
-                    'priority'   => (int)Arr::get($discount_row, 'priority', 1),
+                    'quantity'   => max((int) Arr::get($discount_row, 'quantity', 1), 1),
+                    'price'      => (float) Arr::get($discount_row, 'price', 0),
+                    'priority'   => (int) Arr::get($discount_row, 'priority', 1),
                     'date_start' => Arr::get($discount_row, 'date_start') ?: get_now_date()->toDateTimeString(),
                     'date_end'   => Arr::get($discount_row, 'date_end') ?: get_now_date()->toDateTimeString(),
                 ]
@@ -1067,16 +1055,16 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param list<string> $category_path
+     * @param  list<string>  $category_path
      */
     private function resolveOrCreateCategoryIdByPath(array $category_path): ?int
     {
         $category_path = array_values(array_filter(
             array_map(
-                static fn($category_segment): string => Str::trim((string)$category_segment),
+                static fn ($category_segment): string => Str::trim((string) $category_segment),
                 $category_path
             ),
-            static fn(string $category_segment): bool => $category_segment !== ''
+            static fn (string $category_segment): bool => $category_segment !== ''
         ));
 
         if ($category_path === []) {
@@ -1104,7 +1092,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     'is_active'  => true,
                 ]);
 
-                $current_category_id = (int)$category->id;
+                $current_category_id = (int) $category->id;
             }
 
             $this->ensureCategoryDescription(
@@ -1126,15 +1114,15 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     private function findCategoryIdByParentAndName(
-        ?int   $parent_category_id,
+        ?int $parent_category_id,
         string $category_name,
     ): ?int {
         return CategoryDescription::findCategoryIdByParentAndName($parent_category_id, $category_name);
     }
 
     private function ensureCategoryDescription(
-        int    $category_id,
-        ?int   $shop_language_id,
+        int $category_id,
+        ?int $shop_language_id,
         string $category_name
     ): void {
         CategoryDescription::ensureDefaultDescription($category_id, $shop_language_id, $category_name);
@@ -1156,15 +1144,15 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $seen_paths      = [];
 
         foreach ($category_chunks as $category_chunk) {
-            $category_chunk = Str::trim((string)$category_chunk);
+            $category_chunk = Str::trim((string) $category_chunk);
             if ($category_chunk === '') {
                 continue;
             }
 
             $path_segments = preg_split('/\s*>\s*/u', $category_chunk) ?: [];
             $path_segments = array_values(array_filter(
-                array_map(static fn($segment): string => Str::trim((string)$segment), $path_segments),
-                static fn(string $segment): bool => $segment !== '',
+                array_map(static fn ($segment): string => Str::trim((string) $segment), $path_segments),
+                static fn (string $segment): bool => $segment !== '',
             ));
 
             if ($path_segments === []) {
@@ -1190,23 +1178,23 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param list<string> $attribute_path
+     * @param  list<string>  $attribute_path
      */
     private function resolveOrCreateAttributeIdByPath(array $attribute_path): int
     {
         $attribute_segments = array_values(array_filter(
             array_map(
-                static fn($attribute_segment): string => Str::trim((string)$attribute_segment),
+                static fn ($attribute_segment): string => Str::trim((string) $attribute_segment),
                 $attribute_path
             ),
-            static fn(string $attribute_segment): bool => $attribute_segment !== ''
+            static fn (string $attribute_segment): bool => $attribute_segment !== ''
         ));
 
         if ($attribute_segments === []) {
             throw new RuntimeException('Attribute path is empty');
         }
 
-        $attribute_name = (string)($attribute_segments[0] ?? '');
+        $attribute_name = (string) ($attribute_segments[0] ?? '');
         $path_cache_key = Str::lower($attribute_name);
         if (array_key_exists($path_cache_key, $this->attribute_id_cache_by_path)) {
             return $this->attribute_id_cache_by_path[$path_cache_key];
@@ -1224,7 +1212,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
             'is_active'  => true,
         ]);
 
-        $resolved_attribute_id = (int)$attribute->id;
+        $resolved_attribute_id = (int) $attribute->id;
 
         $this->ensureAttributeDescription($resolved_attribute_id, null, $attribute_name);
         $this->attribute_id_cache_by_path[$path_cache_key] = $resolved_attribute_id;
@@ -1233,8 +1221,8 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     private function ensureAttributeDescription(
-        int    $attribute_id,
-        ?int   $shop_language_id,
+        int $attribute_id,
+        ?int $shop_language_id,
         string $attribute_name
     ): void {
         if (Str::trim($attribute_name) === '') {
@@ -1260,13 +1248,13 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $seen_paths       = [];
 
         foreach ($attribute_chunks as $attribute_chunk) {
-            $attribute_chunk = Str::trim((string)$attribute_chunk);
+            $attribute_chunk = Str::trim((string) $attribute_chunk);
             if ($attribute_chunk === '') {
                 continue;
             }
 
             $path_segments = [$attribute_chunk];
-            $path_key = Str::lower($attribute_chunk);
+            $path_key      = Str::lower($attribute_chunk);
             if (array_key_exists($path_key, $seen_paths)) {
                 continue;
             }
@@ -1279,21 +1267,19 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param list<array<int, string>> $rows
-     *
+     * @param  list<array<int, string>>  $rows
      * @return list<string>
      */
     private function extractHeader(array $rows): array
     {
         $header = $rows[0] ?? [];
 
-        return array_map(static fn($value) => Str::trim((string)$value), $header);
+        return array_map(static fn ($value) => Str::trim((string) $value), $header);
     }
 
     /**
-     * @param list<string>       $header
-     * @param array<int, string> $row
-     *
+     * @param  list<string>  $header
+     * @param  array<int, string>  $row
      * @return array<string, string>
      */
     private function rowToAssoc(array $header, array $row): array
@@ -1315,16 +1301,15 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, string> $row_assoc
+     * @param  array<string, string>  $row_assoc
      */
     private function isAssocRowEmpty(array $row_assoc): bool
     {
-        return array_all($row_assoc, fn($value) => Str::trim((string)$value) === '');
+        return array_all($row_assoc, fn ($value) => Str::trim((string) $value) === '');
     }
 
     /**
-     * @param array<int, array<int, mixed>> $rows
-     *
+     * @param  array<int, array<int, mixed>>  $rows
      * @return list<array<int, string>>
      */
     private function normalizeRows(array $rows): array
@@ -1332,12 +1317,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $normalized_rows = [];
 
         foreach ($rows as $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
 
             $normalized_rows[] = array_map(
-                static fn($cell) => is_scalar($cell) ? decode_html_entities(Str::trim((string)$cell)) : '',
+                static fn ($cell) => is_scalar($cell) ? decode_html_entities(Str::trim((string) $cell)) : '',
                 array_values($row)
             );
         }
@@ -1346,8 +1331,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $data
-     *
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function removeEmptyValues(array $data): array
@@ -1392,37 +1376,37 @@ class ProcessProductImportBatchJob implements ShouldQueue
     }
 
     /**
-     * @param list<array<string, mixed>> $failed_details
+     * @param  list<array<string, mixed>>  $failed_details
      */
     private function writeBatchErrorLog(
         ProductImportBatch $batch,
-        array              $failed_details,
-        ?Throwable         $exception = null,
-        ?string            $reason = null
+        array $failed_details,
+        ?Throwable $exception = null,
+        ?string $reason = null
     ): ?string {
         $log_lines   = [];
-        $log_lines[] = 'datetime: ' . get_now_date()->toDateTimeString();
-        $log_lines[] = 'batch_id: ' . $batch->id;
-        $log_lines[] = 'source_type: ' . $batch->source_type;
+        $log_lines[] = 'datetime: '.get_now_date()->toDateTimeString();
+        $log_lines[] = 'batch_id: '.$batch->id;
+        $log_lines[] = 'source_type: '.$batch->source_type;
 
-        $trimmed_reason = Str::trim((string)$reason);
+        $trimmed_reason = Str::trim((string) $reason);
         if ($trimmed_reason !== '') {
-            $log_lines[] = 'reason: ' . $trimmed_reason;
+            $log_lines[] = 'reason: '.$trimmed_reason;
         }
 
         if ($exception !== null) {
-            $log_lines[] = 'exception: ' . Str::trim($exception->getMessage());
+            $log_lines[] = 'exception: '.Str::trim($exception->getMessage());
         }
 
         if ($failed_details !== []) {
-            $log_lines[] = 'failed_rows: ' . count($failed_details);
+            $log_lines[] = 'failed_rows: '.count($failed_details);
 
             foreach ($failed_details as $index => $failed_detail) {
                 $line_number = $index + 1;
-                $sheet       = Str::trim((string)Arr::get($failed_detail, 'sheet', ''));
+                $sheet       = Str::trim((string) Arr::get($failed_detail, 'sheet', ''));
                 $row         = Arr::get($failed_detail, 'row');
-                $source_path = Str::trim((string)Arr::get($failed_detail, 'source_path', ''));
-                $message     = Str::trim((string)Arr::get($failed_detail, 'message', 'Unknown error'));
+                $source_path = Str::trim((string) Arr::get($failed_detail, 'source_path', ''));
+                $message     = Str::trim((string) Arr::get($failed_detail, 'message', 'Unknown error'));
 
                 $log_lines[] = "$line_number. sheet=$sheet; row=$row; source=$source_path; message=$message";
             }
@@ -1432,14 +1416,14 @@ class ProcessProductImportBatchJob implements ShouldQueue
             return null;
         }
 
-        $log_path = storage_path($this->buildBatchErrorLogPath((int)$batch->id));
+        $log_path = storage_path($this->buildBatchErrorLogPath((int) $batch->id));
 
         if (FIle::exists(File::dirname($log_path)) === false) {
             File::makeDirectory(File::dirname($log_path), recursive: true);
         }
 
-        File::put($log_path, implode(PHP_EOL, $log_lines) . PHP_EOL);
-//        Storage::put($log_path, implode(PHP_EOL, $log_lines).PHP_EOL);
+        File::put($log_path, implode(PHP_EOL, $log_lines).PHP_EOL);
+        //        Storage::put($log_path, implode(PHP_EOL, $log_lines).PHP_EOL);
 
         return $log_path;
     }
@@ -1447,9 +1431,9 @@ class ProcessProductImportBatchJob implements ShouldQueue
     private function buildBatchErrorLogPath(int $batch_id): string
     {
         $now_date  = get_now_date();
-        $directory = 'logs/product-imports/' . $now_date->format('Y/m');
-        $file_name = 'product-import-batch-' . $batch_id . '-errors-' . $now_date->format('Ymd_His') . '.log';
+        $directory = 'logs/product-imports/'.$now_date->format('Y/m');
+        $file_name = 'product-import-batch-'.$batch_id.'-errors-'.$now_date->format('Ymd_His').'.log';
 
-        return $directory . '/' . $file_name;
+        return $directory.'/'.$file_name;
     }
 }

@@ -3,10 +3,9 @@
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class() extends Migration
 {
     /**
      * Run the migrations.
@@ -21,11 +20,9 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
-            $table->foreignId('product_id')
+            $table->bigInteger('product_id')
                 ->nullable()
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->nullOnDelete();
+                ->unique();
 
             $table->jsonb('payload')->nullable();
             $table->string('status', 100)

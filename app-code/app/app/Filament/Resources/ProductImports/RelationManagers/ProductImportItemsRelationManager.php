@@ -9,9 +9,9 @@ use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductShopBindingJob;
+use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
-use App\Models\Attributes\Attribute;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
@@ -58,6 +58,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 class ProductImportItemsRelationManager extends RelationManager
@@ -86,16 +87,16 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
-                    ->formatStateUsing(fn(string $state): string => __('admin/product_imports/batches.item_statuses.' . $state))
+                    ->formatStateUsing(fn (string $state): string => __('admin/product_imports/batches.item_statuses.'.$state))
                     ->badge()
                     ->colors([
-                        'gray'    => fn(string $state): bool => $state === ProductImportItemsStatusEnum::NEW->value,
-                        'warning' => fn(string $state): bool => $state === ProductImportItemsStatusEnum::PROCESSING->value,
-                        'success' => fn(string $state): bool => in_array($state, [
+                        'gray'    => fn (string $state): bool => $state === ProductImportItemsStatusEnum::NEW->value,
+                        'warning' => fn (string $state): bool => $state === ProductImportItemsStatusEnum::PROCESSING->value,
+                        'success' => fn (string $state): bool => in_array($state, [
                             ProductImportItemsStatusEnum::NORMALIZED->value,
                             ProductImportItemsStatusEnum::SUCCESSED->value,
                         ], true),
-                        'danger'  => fn(string $state): bool => $state === ProductImportItemsStatusEnum::FAILED->value,
+                        'danger' => fn (string $state): bool => $state === ProductImportItemsStatusEnum::FAILED->value,
                     ])
                     ->sortable(),
                 TextColumn::make('product_id')
@@ -103,24 +104,24 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->sortable(),
                 TextColumn::make('export_status')
                     ->label(__('admin/product_imports/batches.columns.export_status'))
-                    ->state(fn(ProductImportItem $record): string => $this->resolveExportStatus($record))
+                    ->state(fn (ProductImportItem $record): string => $this->resolveExportStatus($record))
                     ->badge()
                     ->colors([
-                        'gray'    => fn(string $state): bool => $state === ProductImportItemsStatusEnum::NOT_QUEUED->value,
-                        'warning' => fn(string $state): bool => $state === ProductExportItemsStatusEnum::PROCESSING->value,
-                        'success' => fn(string $state): bool => $state === ProductExportItemsStatusEnum::EXPORTED->value,
-                        'danger'  => fn(string $state): bool => in_array($state, [
+                        'gray'    => fn (string $state): bool => $state === ProductImportItemsStatusEnum::NOT_QUEUED->value,
+                        'warning' => fn (string $state): bool => $state === ProductExportItemsStatusEnum::PROCESSING->value,
+                        'success' => fn (string $state): bool => $state === ProductExportItemsStatusEnum::EXPORTED->value,
+                        'danger'  => fn (string $state): bool => in_array($state, [
                             ProductExportItemsStatusEnum::FAILED->value,
                             ProductExportItemsStatusEnum::PARTIAL_FAILED->value,
                         ], true),
                     ])
-                    ->formatStateUsing(fn(string $state): string => __('admin/product_imports/batches.export_item_statuses.' . $state)),
+                    ->formatStateUsing(fn (string $state): string => __('admin/product_imports/batches.export_item_statuses.'.$state)),
                 TextColumn::make('bound_shops')
                     ->label(__('admin/product_imports/batches.columns.bound_shops'))
                     ->wrap()
                     ->getStateUsing(function (ProductImportItem $record): string {
-                        $product_id = (int)($record->product_id ?? 0);
-                        $batch_id   = (int)($record->product_import_batch_id ?? 0);
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $batch_id   = (int) ($record->product_import_batch_id ?? 0);
 
                         if ($product_id <= 0 || $batch_id <= 0) {
                             return __('admin/product_imports/batches.messages.no_bound_shops');
@@ -144,13 +145,13 @@ class ProductImportItemsRelationManager extends RelationManager
                     }),
                 TextColumn::make('payload.source_meta.row_number')
                     ->label(__('admin/product_imports/batches.columns.source_row'))
-                    ->getStateUsing(fn(ProductImportItem $record): string => (string)($record->getSourceRowNumber() ?? __('admin/product_imports/batches.columns.empty_value')))
+                    ->getStateUsing(fn (ProductImportItem $record): string => (string) ($record->getSourceRowNumber() ?? __('admin/product_imports/batches.columns.empty_value')))
                     ->sortable(),
                 TextColumn::make('payload.source_meta.path')
                     ->label(__('admin/product_imports/batches.columns.source_file'))
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->wrap()
-                    ->getStateUsing(fn(ProductImportItem $record): string => $record->getSourceFilePath() ?? __('admin/product_imports/batches.columns.empty_value')),
+                    ->getStateUsing(fn (ProductImportItem $record): string => $record->getSourceFilePath() ?? __('admin/product_imports/batches.columns.empty_value')),
                 TextColumn::make('error_message')
                     ->label(__('admin/product_imports/batches.columns.item_error'))
                     ->wrap()
@@ -177,13 +178,13 @@ class ProductImportItemsRelationManager extends RelationManager
                     ]),
                 SelectFilter::make('shop_id')
                     ->label(__('admin/product_imports/batches.filters.shop'))
-                    ->options(fn(): array => Shop::query()
+                    ->options(fn (): array => Shop::query()
                         ->where('is_active', true)
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->toArray())
                     ->query(static function ($query, array $data) {
-                        $shop_id = (int)Arr::get($data, 'value', 0);
+                        $shop_id = (int) Arr::get($data, 'value', 0);
                         if ($shop_id <= 0) {
                             return $query;
                         }
@@ -201,13 +202,13 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->label(__('admin/product_imports/batches.filters.has_errors'))
                     ->nullable()
                     ->queries(
-                        true : fn($query) => $query->whereNotNull('error_message')->where('error_message', '!=', ''),
-                        false: fn($query) => $query->where(function ($inner_query): void {
+                        true : fn ($query) => $query->whereNotNull('error_message')->where('error_message', '!=', ''),
+                        false: fn ($query) => $query->where(function ($inner_query): void {
                             $inner_query
                                 ->whereNull('error_message')
                                 ->orWhere('error_message', '');
                         }),
-                        blank: fn($query) => $query,
+                        blank: fn ($query) => $query,
                     ),
             ])
             ->recordActions([
@@ -221,8 +222,8 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->modalDescription(function (ProductImportItem $record) {
                         $payload = $record->payload;
 
-                        if (!is_array($payload) || $payload === []) {
-                            return new HtmlString('<p>' . __('admin/product_imports/batches.messages.payload_is_empty') . '</p>');
+                        if (! is_array($payload) || $payload === []) {
+                            return new HtmlString('<p>'.__('admin/product_imports/batches.messages.payload_is_empty').'</p>');
                         }
 
                         $formatted_json = json_encode(
@@ -232,18 +233,18 @@ class ProductImportItemsRelationManager extends RelationManager
 
                         return new HtmlString(
                             '<div class="w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-4">'
-                            . '<pre class="w-full text-sm text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">'
-                            . e($formatted_json)
-                            . '</pre></div>'
+                            .'<pre class="w-full text-sm text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap">'
+                            .e($formatted_json)
+                            .'</pre></div>'
                         );
                     })
-                    ->action(static fn(): null => null),
+                    ->action(static fn (): null => null),
 
                 Action::make('editProduct')
                     ->label(__('admin/product_imports/batches.actions.edit_product'))
                     ->icon(Heroicon::PencilSquare)
-                    ->visible(fn(ProductImportItem $record): bool => $record->product_id !== null)
-                    ->disabled(fn(ProductImportItem $record): bool => !Product::query()->whereKey($record->product_id)->exists())
+                    ->visible(fn (ProductImportItem $record): bool => $record->product_id !== null)
+                    ->disabled(fn (ProductImportItem $record): bool => ! Product::query()->whereKey($record->product_id)->exists())
                     ->modalWidth('7xl')
                     ->modalHeading(__('admin/product_imports/batches.product_edit.heading'))
                     ->fillForm(function (ProductImportItem $record): array {
@@ -254,7 +255,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             'productToAttributes',
                             'specials',
                             'discounts',
-                        ])->find((int)$record->product_id);
+                        ])->find((int) $record->product_id);
 
                         if ($product === null) {
                             return [];
@@ -268,7 +269,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         $current_shop_language_id = null;
                         if ($current_shop_id !== null) {
                             $current_shop_language_id = ShopLanguage::query()
-                                ->where('shop_id', (int)$current_shop_id)
+                                ->where('shop_id', (int) $current_shop_id)
                                 ->where('is_active', true)
                                 ->orderBy('id')
                                 ->value('id');
@@ -281,8 +282,8 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->get();
 
                         $descriptions_by_language = $product->descriptions
-                            ->mapWithKeys(static fn(ProductDescription $description): array => [
-                                (int)$description->shop_language_id => [
+                            ->mapWithKeys(static fn (ProductDescription $description): array => [
+                                (int) $description->shop_language_id => [
                                     'name'             => $description->name,
                                     'description'      => $description->description,
                                     'meta_title'       => $description->meta_title,
@@ -294,8 +295,8 @@ class ProductImportItemsRelationManager extends RelationManager
 
                         $attributes_by_language = $product->productToAttributes
                             ->groupBy('shop_language_id')
-                            ->map(static fn(Collection $rows): array => $rows
-                                ->map(static fn(ProductToAttribute $attribute): array => [
+                            ->map(static fn (Collection $rows): array => $rows
+                                ->map(static fn (ProductToAttribute $attribute): array => [
                                     'attribute_id' => $attribute->attribute_id,
                                     'text'         => $attribute->text,
                                 ])->values()->all())
@@ -303,10 +304,10 @@ class ProductImportItemsRelationManager extends RelationManager
 
                         $attributes_selected_by_language = $product->productToAttributes
                             ->groupBy('shop_language_id')
-                            ->map(static fn(Collection $rows): array => $rows
+                            ->map(static fn (Collection $rows): array => $rows
                                 ->pluck('attribute_id')
                                 ->filter()
-                                ->map(static fn($attribute_id): int => (int)$attribute_id)
+                                ->map(static fn ($attribute_id): int => (int) $attribute_id)
                                 ->unique()
                                 ->values()
                                 ->all())
@@ -316,16 +317,16 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->whereIn('attribute_id', $product->productToAttributes->pluck('attribute_id')->filter()->all())
                             ->whereIn('shop_language_id', $product->productToAttributes->pluck('shop_language_id')->filter()->all())
                             ->get()
-                            ->mapWithKeys(static fn(AttributeDescription $description): array => [
-                                $description->attribute_id . ':' . $description->shop_language_id => (string)$description->name,
+                            ->mapWithKeys(static fn (AttributeDescription $description): array => [
+                                $description->attribute_id.':'.$description->shop_language_id => (string) $description->name,
                             ])
                             ->toArray();
 
                         $attributes_custom_by_language = $product->productToAttributes
                             ->groupBy('shop_language_id')
-                            ->map(static fn(Collection $rows) => $rows
+                            ->map(static fn (Collection $rows) => $rows
                                 ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
-                                    $attribute_key = $attribute->attribute_id . ':' . $attribute->shop_language_id;
+                                    $attribute_key = $attribute->attribute_id.':'.$attribute->shop_language_id;
 
                                     return [
                                         'attribute_name' => $attribute_name_map[$attribute_key] ?? '',
@@ -338,16 +339,16 @@ class ProductImportItemsRelationManager extends RelationManager
 
                         $seo_urls_by_language = [];
                         foreach ($seo_urls as $seo_url) {
-                            $shop_language_id = (int)($seo_url->shop_language_id ?? 0);
+                            $shop_language_id = (int) ($seo_url->shop_language_id ?? 0);
                             if ($shop_language_id <= 0) {
-                                $shop_language_id = (int)($current_shop_language_id ?? 0);
+                                $shop_language_id = (int) ($current_shop_language_id ?? 0);
                             }
 
                             if ($shop_language_id <= 0) {
                                 continue;
                             }
 
-                            if (!array_key_exists($shop_language_id, $seo_urls_by_language)) {
+                            if (! array_key_exists($shop_language_id, $seo_urls_by_language)) {
                                 $seo_urls_by_language[$shop_language_id] = [];
                             }
 
@@ -360,21 +361,21 @@ class ProductImportItemsRelationManager extends RelationManager
                         }
 
                         return [
-                            'bind_shop_id'                    => $current_shop_id !== null ? (int)$current_shop_id : null,
-                            'bind_shop_language_id'           => $current_shop_language_id !== null ? (int)$current_shop_language_id : null,
-                            'product_id'                      => $product->id,
-                            'model'                           => $product->model,
-                            'sku'                             => $product->sku,
-                            'ean'                             => $product->ean,
-                            'quantity'                        => $product->quantity,
-                            'minimum'                         => $product->minimum,
-                            'image'                           => $product->image,
-                            'price'                           => $product->price,
-                            'is_active'                       => (bool)$product->is_active,
-                            'date_available'                  => $product->date_available,
-                            'date_added'                      => $product->date_added,
-                            'descriptions'                    => $product->descriptions
-                                ->map(static fn(ProductDescription $description): array => [
+                            'bind_shop_id'          => $current_shop_id !== null ? (int) $current_shop_id : null,
+                            'bind_shop_language_id' => $current_shop_language_id !== null ? (int) $current_shop_language_id : null,
+                            'product_id'            => $product->id,
+                            'model'                 => $product->model,
+                            'sku'                   => $product->sku,
+                            'ean'                   => $product->ean,
+                            'quantity'              => $product->quantity,
+                            'minimum'               => $product->minimum,
+                            'image'                 => $product->image,
+                            'price'                 => $product->price,
+                            'is_active'             => (bool) $product->is_active,
+                            'date_available'        => $product->date_available,
+                            'date_added'            => $product->date_added,
+                            'descriptions'          => $product->descriptions
+                                ->map(static fn (ProductDescription $description): array => [
                                     'shop_language_id' => $description->shop_language_id,
                                     'name'             => $description->name,
                                     'description'      => $description->description,
@@ -382,32 +383,32 @@ class ProductImportItemsRelationManager extends RelationManager
                                     'meta_description' => $description->meta_description,
                                     'meta_keywords'    => $description->meta_keywords,
                                 ])->values()->all(),
-                            'descriptions_by_language'        => $descriptions_by_language,
-                            'images'                          => $product->images
-                                ->map(static fn(ProductImage $image): array => [
+                            'descriptions_by_language' => $descriptions_by_language,
+                            'images'                   => $product->images
+                                ->map(static fn (ProductImage $image): array => [
                                     'image'      => $image->image,
                                     'sort_order' => $image->sort_order,
                                 ])->values()->all(),
-                            'category_source_scope'           => $current_shop_id !== null ? 'shop' : 'all',
-                            'categories_existing_ids'         => $product->categories
+                            'category_source_scope'   => $current_shop_id !== null ? 'shop' : 'all',
+                            'categories_existing_ids' => $product->categories
                                 ->pluck('id')
                                 ->filter()
-                                ->map(static fn($category_id): int => (int)$category_id)
+                                ->map(static fn ($category_id): int => (int) $category_id)
                                 ->unique()
                                 ->values()
                                 ->all(),
-                            'categories_custom_paths'         => '',
-                            'categories'                      => $product->categories
+                            'categories_custom_paths' => '',
+                            'categories'              => $product->categories
                                 ->map(function (Category $category): array {
-                                    $name = $category->descriptions->first()?->name ?? ('#' . $category->id);
+                                    $name = $category->descriptions->first()?->name ?? ('#'.$category->id);
 
                                     return [
                                         'category_id'   => $category->id,
                                         'category_name' => $name,
                                     ];
                                 })->values()->all(),
-                            'attributes'                      => $product->productToAttributes
-                                ->map(static fn(ProductToAttribute $attribute): array => [
+                            'attributes' => $product->productToAttributes
+                                ->map(static fn (ProductToAttribute $attribute): array => [
                                     'attribute_id'     => $attribute->attribute_id,
                                     'shop_language_id' => $attribute->shop_language_id,
                                     'text'             => $attribute->text,
@@ -417,22 +418,22 @@ class ProductImportItemsRelationManager extends RelationManager
                             'attributes_custom_by_language'   => $attributes_custom_by_language,
                             'attributes_by_language'          => $attributes_by_language,
                             'seo_urls'                        => $seo_urls
-                                ->map(static fn(SeoUrl $seo_url): array => [
+                                ->map(static fn (SeoUrl $seo_url): array => [
                                     'query_value' => $seo_url->query_value,
                                     'keyword'     => $seo_url->keyword,
                                     'sort_order'  => $seo_url->sort_order,
                                 ])->values()->all(),
-                            'seo_urls_by_language'            => $seo_urls_by_language,
-                            'specials'                        => $product->specials
-                                ->map(static fn(ProductSpecial $special): array => [
+                            'seo_urls_by_language' => $seo_urls_by_language,
+                            'specials'             => $product->specials
+                                ->map(static fn (ProductSpecial $special): array => [
                                     'user_group_id' => $special->user_group_id,
                                     'price'         => $special->price,
                                     'priority'      => $special->priority,
                                     'date_start'    => $special->date_start,
                                     'date_end'      => $special->date_end,
                                 ])->values()->all(),
-                            'discounts'                       => $product->discounts
-                                ->map(static fn(ProductDiscount $discount): array => [
+                            'discounts' => $product->discounts
+                                ->map(static fn (ProductDiscount $discount): array => [
                                     'user_group_id' => $discount->user_group_id,
                                     'quantity'      => $discount->quantity,
                                     'price'         => $discount->price,
@@ -450,15 +451,15 @@ class ProductImportItemsRelationManager extends RelationManager
                                     ->schema([
                                         Select::make('bind_shop_id')
                                             ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                            ->options(fn(callable $get, ProductImportItem $record): array => $this->getAvailableShopOptionsForProduct(
-                                                (int)($record->product_id ?? 0),
-                                                (int)($get('bind_shop_id') ?? 0)
+                                            ->options(fn (callable $get, ProductImportItem $record): array => $this->getAvailableShopOptionsForProduct(
+                                                (int) ($record->product_id ?? 0),
+                                                (int) ($get('bind_shop_id') ?? 0)
                                             ))
                                             ->live()
                                             ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                                                 $shop_id              = ($state ?? 0);
                                                 $language_options     = $this->getShopLanguageOptions($shop_id);
-                                                $selected_language_id = (int)($get('bind_shop_language_id') ?? 0);
+                                                $selected_language_id = (int) ($get('bind_shop_language_id') ?? 0);
 
                                                 if ($selected_language_id > 0 && array_key_exists($selected_language_id, $language_options)) {
                                                     return;
@@ -470,8 +471,8 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->helperText(__('admin/product_imports/batches.product_edit.helpers.bind_shop_id')),
                                         Select::make('bind_shop_language_id')
                                             ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_language_id'))
-                                            ->options(fn(callable $get): array => $this->getShopLanguageOptions((int)($get('bind_shop_id') ?? 0)))
-                                            ->disabled(fn(callable $get): bool => (int)($get('bind_shop_id') ?? 0) <= 0)
+                                            ->options(fn (callable $get): array => $this->getShopLanguageOptions((int) ($get('bind_shop_id') ?? 0)))
+                                            ->disabled(fn (callable $get): bool => (int) ($get('bind_shop_id') ?? 0) <= 0)
                                             ->searchable(),
                                         TextInput::make('product_id')->label(__('admin/product_imports/batches.product_edit.fields.product_id'))->disabled(),
                                         TextInput::make('model')->label(__('admin/product_imports/batches.product_edit.fields.model'))->maxLength(255),
@@ -489,7 +490,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                     ->label(__('admin/product_imports/batches.product_edit.tabs.descriptions'))
                                     ->schema([
                                         Tabs::make('description_language_tabs')
-                                            ->tabs(fn(callable $get): array => $this->getDescriptionLanguageTabs((int)($get('bind_shop_id') ?? 0)))
+                                            ->tabs(fn (callable $get): array => $this->getDescriptionLanguageTabs((int) ($get('bind_shop_id') ?? 0)))
                                             ->columnSpanFull(),
                                     ]),
                                 Tab::make('images')
@@ -515,10 +516,10 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->live(),
                                         Select::make('categories_existing_ids')
                                             ->label(__('admin/product_imports/batches.product_edit.fields.categories_existing_ids'))
-                                            ->options(fn(callable $get): array => $this->getCategoryOptionsByScope(
-                                                (string)($get('category_source_scope') ?? 'all'),
-                                                (int)($get('bind_shop_id') ?? 0),
-                                                (int)($get('bind_shop_language_id') ?? 0)
+                                            ->options(fn (callable $get): array => $this->getCategoryOptionsByScope(
+                                                (string) ($get('category_source_scope') ?? 'all'),
+                                                (int) ($get('bind_shop_id') ?? 0),
+                                                (int) ($get('bind_shop_language_id') ?? 0)
                                             ))
                                             ->multiple()
                                             ->searchable()
@@ -542,9 +543,9 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->native(false)
                                             ->live(),
                                         Tabs::make('attribute_language_tabs')
-                                            ->tabs(fn(callable $get): array => $this->getAttributeLanguageTabs(
-                                                (int)($get('bind_shop_id') ?? 0),
-                                                (string)($get('attribute_source_scope') ?? 'all')
+                                            ->tabs(fn (callable $get): array => $this->getAttributeLanguageTabs(
+                                                (int) ($get('bind_shop_id') ?? 0),
+                                                (string) ($get('attribute_source_scope') ?? 'all')
                                             ))
                                             ->columnSpanFull(),
                                     ]),
@@ -552,7 +553,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                     ->label(__('admin/product_imports/batches.product_edit.tabs.seo'))
                                     ->schema([
                                         Tabs::make('seo_language_tabs')
-                                            ->tabs(fn(callable $get): array => $this->getSeoUrlLanguageTabs((int)($get('bind_shop_id') ?? 0)))
+                                            ->tabs(fn (callable $get): array => $this->getSeoUrlLanguageTabs((int) ($get('bind_shop_id') ?? 0)))
                                             ->columnSpanFull(),
                                     ]),
                                 Tab::make('pricing')
@@ -592,19 +593,19 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->visible(function (ProductImportItem $record): bool {
                         $export_status = $this->resolveExportStatus($record);
 
-                        return (int)($record->product_id ?? 0) > 0 &&
+                        return (int) ($record->product_id ?? 0) > 0 &&
                             $this->hasBoundShopsForRecord($record) === true &&
                             $this->checkIsCanTryingExportProduct($record) === false &&
                             ProductExportItemsStatusEnum::tryFrom($export_status)?->value === null;
                     })
-                    ->disabled(fn(ProductImportItem $record): bool => $record->status === ProductImportItemsStatusEnum::PROCESSING->value)
+                    ->disabled(fn (ProductImportItem $record): bool => $record->status === ProductImportItemsStatusEnum::PROCESSING->value)
                     ->action(function (ProductImportItem $record): void {
                         $shop_ids = ProductShop::query()
-                            ->where('product_import_batch_id', (int)($record->product_import_batch_id ?? 0))
-                            ->where('product_id', (int)($record->product_id ?? 0))
+                            ->where('product_import_batch_id', (int) ($record->product_import_batch_id ?? 0))
+                            ->where('product_id', (int) ($record->product_id ?? 0))
                             ->pluck('shop_id')
-                            ->map(static fn($shop_id): int => (int)$shop_id)
-                            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                             ->unique()
                             ->values()
                             ->all();
@@ -631,7 +632,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->icon(Heroicon::ExclamationTriangle)
                     ->color('warning')
                     ->visible(function (ProductImportItem $record): bool {
-                        return (int)($record->product_id ?? 0) > 0 && !$this->hasBoundShopsForRecord($record);
+                        return (int) ($record->product_id ?? 0) > 0 && ! $this->hasBoundShopsForRecord($record);
                     })
                     ->action(function (): void {
                         Notification::make()
@@ -667,7 +668,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -680,8 +681,8 @@ class ProductImportItemsRelationManager extends RelationManager
                         ])
                         ->action(function ($records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -707,7 +708,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             $processed_keys = [];
 
                             foreach ($records_collection as $record) {
-                                if (!$record instanceof ProductImportItem) {
+                                if (! $record instanceof ProductImportItem) {
                                     continue;
                                 }
 
@@ -717,21 +718,21 @@ class ProductImportItemsRelationManager extends RelationManager
                                     continue;
                                 }
 
-                                $product_id = (int)($record->product_id ?? 0);
+                                $product_id = (int) ($record->product_id ?? 0);
                                 if ($product_id <= 0) {
                                     $summary['items_skipped_without_product']++;
 
                                     continue;
                                 }
 
-                                $batch_id = (int)($record->product_import_batch_id ?? 0);
+                                $batch_id = (int) ($record->product_import_batch_id ?? 0);
                                 if ($batch_id <= 0) {
                                     $summary['products_skipped']++;
 
                                     continue;
                                 }
 
-                                $record_key = $batch_id . ':' . $product_id;
+                                $record_key = $batch_id.':'.$product_id;
                                 if (in_array($record_key, $processed_keys, true)) {
                                     continue;
                                 }
@@ -743,7 +744,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                 foreach ($shop_ids as $shop_id) {
                                     ProcessProductShopBindingJob::dispatchSync(
                                         $product_id,
-                                        (int)$shop_id,
+                                        (int) $shop_id,
                                         $batch_id,
                                         $source_payload,
                                         auth()->id()
@@ -780,7 +781,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -793,8 +794,8 @@ class ProductImportItemsRelationManager extends RelationManager
                         ])
                         ->action(function ($records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -839,14 +840,14 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function checkIsCanTryingExportProduct(ProductImportItem $record): bool
     {
-        $product_id = (int)($record->product_id ?? 0);
+        $product_id = (int) ($record->product_id ?? 0);
 
         if ($product_id <= 0) {
             return false;
         }
 
         return ProductExportItem::query()
-            ->where('product_import_batch_id', (int)$record->product_import_batch_id)
+            ->where('product_import_batch_id', (int) $record->product_import_batch_id)
             ->where('product_id', $product_id)
             ->where(function (Builder $query) {
                 $query->where('status', ProductExportItemsStatusEnum::FAILED->value)
@@ -856,8 +857,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param list<int> $shop_ids
-     *
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private function queueExportForSingleItem(ProductImportItem $record, array $shop_ids): array
@@ -871,8 +871,8 @@ class ProductImportItemsRelationManager extends RelationManager
             'errors'                     => 0,
         ];
 
-        $requested_product_id = (int)($record->product_id ?? 0);
-        $batch_id             = (int)($record->product_import_batch_id ?? 0);
+        $requested_product_id = (int) ($record->product_id ?? 0);
+        $batch_id             = (int) ($record->product_import_batch_id ?? 0);
 
         if ($requested_product_id <= 0 || $batch_id <= 0) {
             return $summary;
@@ -882,9 +882,9 @@ class ProductImportItemsRelationManager extends RelationManager
 
         foreach ($shop_ids as $shop_id) {
             try {
-                $product_id = $this->resolveExportProductIdForShop($record, (int)$shop_id);
+                $product_id = $this->resolveExportProductIdForShop($record, (int) $shop_id);
                 if ($product_id <= 0) {
-                    $this->markExportAsFailedForNotBoundShop($batch_id, $requested_product_id, (int)$shop_id);
+                    $this->markExportAsFailedForNotBoundShop($batch_id, $requested_product_id, (int) $shop_id);
                     $summary['skipped_not_bound']++;
 
                     continue;
@@ -896,7 +896,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->where('product_import_batch_id', $batch_id)
                     ->first();
 
-                if (!$product_shop instanceof ProductShop) {
+                if (! $product_shop instanceof ProductShop) {
                     $product_shop = ProductShop::query()
                         ->where('product_id', $product_id)
                         ->where('shop_id', $shop_id)
@@ -904,14 +904,14 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->first();
                 }
 
-                if (!$product_shop instanceof ProductShop) {
-                    $this->markExportAsFailedForNotBoundShop($batch_id, $requested_product_id, (int)$shop_id);
+                if (! $product_shop instanceof ProductShop) {
+                    $this->markExportAsFailedForNotBoundShop($batch_id, $requested_product_id, (int) $shop_id);
                     $summary['skipped_not_bound']++;
 
                     continue;
                 }
 
-                $resolved_batch_id = (int)($product_shop->product_import_batch_id ?? 0);
+                $resolved_batch_id = (int) ($product_shop->product_import_batch_id ?? 0);
                 if ($resolved_batch_id <= 0) {
                     $resolved_batch_id = $batch_id;
                 }
@@ -940,12 +940,12 @@ class ProductImportItemsRelationManager extends RelationManager
                         'target_product_id'    => $product_id,
                         'requested_by_user_id' => auth()->id(),
                     ],
-                    'status'                  => ProductExportItemsStatusEnum::PROCESSING->value,
-                    'error_message'           => null,
-                    'processed_at'            => null,
+                    'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
+                    'error_message' => null,
+                    'processed_at'  => null,
                 ]);
 
-                ProcessProductExportItemJob::dispatchSync((int)$export_item->id);
+                ProcessProductExportItemJob::dispatchSync((int) $export_item->id);
                 $summary['exports_queued']++;
             } catch (Throwable) {
                 $summary['errors']++;
@@ -997,9 +997,9 @@ class ProductImportItemsRelationManager extends RelationManager
                     'failure_reason'       => 'not_bound_to_shop',
                     'requested_by_user_id' => auth()->id(),
                 ],
-                'status'                  => ProductExportItemsStatusEnum::FAILED->value,
-                'error_message'           => $error_message,
-                'processed_at'            => get_now_date(),
+                'status'        => ProductExportItemsStatusEnum::FAILED->value,
+                'error_message' => $error_message,
+                'processed_at'  => get_now_date(),
             ]);
         }
 
@@ -1012,9 +1012,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param Collection $records
-     * @param list<int>  $shop_ids
-     *
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private function queueExportForSelectedItems(Collection $records, array $shop_ids): array
@@ -1032,7 +1030,7 @@ class ProductImportItemsRelationManager extends RelationManager
         ];
 
         foreach ($records as $record) {
-            if (!$record instanceof ProductImportItem) {
+            if (! $record instanceof ProductImportItem) {
                 continue;
             }
 
@@ -1042,7 +1040,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 continue;
             }
 
-            $product_id = (int)($record->product_id ?? 0);
+            $product_id = (int) ($record->product_id ?? 0);
             if ($product_id <= 0) {
                 $summary['items_skipped_without_product']++;
 
@@ -1051,20 +1049,18 @@ class ProductImportItemsRelationManager extends RelationManager
 
             $item_summary = $this->queueExportForSingleItem($record, $shop_ids);
 
-            $summary['products_total']             += ($item_summary['products_total'] ?? 0);
-            $summary['exports_queued']             += ($item_summary['exports_queued'] ?? 0);
-            $summary['already_failed']             += ($item_summary['already_failed'] ?? 0);
+            $summary['products_total'] += ($item_summary['products_total'] ?? 0);
+            $summary['exports_queued'] += ($item_summary['exports_queued'] ?? 0);
+            $summary['already_failed'] += ($item_summary['already_failed'] ?? 0);
             $summary['already_queued_or_exported'] += ($item_summary['already_queued_or_exported'] ?? 0);
-            $summary['skipped_not_bound']          += ($item_summary['skipped_not_bound'] ?? 0);
-            $summary['errors']                     += $item_summary['errors'] ?? 0;
+            $summary['skipped_not_bound'] += ($item_summary['skipped_not_bound'] ?? 0);
+            $summary['errors'] += $item_summary['errors'] ?? 0;
         }
 
         return $summary;
     }
 
     /**
-     * @param Collection $records
-     *
      * @return array<string, int>
      */
     private function retryFailedExportsForSelectedItems(Collection $records): array
@@ -1075,13 +1071,13 @@ class ProductImportItemsRelationManager extends RelationManager
         ];
 
         foreach ($records as $record) {
-            if (!$record instanceof ProductImportItem) {
+            if (! $record instanceof ProductImportItem) {
                 continue;
             }
 
-            $item_summary            = $this->retryFailedExportsForSingleItem($record);
+            $item_summary = $this->retryFailedExportsForSingleItem($record);
             $summary['failed_found'] += ($item_summary['failed_found'] ?? 0);
-            $summary['queued']       += $item_summary['queued'] ?? 0;
+            $summary['queued'] += $item_summary['queued'] ?? 0;
         }
 
         return $summary;
@@ -1097,8 +1093,8 @@ class ProductImportItemsRelationManager extends RelationManager
             'queued'       => 0,
         ];
 
-        $product_id = (int)($record->product_id ?? 0);
-        $batch_id   = (int)($record->product_import_batch_id ?? 0);
+        $product_id = (int) ($record->product_id ?? 0);
+        $batch_id   = (int) ($record->product_import_batch_id ?? 0);
 
         if ($product_id <= 0 || $batch_id <= 0) {
             return $summary;
@@ -1120,7 +1116,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'processed_at'  => null,
             ]);
 
-            ProcessProductExportItemJob::dispatchSync((int)$failed_export_item->id);
+            ProcessProductExportItemJob::dispatchSync((int) $failed_export_item->id);
             $summary['queued']++;
         }
 
@@ -1133,8 +1129,8 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function resolveExportStatus(ProductImportItem $record): string
     {
-        $product_id = (int)($record->product_id ?? 0);
-        $batch_id   = (int)($record->product_import_batch_id ?? 0);
+        $product_id = (int) ($record->product_id ?? 0);
+        $batch_id   = (int) ($record->product_import_batch_id ?? 0);
 
         if ($product_id <= 0 || $batch_id <= 0) {
             return ProductImportItemsStatusEnum::NOT_QUEUED->value;
@@ -1246,11 +1242,11 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('product_id', $product_id)
             ->when(
                 $batch_id > 0,
-                static fn($query) => $query->where('product_import_batch_id', $batch_id)
+                static fn ($query) => $query->where('product_import_batch_id', $batch_id)
             )
             ->pluck('shop_id')
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -1260,8 +1256,8 @@ class ProductImportItemsRelationManager extends RelationManager
             $shop_ids = ProductShop::query()
                 ->where('product_id', $product_id)
                 ->pluck('shop_id')
-                ->map(static fn($shop_id): int => (int)$shop_id)
-                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                ->map(static fn ($shop_id): int => (int) $shop_id)
+                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                 ->unique()
                 ->values()
                 ->all();
@@ -1302,7 +1298,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getBoundShopIdsForRecord(ProductImportItem $record): array
     {
-        $product_id = (int)($record->product_id ?? 0);
+        $product_id = (int) ($record->product_id ?? 0);
         if ($product_id <= 0) {
             return [];
         }
@@ -1310,8 +1306,8 @@ class ProductImportItemsRelationManager extends RelationManager
         return ProductShop::query()
             ->where('product_id', $product_id)
             ->pluck('shop_id')
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -1323,7 +1319,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return 0;
         }
 
-        $product_id = (int)($record->product_id ?? 0);
+        $product_id = (int) ($record->product_id ?? 0);
         if ($product_id <= 0) {
             return 0;
         }
@@ -1335,30 +1331,30 @@ class ProductImportItemsRelationManager extends RelationManager
             ->first();
 
         return $product_shop instanceof ProductShop
-            ? (int)$product_shop->product_id
+            ? (int) $product_shop->product_id
             : 0;
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      *
      * @throws Throwable
      */
     private function saveEditedProduct(ProductImportItem $record, array $data): void
     {
-        $source_product_id = (int)($record->product_id ?? 0);
+        $source_product_id = (int) ($record->product_id ?? 0);
         $source_product    = Product::query()->find($source_product_id);
 
         if ($source_product === null) {
             return;
         }
 
-        $bind_shop_id          = (int)Arr::get($data, 'bind_shop_id', 0);
-        $bind_shop_language_id = (int)Arr::get($data, 'bind_shop_language_id', 0);
+        $bind_shop_id          = (int) Arr::get($data, 'bind_shop_id', 0);
+        $bind_shop_language_id = (int) Arr::get($data, 'bind_shop_language_id', 0);
         $target_product        = $source_product;
 
         DB::transaction(function () use ($record, $source_product, $bind_shop_id, $bind_shop_language_id, $data, &$target_product): void {
-            $batch_id = (int)($record->product_import_batch_id ?? 0);
+            $batch_id = (int) ($record->product_import_batch_id ?? 0);
 
             if ($bind_shop_id > 0) {
                 $target_product = $this->resolveTargetProductForShopBinding($source_product, $bind_shop_id, $batch_id);
@@ -1367,12 +1363,12 @@ class ProductImportItemsRelationManager extends RelationManager
             $this->persistEditedProductData($target_product, $data, $bind_shop_language_id);
 
             if ($bind_shop_id > 0) {
-                $shop_name = (string)(Shop::query()->whereKey($bind_shop_id)->value('name') ?? $bind_shop_id);
+                $shop_name = (string) (Shop::query()->whereKey($bind_shop_id)->value('name') ?? $bind_shop_id);
                 ProductShop::query()->updateOrCreate([
                     'product_id' => $target_product->id,
                     'shop_id'    => $bind_shop_id,
                 ], [
-                    'product_import_batch_id' => $batch_id > 0 ? $batch_id : (int)($record->product_import_batch_id ?? 0),
+                    'product_import_batch_id' => $batch_id > 0 ? $batch_id : (int) ($record->product_import_batch_id ?? 0),
                     'external_product_id'     => null,
                 ]);
 
@@ -1382,7 +1378,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
                 $this->ensureShopLinksForProduct($target_product->id, $bind_shop_id);
                 ProcessProductShopBindingJob::dispatchSync(
-                    (int)$target_product->id,
+                    (int) $target_product->id,
                     $bind_shop_id,
                     $batch_id,
                     is_array($record->payload) ? $record->payload : [],
@@ -1392,8 +1388,8 @@ class ProductImportItemsRelationManager extends RelationManager
                 if ($batch_id > 0) {
                     ProductImportItem::ensureBatchProductItem(
                         $batch_id,
-                        (int)$target_product->id,
-                        (array)($record->payload ?? []),
+                        (int) $target_product->id,
+                        (array) ($record->payload ?? []),
                         ProductImportItemsStatusEnum::SUCCESSED->value
                     );
 
@@ -1401,7 +1397,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 }
             }
 
-            if ($target_product->id !== (int)$record->product_id) {
+            if ($target_product->id !== (int) $record->product_id) {
                 $record->update([
                     'product_id' => $target_product->id,
                 ]);
@@ -1411,14 +1407,14 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function resolveTargetProductForShopBinding(Product $source_product, int $shop_id, int $batch_id): Product
     {
-        $shop_name     = (string)(Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
+        $shop_name     = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
         $already_bound = ProductShop::query()
             ->where('product_id', $source_product->id)
             ->where('shop_id', $shop_id)
             ->first();
 
         if ($already_bound instanceof ProductShop) {
-            if ($batch_id > 0 && (int)$already_bound->product_import_batch_id !== $batch_id) {
+            if ($batch_id > 0 && (int) $already_bound->product_import_batch_id !== $batch_id) {
                 $already_bound->update([
                     'product_import_batch_id' => $batch_id,
                 ]);
@@ -1435,7 +1431,7 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('product_id', $source_product->id)
             ->exists();
 
-        if (!$has_any_shop_binding) {
+        if (! $has_any_shop_binding) {
             ProductShop::query()->updateOrCreate([
                 'product_id' => $source_product->id,
                 'shop_id'    => $shop_id,
@@ -1456,23 +1452,36 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function duplicateProductWithRelationsForShop(
         Product $source_product,
-        int     $shop_id,
-        string  $shop_name,
-        int     $batch_id
+        int $shop_id,
+        string $shop_name,
+        int $batch_id
     ): Product {
-        $duplicated_product = Product::query()->create([
-            'marked_to_shop' => $shop_name,
-            'model'          => $source_product->model,
-            'sku'            => $source_product->sku,
-            'ean'            => $source_product->ean,
-            'quantity'       => $source_product->quantity,
-            'minimum'        => $source_product->minimum,
-            'image'          => $source_product->image,
-            'price'          => $source_product->price,
-            'is_active'      => (bool)$source_product->is_active,
-            'date_available' => $source_product->date_available,
-            'date_added'     => $source_product->date_added,
+        if ($batch_id <= 0) {
+            throw new RuntimeException('Invalid product_import_batch_id for product duplication');
+        }
+
+        $duplicated_import_item = ProductImportItem::createDraftItemForBatch($batch_id, [
+            'source_product_id' => (int) $source_product->id,
+            'source_type'       => 'manual_binding_duplication',
+            'shop_id'           => $shop_id,
         ]);
+
+        $duplicated_product = Product::query()->create([
+            'product_import_item_id' => (int) $duplicated_import_item->id,
+            'marked_to_shop'         => $shop_name,
+            'model'                  => $source_product->model,
+            'sku'                    => $source_product->sku,
+            'ean'                    => $source_product->ean,
+            'quantity'               => $source_product->quantity,
+            'minimum'                => $source_product->minimum,
+            'image'                  => $source_product->image,
+            'price'                  => $source_product->price,
+            'is_active'              => (bool) $source_product->is_active,
+            'date_available'         => $source_product->date_available,
+            'date_added'             => $source_product->date_added,
+        ]);
+
+        $duplicated_import_item->linkProduct((int) $duplicated_product->id);
 
         ProductDescription::query()
             ->where('product_id', $source_product->id)
@@ -1536,7 +1545,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'seoable_type'     => Product::class,
                     'seoable_id'       => $duplicated_product->id,
                     'shop_language_id' => null,
-                    'query_value'      => (string)$duplicated_product->id,
+                    'query_value'      => (string) $duplicated_product->id,
                     'keyword'          => $seo_url->keyword,
                     'sort_order'       => $seo_url->sort_order,
                 ]);
@@ -1591,7 +1600,7 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('product_id', $product_id)
             ->pluck('category_id')
             ->filter()
-            ->map(static fn($id): int => (int)$id)
+            ->map(static fn ($id): int => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -1609,7 +1618,7 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('product_id', $product_id)
             ->pluck('attribute_id')
             ->filter()
-            ->map(static fn($id): int => (int)$id)
+            ->map(static fn ($id): int => (int) $id)
             ->unique()
             ->values()
             ->all();
@@ -1625,22 +1634,22 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function persistEditedProductData(Product $product, array $data, int $bind_shop_language_id = 0): void
     {
-        $product_id               = (int)$product->id;
+        $product_id               = (int) $product->id;
         $default_shop_language_id = $bind_shop_language_id;
 
         $product->update([
             'model'          => Arr::get($data, 'model'),
             'sku'            => Arr::get($data, 'sku'),
             'ean'            => Arr::get($data, 'ean'),
-            'quantity'       => (int)Arr::get($data, 'quantity', 0),
-            'minimum'        => max((int)Arr::get($data, 'minimum', 1), 1),
+            'quantity'       => (int) Arr::get($data, 'quantity', 0),
+            'minimum'        => max((int) Arr::get($data, 'minimum', 1), 1),
             'image'          => Arr::get($data, 'image'),
-            'price'          => (float)Arr::get($data, 'price', 0),
-            'is_active'      => (bool)Arr::get($data, 'is_active', false),
+            'price'          => (float) Arr::get($data, 'price', 0),
+            'is_active'      => (bool) Arr::get($data, 'is_active', false),
             'date_available' => Arr::get($data, 'date_available'),
             'date_added'     => Arr::get($data, 'date_added'),
         ]);
@@ -1649,11 +1658,11 @@ class ProductImportItemsRelationManager extends RelationManager
         $descriptions_by_language = Arr::get($data, 'descriptions_by_language', []);
         if (is_array($descriptions_by_language) && $descriptions_by_language !== []) {
             foreach ($descriptions_by_language as $shop_language_id => $description_row) {
-                if (!is_array($description_row)) {
+                if (! is_array($description_row)) {
                     continue;
                 }
 
-                $resolved_shop_language_id = (int)$shop_language_id;
+                $resolved_shop_language_id = (int) $shop_language_id;
                 if ($resolved_shop_language_id <= 0) {
                     $resolved_shop_language_id = $default_shop_language_id;
                 }
@@ -1674,11 +1683,11 @@ class ProductImportItemsRelationManager extends RelationManager
             }
         } else {
             foreach (Arr::get($data, 'descriptions', []) as $description_row) {
-                if (!is_array($description_row)) {
+                if (! is_array($description_row)) {
                     continue;
                 }
 
-                $shop_language_id = (int)Arr::get($description_row, 'shop_language_id', 0);
+                $shop_language_id = (int) Arr::get($description_row, 'shop_language_id', 0);
                 if ($shop_language_id <= 0) {
                     $shop_language_id = $default_shop_language_id;
                 }
@@ -1701,11 +1710,11 @@ class ProductImportItemsRelationManager extends RelationManager
 
         ProductImage::query()->where('product_id', $product_id)->delete();
         foreach (Arr::get($data, 'images', []) as $image_row) {
-            if (!is_array($image_row)) {
+            if (! is_array($image_row)) {
                 continue;
             }
 
-            $image = Str::trim((string)Arr::get($image_row, 'image', ''));
+            $image = Str::trim((string) Arr::get($image_row, 'image', ''));
             if ($image === '') {
                 continue;
             }
@@ -1713,7 +1722,7 @@ class ProductImportItemsRelationManager extends RelationManager
             ProductImage::query()->create([
                 'product_id' => $product_id,
                 'image'      => $image,
-                'sort_order' => (int)Arr::get($image_row, 'sort_order', 1),
+                'sort_order' => (int) Arr::get($image_row, 'sort_order', 1),
             ]);
         }
 
@@ -1727,17 +1736,17 @@ class ProductImportItemsRelationManager extends RelationManager
         $seo_urls_by_language = Arr::get($data, 'seo_urls_by_language', []);
         if (is_array($seo_urls_by_language) && $seo_urls_by_language !== []) {
             foreach ($seo_urls_by_language as $shop_language_id => $seo_rows) {
-                $resolved_shop_language_id = (int)$shop_language_id;
+                $resolved_shop_language_id = (int) $shop_language_id;
                 if ($resolved_shop_language_id <= 0) {
                     $resolved_shop_language_id = $default_shop_language_id;
                 }
 
-                if ($resolved_shop_language_id <= 0 || !is_array($seo_rows)) {
+                if ($resolved_shop_language_id <= 0 || ! is_array($seo_rows)) {
                     continue;
                 }
 
                 foreach ($seo_rows as $seo_row) {
-                    if (!is_array($seo_row)) {
+                    if (! is_array($seo_row)) {
                         continue;
                     }
 
@@ -1745,15 +1754,15 @@ class ProductImportItemsRelationManager extends RelationManager
                         'seoable_type'     => Product::class,
                         'seoable_id'       => $product_id,
                         'shop_language_id' => $resolved_shop_language_id,
-                        'query_value'      => (string)$product_id,
-                        'keyword'          => (string)Arr::get($seo_row, 'keyword', ''),
-                        'sort_order'       => (int)Arr::get($seo_row, 'sort_order', 1),
+                        'query_value'      => (string) $product_id,
+                        'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
+                        'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
                     ]);
                 }
             }
         } else {
             foreach (Arr::get($data, 'seo_urls', []) as $seo_row) {
-                if (!is_array($seo_row)) {
+                if (! is_array($seo_row)) {
                     continue;
                 }
 
@@ -1761,25 +1770,25 @@ class ProductImportItemsRelationManager extends RelationManager
                     'seoable_type'     => Product::class,
                     'seoable_id'       => $product_id,
                     'shop_language_id' => null,
-                    'query_value'      => (string)$product_id,
-                    'keyword'          => (string)Arr::get($seo_row, 'keyword', ''),
-                    'sort_order'       => (int)Arr::get($seo_row, 'sort_order', 1),
+                    'query_value'      => (string) $product_id,
+                    'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
+                    'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
                 ]);
             }
         }
 
         ProductDiscount::query()->where('product_id', $product_id)->delete();
         foreach (Arr::get($data, 'discounts', []) as $discount_row) {
-            if (!is_array($discount_row)) {
+            if (! is_array($discount_row)) {
                 continue;
             }
 
             ProductDiscount::query()->create([
                 'product_id'    => $product_id,
-                'user_group_id' => (int)Arr::get($discount_row, 'user_group_id', 1),
-                'quantity'      => max((int)Arr::get($discount_row, 'quantity', 1), 1),
-                'price'         => (float)Arr::get($discount_row, 'price', 0),
-                'priority'      => (int)Arr::get($discount_row, 'priority', 1),
+                'user_group_id' => (int) Arr::get($discount_row, 'user_group_id', 1),
+                'quantity'      => max((int) Arr::get($discount_row, 'quantity', 1), 1),
+                'price'         => (float) Arr::get($discount_row, 'price', 0),
+                'priority'      => (int) Arr::get($discount_row, 'priority', 1),
                 'date_start'    => Arr::get($discount_row, 'date_start') ?: get_now_date()->toDateTimeString(),
                 'date_end'      => Arr::get($discount_row, 'date_end') ?: get_now_date()->toDateTimeString(),
             ]);
@@ -1787,15 +1796,15 @@ class ProductImportItemsRelationManager extends RelationManager
 
         ProductSpecial::query()->where('product_id', $product_id)->delete();
         foreach (Arr::get($data, 'specials', []) as $special_row) {
-            if (!is_array($special_row)) {
+            if (! is_array($special_row)) {
                 continue;
             }
 
             ProductSpecial::query()->create([
                 'product_id'    => $product_id,
-                'user_group_id' => (int)Arr::get($special_row, 'user_group_id', 1),
-                'price'         => (float)Arr::get($special_row, 'price', 0),
-                'priority'      => (int)Arr::get($special_row, 'priority', 1),
+                'user_group_id' => (int) Arr::get($special_row, 'user_group_id', 1),
+                'price'         => (float) Arr::get($special_row, 'price', 0),
+                'priority'      => (int) Arr::get($special_row, 'priority', 1),
                 'date_start'    => Arr::get($special_row, 'date_start') ?: get_now_date()->toDateTimeString(),
                 'date_end'      => Arr::get($special_row, 'date_end') ?: get_now_date()->toDateTimeString(),
             ]);
@@ -1820,7 +1829,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function syncProductCategoriesFromFormData(int $product_id, array $data, int $default_shop_language_id): void
     {
@@ -1830,7 +1839,7 @@ class ProductImportItemsRelationManager extends RelationManager
         $seen_category_ids     = [];
 
         foreach (Arr::get($data, 'categories_existing_ids', []) as $category_id) {
-            $resolved_category_id = (int)$category_id;
+            $resolved_category_id = (int) $category_id;
             if ($resolved_category_id <= 0) {
                 continue;
             }
@@ -1846,7 +1855,7 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         [$category_paths, $duplicate_category_paths] = $this->parseHierarchyPathsWithDuplicates(
-            (string)Arr::get($data, 'categories_custom_paths', '')
+            (string) Arr::get($data, 'categories_custom_paths', '')
         );
 
         if ($duplicate_category_paths !== []) {
@@ -1880,7 +1889,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function syncProductAttributesFromFormData(int $product_id, array $data, int $default_shop_language_id): void
     {
@@ -1892,22 +1901,22 @@ class ProductImportItemsRelationManager extends RelationManager
         $attributes_selected_by_language = Arr::get($data, 'attributes_selected_by_language', []);
         if (is_array($attributes_selected_by_language)) {
             foreach ($attributes_selected_by_language as $shop_language_id => $attribute_ids) {
-                $resolved_shop_language_id = (int)$shop_language_id;
+                $resolved_shop_language_id = (int) $shop_language_id;
                 if ($resolved_shop_language_id <= 0) {
                     $resolved_shop_language_id = $default_shop_language_id;
                 }
 
-                if ($resolved_shop_language_id <= 0 || !is_array($attribute_ids)) {
+                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_ids)) {
                     continue;
                 }
 
                 foreach ($attribute_ids as $attribute_id) {
-                    $resolved_attribute_id = (int)$attribute_id;
+                    $resolved_attribute_id = (int) $attribute_id;
                     if ($resolved_attribute_id <= 0) {
                         continue;
                     }
 
-                    $pair_key = $resolved_shop_language_id . ':' . $resolved_attribute_id;
+                    $pair_key = $resolved_shop_language_id.':'.$resolved_attribute_id;
                     if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                         throw ValidationException::withMessages([
                             "attributes_selected_by_language.$shop_language_id" => __('admin/product_imports/batches.product_edit.errors.duplicate_attribute'),
@@ -1927,23 +1936,23 @@ class ProductImportItemsRelationManager extends RelationManager
         $attributes_custom_by_language = Arr::get($data, 'attributes_custom_by_language', []);
         if (is_array($attributes_custom_by_language)) {
             foreach ($attributes_custom_by_language as $shop_language_id => $attribute_rows) {
-                $resolved_shop_language_id = (int)$shop_language_id;
+                $resolved_shop_language_id = (int) $shop_language_id;
                 if ($resolved_shop_language_id <= 0) {
                     $resolved_shop_language_id = $default_shop_language_id;
                 }
 
-                if ($resolved_shop_language_id <= 0 || !is_array($attribute_rows)) {
+                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_rows)) {
                     continue;
                 }
 
                 foreach ($attribute_rows as $row_index => $attribute_row) {
-                    if (!is_array($attribute_row)) {
+                    if (! is_array($attribute_row)) {
                         continue;
                     }
 
-                    $attribute_text = (string)Arr::get($attribute_row, 'text', '');
+                    $attribute_text                                = (string) Arr::get($attribute_row, 'text', '');
                     [$attribute_paths, $duplicate_attribute_paths] = $this->parseHierarchyPathsWithDuplicates(
-                        (string)Arr::get($attribute_row, 'attribute_name', ''),
+                        (string) Arr::get($attribute_row, 'attribute_name', ''),
                         false
                     );
 
@@ -1955,7 +1964,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
                     foreach ($attribute_paths as $attribute_path) {
                         $attribute_id = $this->resolveOrCreateAttributeIdByPath($attribute_path, $resolved_shop_language_id);
-                        $pair_key     = $resolved_shop_language_id . ':' . $attribute_id;
+                        $pair_key     = $resolved_shop_language_id.':'.$attribute_id;
 
                         if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                             throw ValidationException::withMessages([
@@ -1977,26 +1986,26 @@ class ProductImportItemsRelationManager extends RelationManager
         $legacy_attributes_by_language = Arr::get($data, 'attributes_by_language', []);
         if (is_array($legacy_attributes_by_language)) {
             foreach ($legacy_attributes_by_language as $shop_language_id => $attribute_rows) {
-                $resolved_shop_language_id = (int)$shop_language_id;
+                $resolved_shop_language_id = (int) $shop_language_id;
                 if ($resolved_shop_language_id <= 0) {
                     $resolved_shop_language_id = $default_shop_language_id;
                 }
 
-                if ($resolved_shop_language_id <= 0 || !is_array($attribute_rows)) {
+                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_rows)) {
                     continue;
                 }
 
                 foreach ($attribute_rows as $attribute_row) {
-                    if (!is_array($attribute_row)) {
+                    if (! is_array($attribute_row)) {
                         continue;
                     }
 
-                    $attribute_id = (int)Arr::get($attribute_row, 'attribute_id', 0);
+                    $attribute_id = (int) Arr::get($attribute_row, 'attribute_id', 0);
                     if ($attribute_id <= 0) {
                         continue;
                     }
 
-                    $pair_key = $resolved_shop_language_id . ':' . $attribute_id;
+                    $pair_key = $resolved_shop_language_id.':'.$attribute_id;
                     if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                         continue;
                     }
@@ -2005,7 +2014,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     $attribute_rows_to_create[]      = [
                         'attribute_id'     => $attribute_id,
                         'shop_language_id' => $resolved_shop_language_id,
-                        'text'             => (string)Arr::get($attribute_row, 'text', ''),
+                        'text'             => (string) Arr::get($attribute_row, 'text', ''),
                     ];
                 }
             }
@@ -2014,9 +2023,9 @@ class ProductImportItemsRelationManager extends RelationManager
         foreach ($attribute_rows_to_create as $attribute_row_to_create) {
             ProductToAttribute::query()->create([
                 'product_id'       => $product_id,
-                'attribute_id'     => (int)$attribute_row_to_create['attribute_id'],
-                'shop_language_id' => (int)$attribute_row_to_create['shop_language_id'],
-                'text'             => (string)$attribute_row_to_create['text'],
+                'attribute_id'     => (int) $attribute_row_to_create['attribute_id'],
+                'shop_language_id' => (int) $attribute_row_to_create['shop_language_id'],
+                'text'             => (string) $attribute_row_to_create['text'],
             ]);
         }
     }
@@ -2037,7 +2046,7 @@ class ProductImportItemsRelationManager extends RelationManager
         $duplicate_paths = [];
 
         foreach ($path_chunks as $path_chunk) {
-            $path_chunk = Str::trim((string)$path_chunk);
+            $path_chunk = Str::trim((string) $path_chunk);
             if ($path_chunk === '') {
                 continue;
             }
@@ -2047,8 +2056,8 @@ class ProductImportItemsRelationManager extends RelationManager
                 : [$path_chunk];
 
             $path_segments = array_values(array_filter(
-                array_map(static fn($segment): string => Str::trim((string)$segment), $path_segments),
-                static fn(string $segment): bool => $segment !== '',
+                array_map(static fn ($segment): string => Str::trim((string) $segment), $path_segments),
+                static fn (string $segment): bool => $segment !== '',
             ));
 
             if ($path_segments === []) {
@@ -2070,13 +2079,13 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param list<string> $category_path
+     * @param  list<string>  $category_path
      */
     private function resolveOrCreateCategoryIdByPath(array $category_path, int $shop_language_id): ?int
     {
         $category_path = array_values(array_filter(
-            array_map(static fn($segment): string => Str::trim((string)$segment), $category_path),
-            static fn(string $segment): bool => $segment !== '',
+            array_map(static fn ($segment): string => Str::trim((string) $segment), $category_path),
+            static fn (string $segment): bool => $segment !== '',
         ));
 
         if ($category_path === []) {
@@ -2095,7 +2104,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'is_active'  => true,
                 ]);
 
-                $existing_category_id = (int)$category->id;
+                $existing_category_id = (int) $category->id;
             }
 
             $this->ensureCategoryDescription($existing_category_id, $shop_language_id, $category_name);
@@ -2118,8 +2127,8 @@ class ProductImportItemsRelationManager extends RelationManager
             ->whereRaw('LOWER(category_descriptions.name) = ?', [$normalized_category_name])
             ->when(
                 $parent_category_id === null,
-                static fn($builder) => $builder->whereNull('categories.parent_id'),
-                static fn($builder) => $builder->where('categories.parent_id', $parent_category_id),
+                static fn ($builder) => $builder->whereNull('categories.parent_id'),
+                static fn ($builder) => $builder->where('categories.parent_id', $parent_category_id),
             )
             ->orderByRaw(
                 'CASE WHEN category_descriptions.shop_language_id = ? THEN 0 ELSE 1 END',
@@ -2129,7 +2138,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $category_id = $query->value('categories.id');
 
-        return $category_id !== null ? (int)$category_id : null;
+        return $category_id !== null ? (int) $category_id : null;
     }
 
     private function ensureCategoryDescription(int $category_id, int $shop_language_id, string $category_name): void
@@ -2156,13 +2165,13 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param list<string> $attribute_path
+     * @param  list<string>  $attribute_path
      */
     private function resolveOrCreateAttributeIdByPath(array $attribute_path, int $shop_language_id): int
     {
         $attribute_path = array_values(array_filter(
-            array_map(static fn($segment): string => Str::trim((string)$segment), $attribute_path),
-            static fn(string $segment): bool => $segment !== '',
+            array_map(static fn ($segment): string => Str::trim((string) $segment), $attribute_path),
+            static fn (string $segment): bool => $segment !== '',
         ));
 
         if ($attribute_path === []) {
@@ -2180,7 +2189,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 ->value('attribute_id');
 
             if ($existing_attribute_id !== null) {
-                $resolved_attribute_id = (int)$existing_attribute_id;
+                $resolved_attribute_id = (int) $existing_attribute_id;
 
                 continue;
             }
@@ -2189,7 +2198,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'sort_order' => 1,
             ]);
 
-            $resolved_attribute_id = (int)$attribute->id;
+            $resolved_attribute_id = (int) $attribute->id;
 
             AttributeDescription::query()->firstOrCreate([
                 'attribute_id'     => $resolved_attribute_id,
@@ -2215,7 +2224,7 @@ class ProductImportItemsRelationManager extends RelationManager
     {
         $default_language_id = $shop_language_id > 0
             ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
 
         $descriptions_query = CategoryDescription::query()->orderBy('name')->select('category_id', 'name');
 
@@ -2223,7 +2232,7 @@ class ProductImportItemsRelationManager extends RelationManager
             $shop_category_ids = CategoryShop::query()
                 ->where('shop_id', $shop_id)
                 ->pluck('category_id')
-                ->map(static fn($category_id): int => (int)$category_id)
+                ->map(static fn ($category_id): int => (int) $category_id)
                 ->all();
 
             if ($shop_category_ids === []) {
@@ -2248,7 +2257,7 @@ class ProductImportItemsRelationManager extends RelationManager
         return Category::query()
             ->orderBy('id')
             ->get()
-            ->mapWithKeys(static fn(Category $category): array => [$category->id => '#' . $category->id])
+            ->mapWithKeys(static fn (Category $category): array => [$category->id => '#'.$category->id])
             ->toArray();
     }
 
@@ -2257,12 +2266,12 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getAttributeOptionsByScope(
         string $scope,
-        int    $shop_id = 0,
-        int    $shop_language_id = 0
+        int $shop_id = 0,
+        int $shop_language_id = 0
     ): array {
         $default_language_id = $shop_language_id > 0
             ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
 
         $query = Attribute::query()
             ->with([
@@ -2270,14 +2279,14 @@ class ProductImportItemsRelationManager extends RelationManager
                     if ($default_language_id > 0) {
                         $query->where('shop_language_id', $default_language_id);
                     }
-                }
+                },
             ]);
 
         if ($scope === 'shop' && $shop_id > 0) {
             $shop_attribute_ids = AttributeShop::query()
                 ->where('shop_id', $shop_id)
                 ->pluck('attribute_id')
-                ->map(static fn($attribute_id): int => (int)$attribute_id)
+                ->map(static fn ($attribute_id): int => (int) $attribute_id)
                 ->all();
 
             if ($shop_attribute_ids === []) {
@@ -2294,7 +2303,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
         return $attributes
             ->mapWithKeys(static function (Attribute $attribute): array {
-                $name = $attribute->descriptions->first()?->name ?? ('#' . $attribute->id);
+                $name = $attribute->descriptions->first()?->name ?? ('#'.$attribute->id);
 
                 return [$attribute->id => $name];
             })
@@ -2313,17 +2322,17 @@ class ProductImportItemsRelationManager extends RelationManager
         $already_bound_shop_ids = ProductShop::query()
             ->where('product_id', $product_id)
             ->pluck('shop_id')
-            ->map(static fn($shop_id): int => (int)$shop_id)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
             ->all();
 
         $options = Shop::query()
             ->where('is_active', true)
-            ->when($already_bound_shop_ids !== [], fn($query) => $query->whereNotIn('id', $already_bound_shop_ids))
+            ->when($already_bound_shop_ids !== [], fn ($query) => $query->whereNotIn('id', $already_bound_shop_ids))
             ->orderBy('name')
             ->pluck('name', 'id')
             ->toArray();
 
-        if ($current_shop_id > 0 && !array_key_exists($current_shop_id, $options)) {
+        if ($current_shop_id > 0 && ! array_key_exists($current_shop_id, $options)) {
             $current_shop_name = Shop::query()->whereKey($current_shop_id)->value('name');
             if (is_string($current_shop_name) && $current_shop_name !== '') {
                 $options[$current_shop_id] = $current_shop_name;
@@ -2370,11 +2379,11 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $tabs = [];
         foreach ($shop_languages as $shop_language) {
-            $language_id = (int)$shop_language->id;
+            $language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('description_language_' . $language_id)
-                ->label((string)$shop_language->name)
-                ->badge((string)$shop_language->code)
+            $tabs[] = Tab::make('description_language_'.$language_id)
+                ->label((string) $shop_language->name)
+                ->badge((string) $shop_language->code)
                 ->schema([
                     TextInput::make("descriptions_by_language.$language_id.name")
                         ->label(__('admin/product_imports/batches.product_edit.fields.name'))
@@ -2419,17 +2428,17 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $tabs = [];
         foreach ($shop_languages as $shop_language) {
-            $language_id = (int)$shop_language->id;
+            $language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('attribute_language_' . $language_id)
-                ->label((string)$shop_language->name)
-                ->badge((string)$shop_language->code)
+            $tabs[] = Tab::make('attribute_language_'.$language_id)
+                ->label((string) $shop_language->name)
+                ->badge((string) $shop_language->code)
                 ->schema([
                     Select::make("attributes_selected_by_language.$language_id")
                         ->label(__('admin/product_imports/batches.product_edit.fields.attributes_existing_ids'))
-                        ->options(fn(callable $get): array => $this->getAttributeOptionsByScope(
+                        ->options(fn (callable $get): array => $this->getAttributeOptionsByScope(
                             $scope,
-                            (int)($get('bind_shop_id') ?? 0),
+                            (int) ($get('bind_shop_id') ?? 0),
                             $language_id
                         ))
                         ->multiple()
@@ -2474,11 +2483,11 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $tabs = [];
         foreach ($shop_languages as $shop_language) {
-            $language_id = (int)$shop_language->id;
+            $language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('seo_urls_language_' . $language_id)
-                ->label((string)$shop_language->name)
-                ->badge((string)$shop_language->code)
+            $tabs[] = Tab::make('seo_urls_language_'.$language_id)
+                ->label((string) $shop_language->name)
+                ->badge((string) $shop_language->code)
                 ->schema([
                     TextInput::make('query_value')
                         ->label(__('admin/product_imports/batches.product_edit.fields.query_value'))
