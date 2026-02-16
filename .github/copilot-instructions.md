@@ -27,13 +27,13 @@
 
 ## Safety dev workflow
 
-- You can using system variables from `/home/kamaz/www/strateg-export-products/.docker/dev/env/`
+- You can using system variables from `/home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/env/`
 - Never run: `docker system prune`, `docker volume rm`, `DROP DATABASE`, `TRUNCATE`
 - Prefer SELECT-only unless explicitly asked to modify data
 - DB read-only queries:
-  * docker compose -f /home/kamaz/www/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-postgresql psql -U `POSTGRES_SIMPLE_USER` -d `POSTGRES_DB` -c "SELECT ...;"
+  * `docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-postgresql psql -U ${POSTGRES_SIMPLE_USER} -d ${POSTGRES_DB} -c "SELECT ...;`"
 - To execute commands related to the application or server, use the following command:
-  * `docker compose -f /home/kamaz/www/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-php-fpm <command and args>`. The Docker container already has everything you need installed, including PHP.
+  * `docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-php-fpm <command and args>`. The Docker container already has everything you need installed, including PHP.
 
 # Laravel Boost Guidelines
 
