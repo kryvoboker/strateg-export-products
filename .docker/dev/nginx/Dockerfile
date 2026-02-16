@@ -27,10 +27,9 @@ RUN chown -R ${UID}:${GID} /var/cache/nginx/ /var/log/nginx/ /etc/nginx/conf.d/ 
   && chmod -R 755 /var/cache/nginx/ /var/log/nginx/
 
 # Copy and set permissions for entrypoint script
-COPY .docker/dev/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=${UID}:${GID} .docker/dev/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && chown ${UID}:${GID} /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 80
 

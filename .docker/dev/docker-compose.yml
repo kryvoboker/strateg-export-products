@@ -3,7 +3,7 @@ name: "dev-strateg-export-products"
 services:
   dev-strateg-export-products-php-fpm:
     build:
-      context: $PWD
+      context: ${PWD}
       dockerfile: .docker/dev/php/Dockerfile
       target: development
       args:
@@ -39,7 +39,7 @@ services:
 
   dev-strateg-export-products-cron:
     build:
-      context: $PWD
+      context: ${PWD}
       dockerfile: .docker/dev/cron/Dockerfile
       target: development
       args:
@@ -74,7 +74,7 @@ services:
 
   dev-strateg-export-products-nginx:
     build:
-      context: $PWD
+      context: ${PWD}
       dockerfile: .docker/dev/nginx/Dockerfile
       args:
         UID: ${UID:-1000}
@@ -112,7 +112,7 @@ services:
 
   dev-strateg-export-products-postgresql:
     build:
-      context: $PWD
+      context: ${PWD}
       dockerfile: .docker/dev/postgresql/Dockerfile
       args:
         UID: ${UID:-1000}

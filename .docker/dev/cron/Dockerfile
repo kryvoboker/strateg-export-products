@@ -20,7 +20,15 @@ RUN echo "date.timezone=${TZ}" > /usr/local/etc/php/conf.d/99-timezone.ini
 
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions gd zip pdo pdo_pgsql pgsql sockets intl bcmath apcu \
+RUN install-php-extensions gd \
+    zip \
+    pdo \
+    pdo_pgsql \
+    pgsql \
+    sockets \
+    intl \
+    bcmath \
+    apcu \
   && rm -f /usr/local/bin/install-php-extensions
 
 FROM php-cli AS supercronic
@@ -56,10 +64,10 @@ RUN deluser ${USERNAME} 2>/dev/null || true \
 # Create crontab directory with proper permissions
 RUN mkdir -p /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
   && chown ${UID}:${GID} /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
-  && chmod -R 775 /var/log/cron/ ${COMPOSER_CACHE_DIR}/
+  && chmod -R 755 /var/log/cron/ ${COMPOSER_CACHE_DIR}/
 
 # Copy entrypoint script
-COPY .docker/dev/cron/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=${UID}:${GID} .docker/dev/cron/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

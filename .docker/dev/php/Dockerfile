@@ -12,7 +12,6 @@ RUN apt-get update \
     unzip  \
     zip  \
     tzdata  \
-    nano \
   && rm -rf /var/lib/apt/lists/*
 
 RUN ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
@@ -20,7 +19,17 @@ RUN ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
 
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-RUN install-php-extensions gd zip pdo pdo_pgsql pgsql xdebug xhprof sockets intl bcmath apcu \
+RUN install-php-extensions gd \
+    zip \
+    pdo \
+    pdo_pgsql \
+    pgsql \
+    xdebug \
+    xhprof \
+    sockets \
+    intl \
+    bcmath \
+    apcu \
   && rm -f /usr/local/bin/install-php-extensions
 
 RUN echo "xhprof.output_dir = /tmp/xhprof" >> /usr/local/etc/php/conf.d/docker-php-ext-xhprof.ini \
@@ -49,7 +58,7 @@ COPY --from=composer /usr/bin/composer /usr/bin/composer
 ARG UID
 ARG GID
 ARG UMASK
-ARG USERNAME=www-data
+ARG USERNAME
 
 # Configure composer cache directory
 ENV HOME=/home/${USERNAME}
@@ -67,13 +76,12 @@ RUN groupmod -o -g ${GID} ${USERNAME} \
 # Create npm global directory for www-data and set ownership
 RUN mkdir -p ${NPM_CONFIG_PREFIX}/ ${NPM_CONFIG_CACHE}/ ${COMPOSER_CACHE_DIR}/ \
   && chown -R ${UID}:${GID} ${COMPOSER_HOME}/ ${NPM_CONFIG_PREFIX}/ ${NPM_CONFIG_CACHE}/ \
-  && chmod -R 775 ${COMPOSER_HOME}/ ${NPM_CONFIG_CACHE}/ ${NPM_CONFIG_PREFIX}/
+  && chmod -R 755 ${COMPOSER_HOME}/ ${NPM_CONFIG_CACHE}/ ${NPM_CONFIG_PREFIX}/
 
 # Copy and set permissions for entrypoint script
-COPY .docker/dev/php/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=${UID}:${GID} .docker/dev/php/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && chown ${UID}:${GID} /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /var/webroot/sites/export-products.strateg.ua/app
 

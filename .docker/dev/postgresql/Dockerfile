@@ -27,10 +27,9 @@ RUN chown -R ${UID}:${GID} /var/lib/postgresql/ \
   && chown -R ${UID}:${GID} /var/run/postgresql/
 
 # Copy custom entrypoint
-COPY .docker/dev/postgresql/entrypoint.sh /usr/local/bin/custom-entrypoint.sh
+COPY --chown=${UID}:${GID} .docker/dev/postgresql/entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 
-RUN chmod +x /usr/local/bin/custom-entrypoint.sh \
-  && chown ${UID}:${GID} /usr/local/bin/custom-entrypoint.sh
+RUN chmod +x /usr/local/bin/custom-entrypoint.sh
 
 USER ${USERNAME}
 
