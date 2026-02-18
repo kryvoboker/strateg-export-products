@@ -7,8 +7,12 @@ namespace App\Filament\Resources\Catalog\Products\Tables;
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
+use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductShopBindingJob;
+use App\Jobs\ProcessProductUpdateItemJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Categories\Category;
@@ -18,7 +22,10 @@ use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
+use App\Models\Products\Updates\ProductUpdateBatch;
+use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
+use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -36,6 +43,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -53,8 +61,7 @@ class ProductsTable
                     ->orderBy('id'),
                 'productShops.shop' => static fn($shop_query) => $shop_query
                     ->orderBy('name'),
-                'importItems'       => static fn($import_items_query) => $import_items_query
-                    ->orderByDesc('id'),
+                'importItem',
             ]))
             ->columns([
                 TextColumn::make('id')
@@ -144,37 +151,14 @@ class ProductsTable
                         TextInput::make('sku')->label(__('admin/products/products.columns.sku')),
                         TextInput::make('model')->label(__('admin/products/products.columns.model')),
                         TextInput::make('ean')->label(__('admin/products/products.columns.ean')),
+                        TextInput::make('external_product_id')->label('External product id'),
+                        TextInput::make('quantity')->label(__('admin/products/products.columns.quantity')),
+                        TextInput::make('price')->label(__('admin/products/products.columns.price')),
+                        TextInput::make('attribute_name')->label('Attribute name'),
+                        TextInput::make('attribute_value')->label('Attribute value'),
+                        TextInput::make('category_name')->label('Category name'),
                     ])
-                    ->query(static function (Builder $query, array $data): Builder {
-                        $name  = Str::lower(Str::trim((string)Arr::get($data, 'name', '')));
-                        $sku   = Str::trim((string)Arr::get($data, 'sku', ''));
-                        $model = Str::trim((string)Arr::get($data, 'model', ''));
-                        $ean   = Str::trim((string)Arr::get($data, 'ean', ''));
-
-                        if ($name !== '') {
-                            $query->whereHas(
-                                'descriptions',
-                                static fn(Builder $description_query): Builder => $description_query->whereRaw(
-                                    'LOWER(name) LIKE ?',
-                                    ['%' . $name . '%']
-                                )
-                            );
-                        }
-
-                        if ($sku !== '') {
-                            $query->whereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', ['%' . Str::lower($sku) . '%']);
-                        }
-
-                        if ($model !== '') {
-                            $query->whereRaw('LOWER(COALESCE(model, \'\')) LIKE ?', ['%' . Str::lower($model) . '%']);
-                        }
-
-                        if ($ean !== '') {
-                            $query->whereRaw('LOWER(COALESCE(ean, \'\')) LIKE ?', ['%' . Str::lower($ean) . '%']);
-                        }
-
-                        return $query;
-                    }),
+                    ->query(static fn(Builder $query, array $data): Builder => self::applySearchFieldsQuery($query, $data)),
 
                 SelectFilter::make('shop_id')
                     ->label(__('admin/products/products.filters.shop'))
@@ -232,15 +216,15 @@ class ProductsTable
                     ->label(__('admin/products/products.filters.is_processed'))
                     ->queries(
                         true : static fn(Builder $query): Builder => $query->whereHas(
-                            'importItems',
-                            static fn(Builder $items_query): Builder => $items_query->whereIn('status', [
+                            'importItem',
+                            static fn(Builder $item_query): Builder => $item_query->whereIn('status', [
                                 ProductImportItemsStatusEnum::NORMALIZED->value,
                                 ProductImportItemsStatusEnum::SUCCESSED->value,
                             ])
                         ),
                         false: static fn(Builder $query): Builder => $query->whereDoesntHave(
-                            'importItems',
-                            static fn(Builder $items_query): Builder => $items_query->whereIn('status', [
+                            'importItem',
+                            static fn(Builder $item_query): Builder => $item_query->whereIn('status', [
                                 ProductImportItemsStatusEnum::NORMALIZED->value,
                                 ProductImportItemsStatusEnum::SUCCESSED->value,
                             ])
@@ -267,10 +251,88 @@ class ProductsTable
                     ),
             ])
             ->recordActions([
+                Action::make('updateProductToShops')
+                    ->label(__('admin/products/products.actions.update_product_to_shops'))
+                    ->icon(Heroicon::ArrowPathRoundedSquare)
+                    ->color('success')
+                    ->action(function (Product $record): void {
+                        $shop_ids = ProductShop::query()
+                            ->where('product_id', (int) ($record->id ?? 0))
+                            ->pluck('shop_id')
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($shop_ids === []) {
+                            Notification::make()
+                                ->title(__('admin/products/products.messages.select_shops_required'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $summary = self::queueUpdateForSelectedProducts(
+                            new Collection([$record]),
+                            $shop_ids
+                        );
+
+                        Notification::make()
+                            ->title(__('admin/products/products.messages.item_update_queued'))
+                            ->body(__('admin/products/products.messages.item_update_result', $summary))
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('updateProductsToShops')
+                        ->label(__('admin/products/products.actions.update_products_to_shops'))
+                        ->icon(Heroicon::ArrowPathRoundedSquare)
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->schema([
+                            Select::make('shop_ids')
+                                ->label(__('admin/products/products.filters.shop'))
+                                ->options(fn(): array => Shop::query()
+                                    ->where('is_active', true)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray())
+                                ->multiple()
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $shop_ids = collect($data['shop_ids'] ?? [])
+                                ->map(static fn($shop_id): int => (int)$shop_id)
+                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            if ($shop_ids === []) {
+                                Notification::make()
+                                    ->title(__('admin/products/products.messages.select_shops_required'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $summary = self::queueUpdateForSelectedProducts($records, $shop_ids);
+
+                            Notification::make()
+                                ->title(__('admin/products/products.messages.bulk_update_queued'))
+                                ->body(__('admin/products/products.messages.bulk_update_result', $summary))
+                                ->success()
+                                ->send();
+                        }),
+
                     BulkAction::make('bindProductsToShops')
                         ->label(__('admin/products/products.actions.bind_products_to_shops'))
                         ->icon(Heroicon::Link)
@@ -366,6 +428,110 @@ class ProductsTable
             ->defaultSort('id', 'desc');
     }
 
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function applySearchFieldsQuery(Builder $query, array $data): Builder
+    {
+        $name                = Str::lower(Str::trim((string)Arr::get($data, 'name', '')));
+        $sku                 = Str::lower(Str::trim((string)Arr::get($data, 'sku', '')));
+        $model               = Str::lower(Str::trim((string)Arr::get($data, 'model', '')));
+        $ean                 = Str::lower(Str::trim((string)Arr::get($data, 'ean', '')));
+        $external_product_id = Str::trim((string)Arr::get($data, 'external_product_id', ''));
+        $quantity            = Str::trim((string)Arr::get($data, 'quantity', ''));
+        $price               = Str::trim((string)Arr::get($data, 'price', ''));
+        $attribute_name      = Str::lower(Str::trim((string)Arr::get($data, 'attribute_name', '')));
+        $attribute_value     = Str::lower(Str::trim((string)Arr::get($data, 'attribute_value', '')));
+        $category_name       = Str::lower(Str::trim((string)Arr::get($data, 'category_name', '')));
+
+        if ($name !== '') {
+            $query->whereHas(
+                'descriptions',
+                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $name . '%']
+                )
+            );
+        }
+
+        if ($sku !== '') {
+            $query->whereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', ['%' . $sku . '%']);
+        }
+
+        if ($model !== '') {
+            $query->whereRaw('LOWER(COALESCE(model, \'\')) LIKE ?', ['%' . $model . '%']);
+        }
+
+        if ($ean !== '') {
+            $query->whereRaw('LOWER(COALESCE(ean, \'\')) LIKE ?', ['%' . $ean . '%']);
+        }
+
+        if ($external_product_id !== '') {
+            if (is_numeric($external_product_id)) {
+                $query->whereHas(
+                    'productShops',
+                    static fn(Builder $product_shops_query): Builder => $product_shops_query->where('external_product_id', (int)$external_product_id)
+                );
+            } else {
+                $query->whereHas(
+                    'productShops',
+                    static fn(Builder $product_shops_query): Builder => $product_shops_query->whereRaw(
+                        'LOWER(COALESCE(CAST(external_product_id AS TEXT), \'\')) LIKE ?',
+                        ['%' . Str::lower($external_product_id) . '%']
+                    )
+                );
+            }
+        }
+
+        if ($quantity !== '') {
+            if (is_numeric($quantity)) {
+                $query->where('quantity', (int)$quantity);
+            } else {
+                $query->whereRaw('LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?', ['%' . Str::lower($quantity) . '%']);
+            }
+        }
+
+        if ($price !== '') {
+            if (is_numeric($price)) {
+                $query->where('price', (float)$price);
+            } else {
+                $query->whereRaw('LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?', ['%' . Str::lower($price) . '%']);
+            }
+        }
+
+        if ($attribute_name !== '') {
+            $query->whereHas(
+                'attributes.descriptions',
+                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $attribute_name . '%']
+                )
+            );
+        }
+
+        if ($attribute_value !== '') {
+            $query->whereHas(
+                'productToAttributes',
+                static fn(Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
+                    'LOWER(COALESCE(text, \'\')) LIKE ?',
+                    ['%' . $attribute_value . '%']
+                )
+            );
+        }
+
+        if ($category_name !== '') {
+            $query->whereHas(
+                'categories.descriptions',
+                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $category_name . '%']
+                )
+            );
+        }
+
+        return $query;
+    }
+
     private static function resolveProductName(Product $product): string
     {
         $name = Str::trim((string)$product->product_name);
@@ -439,17 +605,12 @@ class ProductsTable
 
     private static function resolveProcessedState(Product $product): bool
     {
-        $status_values = collect($product->importItems)
-            ->pluck('status')
-            ->filter()
-            ->all();
-
-        if ($status_values !== []) {
-            return collect($status_values)
-                ->contains(static fn($status): bool => in_array((string)$status, [
-                    ProductImportItemsStatusEnum::NORMALIZED->value,
-                    ProductImportItemsStatusEnum::SUCCESSED->value,
-                ], true));
+        $status = (string) ($product->importItem?->status ?? '');
+        if ($status !== '') {
+            return in_array($status, [
+                ProductImportItemsStatusEnum::NORMALIZED->value,
+                ProductImportItemsStatusEnum::SUCCESSED->value,
+            ], true);
         }
 
         return ProductImportItem::query()
@@ -548,12 +709,298 @@ class ProductsTable
      *
      * @return array<string, int>
      */
+    private static function queueUpdateForSelectedProducts(Collection $records, array $shop_ids): array
+    {
+        $summary = [
+            'products_total'              => 0,
+            'shops_total'                 => count($shop_ids),
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
+            'skipped_without_external_id' => 0,
+            'failed_created'              => 0,
+            'errors'                      => 0,
+        ];
+
+        $product_ids = $records
+            ->filter(static fn($record): bool => $record instanceof Product)
+            ->map(static fn(Product $record): int => (int) $record->id)
+            ->filter(static fn(int $product_id): bool => $product_id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($product_ids === [] || $shop_ids === []) {
+            return $summary;
+        }
+
+        $summary['products_total'] = count($product_ids);
+        $requested_by_user_id      = is_numeric(auth()->id()) ? (int) auth()->id() : null;
+
+        $batch = ProductUpdateBatch::query()->create([
+            'user_id'         => $requested_by_user_id,
+            'source_type'     => ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value,
+            'source_name'     => 'Catalog local products update',
+            'source_path'     => null,
+            'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            'total_items'     => 0,
+            'processed_items' => 0,
+            'failed_items'    => 0,
+            'options'         => [
+                'triggered_from'      => 'catalog_products',
+                'requested_by_user_id' => $requested_by_user_id,
+                'update_state'        => 'processing',
+                'update_started_at'   => now()->toDateTimeString(),
+                'update_finished_at'  => null,
+            ],
+            'started_at'      => now(),
+            'finished_at'     => null,
+        ]);
+
+        foreach ($product_ids as $product_id) {
+            foreach ($shop_ids as $shop_id) {
+                $queued_result = self::createLocalUpdateItemAndDispatch(
+                    (int) $batch->id,
+                    (int) $product_id,
+                    (int) $shop_id,
+                    $requested_by_user_id
+                );
+
+                $summary['updates_queued'] += (int) Arr::get($queued_result, 'updates_queued', 0);
+                $summary['already_failed'] += (int) Arr::get($queued_result, 'already_failed', 0);
+                $summary['already_queued_or_exported'] += (int) Arr::get($queued_result, 'already_queued_or_exported', 0);
+                $summary['skipped_not_bound'] += (int) Arr::get($queued_result, 'skipped_not_bound', 0);
+                $summary['skipped_without_external_id'] += (int) Arr::get($queued_result, 'skipped_without_external_id', 0);
+                $summary['failed_created'] += (int) Arr::get($queued_result, 'failed_created', 0);
+                $summary['errors'] += (int) Arr::get($queued_result, 'errors', 0);
+            }
+        }
+
+        self::syncLocalUpdateBatchStatus((int) $batch->id);
+
+        return $summary;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private static function createLocalUpdateItemAndDispatch(
+        int $batch_id,
+        int $product_id,
+        int $shop_id,
+        ?int $requested_by_user_id = null
+    ): array {
+        $summary = [
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
+            'skipped_without_external_id' => 0,
+            'failed_created'              => 0,
+            'errors'                      => 0,
+        ];
+
+        try {
+            $existing_update_item = ProductUpdateItem::query()
+                ->where('product_update_batch_id', $batch_id)
+                ->where('product_id', $product_id)
+                ->where('payload->operation', 'update')
+                ->where('payload->shop_id', $shop_id)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing_update_item instanceof ProductUpdateItem) {
+                if ($existing_update_item->status === ProductUpdateItemsStatusEnum::FAILED->value) {
+                    $summary['already_failed']++;
+                } else {
+                    $summary['already_queued_or_exported']++;
+                }
+
+                return $summary;
+            }
+
+            $product_shop = ProductShop::query()
+                ->where('product_id', $product_id)
+                ->where('shop_id', $shop_id)
+                ->orderByDesc('id')
+                ->first();
+
+            if (! $product_shop instanceof ProductShop) {
+                self::createLocalFailedUpdateItem(
+                    $batch_id,
+                    $product_id,
+                    $shop_id,
+                    'Product is not bound to selected shop',
+                    $requested_by_user_id
+                );
+                $summary['skipped_not_bound']++;
+                $summary['failed_created']++;
+
+                return $summary;
+            }
+
+            $external_product_id = (int) ($product_shop->external_product_id ?? 0);
+            if ($external_product_id <= 0) {
+                self::createLocalFailedUpdateItem(
+                    $batch_id,
+                    $product_id,
+                    $shop_id,
+                    'External product id is missing for update',
+                    $requested_by_user_id
+                );
+                $summary['skipped_without_external_id']++;
+                $summary['failed_created']++;
+
+                return $summary;
+            }
+
+            $update_item = ProductUpdateItem::query()->create([
+                'product_update_batch_id' => $batch_id,
+                'product_id'              => $product_id,
+                'payload'                 => [
+                    'operation'            => 'update',
+                    'shop_id'              => $shop_id,
+                    'requested_product_id' => $product_id,
+                    'target_product_id'    => $product_id,
+                    'external_product_id'  => $external_product_id,
+                    'requested_by_user_id' => $requested_by_user_id,
+                    'triggered_from'       => 'catalog_products',
+                    'update_instructions'  => [],
+                ],
+                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                'error_message' => null,
+                'processed_at'  => null,
+            ]);
+
+            ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
+            $summary['updates_queued']++;
+        } catch (QueryException $exception) {
+            $sql_state = (string) ($exception->errorInfo[0] ?? '');
+
+            if ($sql_state === '23505') {
+                $summary['already_queued_or_exported']++;
+
+                return $summary;
+            }
+
+            Log::channel('stack')->error('Failed to create local product update item', [
+                'batch_id'   => $batch_id,
+                'product_id' => $product_id,
+                'shop_id'    => $shop_id,
+                'message'    => $exception->getMessage(),
+            ]);
+
+            $summary['errors']++;
+        } catch (Throwable $exception) {
+            Log::channel('stack')->error('Failed to queue local product update', [
+                'batch_id'   => $batch_id,
+                'product_id' => $product_id,
+                'shop_id'    => $shop_id,
+                'message'    => $exception->getMessage(),
+            ]);
+
+            $summary['errors']++;
+        }
+
+        return $summary;
+    }
+
+    private static function createLocalFailedUpdateItem(
+        int $batch_id,
+        int $product_id,
+        int $shop_id,
+        string $error_message,
+        ?int $requested_by_user_id = null
+    ): void {
+        Log::channel('stack')->error('Local product update skipped', [
+            'batch_id'   => $batch_id,
+            'product_id' => $product_id,
+            'shop_id'    => $shop_id,
+            'message'    => $error_message,
+        ]);
+
+        ProductUpdateItem::query()->create([
+            'product_update_batch_id' => $batch_id,
+            'product_id'              => $product_id,
+            'payload'                 => [
+                'operation'            => 'update',
+                'shop_id'              => $shop_id,
+                'requested_product_id' => $product_id,
+                'target_product_id'    => $product_id,
+                'requested_by_user_id' => $requested_by_user_id,
+                'triggered_from'       => 'catalog_products',
+                'update_instructions'  => [],
+            ],
+            'status'        => ProductUpdateItemsStatusEnum::FAILED->value,
+            'error_message' => Str::limit(Str::trim($error_message), 10000),
+            'processed_at'  => now(),
+        ]);
+    }
+
+    private static function syncLocalUpdateBatchStatus(int $batch_id): void
+    {
+        if ($batch_id <= 0) {
+            return;
+        }
+
+        $batch = ProductUpdateBatch::query()->find($batch_id);
+        if (! $batch instanceof ProductUpdateBatch) {
+            return;
+        }
+
+        $status_rows = ProductUpdateItem::query()
+            ->selectRaw('status, COUNT(*) AS status_total')
+            ->where('product_update_batch_id', $batch_id)
+            ->where('payload->operation', 'update')
+            ->groupBy('status')
+            ->get();
+
+        $total_update_items = (int) $status_rows->sum(static fn($row): int => (int) ($row->status_total ?? 0));
+        if ($total_update_items <= 0) {
+            return;
+        }
+
+        $processing_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::PROCESSING->value)->status_total ?? 0);
+        $failed_count     = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0);
+        $updated_count    = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
+
+        $final_status = match (true) {
+            $processing_count > 0                            => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            $failed_count > 0 && $updated_count > 0         => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
+            $failed_count > 0 && $updated_count === 0       => ProductUpdateBatchesStatusEnum::FAILED->value,
+            default                                          => ProductUpdateBatchesStatusEnum::COMPLETED->value,
+        };
+
+        $batch->update([
+            'status'          => $final_status,
+            'total_items'     => $total_update_items,
+            'processed_items' => max($updated_count + $failed_count, 0),
+            'failed_items'    => max($failed_count, 0),
+            'finished_at'     => $processing_count > 0 ? null : now(),
+            'options'         => [
+                ...($batch->options ?? []),
+                'update_state'         => $processing_count > 0 ? 'processing' : 'finished',
+                'update_total_items'   => $total_update_items,
+                'update_success_items' => $updated_count,
+                'update_failed_items'  => $failed_count,
+                'update_finished_at'   => $processing_count > 0 ? null : now()->toDateTimeString(),
+            ],
+        ]);
+    }
+
+    /**
+     * @param list<int> $shop_ids
+     *
+     * @return array<string, int>
+     */
     private static function bindSelectedProductsToShops(Collection $records, array $shop_ids): array
     {
         $summary = [
             'products_total' => 0,
             'shops_total'    => count($shop_ids),
             'jobs_queued'    => 0,
+            'skipped_already_bound' => 0,
         ];
 
         foreach ($records as $record) {
@@ -575,6 +1022,17 @@ class ProductsTable
             $product_import_batch_id = (int)($source_item?->product_import_batch_id ?? 0);
 
             foreach ($shop_ids as $shop_id) {
+                $already_bound = ProductShop::query()
+                    ->where('product_id', (int) $record->id)
+                    ->where('shop_id', (int) $shop_id)
+                    ->exists();
+
+                if ($already_bound) {
+                    $summary['skipped_already_bound']++;
+
+                    continue;
+                }
+
                 ProcessProductShopBindingJob::dispatch(
                     (int)$record->id,
                     (int)$shop_id,
@@ -697,7 +1155,7 @@ class ProductsTable
                             'options' => [
                                 ...($batch->options ?? []),
                                 'export_state'       => 'processing',
-                                'export_started_at'  => get_now_date()->toDateTimeString(),
+                                'export_started_at'  => now()->toDateTimeString(),
                                 'export_finished_at' => null,
                             ],
                         ]);
@@ -740,7 +1198,7 @@ class ProductsTable
             $existing_export_item->update([
                 'status' => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => get_now_date(),
+                'processed_at' => now(),
                 'payload' => [
                     ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
                     'shop_id' => $shop_id,
@@ -763,7 +1221,7 @@ class ProductsTable
                 ],
                 'status' => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => get_now_date(),
+                'processed_at' => now(),
             ]);
         }
 

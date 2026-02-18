@@ -21,9 +21,12 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -45,8 +48,10 @@ class ProductForm
                                     ->live()
                                     ->afterStateUpdated(function ($state, callable $set, callable $get): void {
                                         $shop_id = (int) ($state ?? 0);
+                                        $product_id = (int) ($get('product_id') ?? 0);
                                         $language_options = self::getShopLanguageOptions($shop_id);
                                         $selected_language_id = (int) ($get('bind_shop_language_id') ?? 0);
+                                        $set('external_product_id', self::resolveExternalProductIdForProductAndShop($product_id, $shop_id));
 
                                         if ($selected_language_id > 0 && array_key_exists($selected_language_id, $language_options)) {
                                             return;
@@ -74,6 +79,10 @@ class ProductForm
                                 TextInput::make('ean')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.ean'))
                                     ->maxLength(255),
+                                TextInput::make('external_product_id')
+                                    ->label(__('admin/product_imports/batches.product_edit.fields.external_product_id'))
+                                    ->numeric()
+                                    ->visible(fn (callable $get): bool => (int) ($get('bind_shop_id') ?? 0) > 0),
                                 TextInput::make('quantity')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.quantity'))
                                     ->numeric(),
@@ -220,9 +229,120 @@ class ProductForm
                                     ])
                                     ->columns(3),
                             ]),
+                        Tab::make('api_update_modes')
+                            ->label(__('admin/products/products.api_update.tab_label'))
+                            ->schema(self::getApiUpdateModeSections())
+                            ->columns(1),
                     ])
                     ->columnSpanFull(),
             ]);
+    }
+
+    /**
+     * @return array<Section>
+     */
+    private static function getApiUpdateModeSections(): array
+    {
+        return [
+            Section::make(__('admin/products/products.api_update.sections.product'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.product.model', __('admin/product_imports/batches.product_edit.fields.model')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.sku', __('admin/product_imports/batches.product_edit.fields.sku')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.ean', __('admin/product_imports/batches.product_edit.fields.ean')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.quantity', __('admin/product_imports/batches.product_edit.fields.quantity')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.minimum', __('admin/product_imports/batches.product_edit.fields.minimum')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.image', __('admin/product_imports/batches.product_edit.fields.image')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.price', __('admin/product_imports/batches.product_edit.fields.price')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.is_active', __('admin/product_imports/batches.product_edit.fields.is_active')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.date_available', __('admin/product_imports/batches.product_edit.fields.date_available')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.date_added', __('admin/product_imports/batches.product_edit.fields.date_added')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.tabs.descriptions'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.description.name', __('admin/product_imports/batches.product_edit.fields.name')),
+                    self::makeApiUpdateModeToggle('api_update_modes.description.description', __('admin/product_imports/batches.product_edit.fields.description')),
+                    self::makeApiUpdateModeToggle('api_update_modes.description.meta_title', __('admin/product_imports/batches.product_edit.fields.meta_title')),
+                    self::makeApiUpdateModeToggle('api_update_modes.description.meta_description', __('admin/product_imports/batches.product_edit.fields.meta_description')),
+                    self::makeApiUpdateModeToggle('api_update_modes.description.meta_keywords', __('admin/product_imports/batches.product_edit.fields.meta_keywords')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.tabs.images'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.image.image', __('admin/product_imports/batches.product_edit.fields.image_path')),
+                    self::makeApiUpdateModeToggle('api_update_modes.image.sort_order', __('admin/product_imports/batches.product_edit.fields.sort_order')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.tabs.categories'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.product_category.category_name', __('admin/product_imports/batches.product_edit.fields.category_id')),
+                ])
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.tabs.attributes'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.product_attribute.attribute_name', __('admin/product_imports/batches.product_edit.fields.attribute_name')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product_attribute.attribute_text', __('admin/product_imports/batches.product_edit.fields.text')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.tabs.seo'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.seo_url.query_key', __('admin/product_imports/batches.product_edit.fields.query_key')),
+                    self::makeApiUpdateModeToggle('api_update_modes.seo_url.query_value', __('admin/product_imports/batches.product_edit.fields.query_value')),
+                    self::makeApiUpdateModeToggle('api_update_modes.seo_url.keyword', __('admin/product_imports/batches.product_edit.fields.keyword')),
+                    self::makeApiUpdateModeToggle('api_update_modes.seo_url.sort_order', __('admin/product_imports/batches.product_edit.fields.sort_order')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.sections.specials'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.special.user_group_id', __('admin/product_imports/batches.product_edit.fields.user_group_id')),
+                    self::makeApiUpdateModeToggle('api_update_modes.special.price', __('admin/product_imports/batches.product_edit.fields.price')),
+                    self::makeApiUpdateModeToggle('api_update_modes.special.priority', __('admin/product_imports/batches.product_edit.fields.priority')),
+                    self::makeApiUpdateModeToggle('api_update_modes.special.date_start', __('admin/product_imports/batches.product_edit.fields.date_start')),
+                    self::makeApiUpdateModeToggle('api_update_modes.special.date_end', __('admin/product_imports/batches.product_edit.fields.date_end')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+            Section::make(__('admin/product_imports/batches.product_edit.sections.discounts'))
+                ->schema([
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.user_group_id', __('admin/product_imports/batches.product_edit.fields.user_group_id')),
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.quantity', __('admin/product_imports/batches.product_edit.fields.quantity')),
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.price', __('admin/product_imports/batches.product_edit.fields.price')),
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.priority', __('admin/product_imports/batches.product_edit.fields.priority')),
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.date_start', __('admin/product_imports/batches.product_edit.fields.date_start')),
+                    self::makeApiUpdateModeToggle('api_update_modes.discount.date_end', __('admin/product_imports/batches.product_edit.fields.date_end')),
+                ])
+                ->columns(2)
+                ->visible(static fn (?Product $record): bool => $record instanceof Product && $record->exists),
+        ];
+    }
+
+    private static function makeApiUpdateModeToggle(string $state_path, string $label): ToggleButtons
+    {
+        return ToggleButtons::make($state_path)
+            ->label($label)
+            ->options([
+                'skip' => __('admin/products/products.api_update.actions.skip'),
+                'delete' => __('admin/products/products.api_update.actions.delete'),
+                'update' => __('admin/products/products.api_update.actions.update'),
+            ])
+            ->colors([
+                'skip' => 'gray',
+                'delete' => 'danger',
+                'update' => 'success',
+            ])
+            ->icons([
+                'skip' => Heroicon::PauseCircle,
+                'delete' => Heroicon::Trash,
+                'update' => Heroicon::CheckCircle,
+            ])
+            ->inline()
+            ->nullable()
+            ->helperText(__('admin/products/products.api_update.mode_helper'));
     }
 
     private static function resolveBoundShopId(?Product $product): ?int
@@ -237,6 +357,21 @@ class ProductForm
             ->value('shop_id');
 
         return $shop_id !== null ? (int) $shop_id : null;
+    }
+
+    private static function resolveExternalProductIdForProductAndShop(int $product_id, int $shop_id): ?int
+    {
+        if ($product_id <= 0 || $shop_id <= 0) {
+            return null;
+        }
+
+        $external_product_id = ProductShop::query()
+            ->where('product_id', $product_id)
+            ->where('shop_id', $shop_id)
+            ->orderByDesc('id')
+            ->value('external_product_id');
+
+        return is_numeric($external_product_id) ? (int) $external_product_id : null;
     }
 
     /**
@@ -551,4 +686,3 @@ class ProductForm
             ->toArray();
     }
 }
-

@@ -19,15 +19,19 @@ namespace Tests\Unit\Models {
     use App\Models\Products\Imports\ProductImportItem;
     use App\Models\Products\Product;
     use App\Supports\Services\Catalog\ProductShopBindingService;
+    use Illuminate\Config\Repository;
     use Illuminate\Container\Container;
     use Illuminate\Database\Capsule\Manager as Capsule;
     use Illuminate\Support\Facades\Facade;
+    use Illuminate\Translation\ArrayLoader;
+    use Illuminate\Translation\Translator;
     use PHPUnit\Framework\TestCase;
     use ReflectionMethod;
 
     class ProductImportItemProductLinkingTest extends TestCase
     {
         private static ?Capsule $capsule = null;
+        private static ?Container $container = null;
 
         public static function setUpBeforeClass(): void
         {
@@ -46,10 +50,15 @@ namespace Tests\Unit\Models {
             self::$capsule->setAsGlobal();
             self::$capsule->bootEloquent();
 
-            $container = new Container();
-            Container::setInstance($container);
-            Facade::setFacadeApplication($container);
-            $container->instance('db', self::$capsule->getDatabaseManager());
+            self::$container = new Container();
+            Container::setInstance(self::$container);
+            Facade::setFacadeApplication(self::$container);
+            self::$container->instance('db', self::$capsule->getDatabaseManager());
+            self::$container->instance('config', new Repository([
+                'database.db_prefix' => '',
+                'app.ai_translation_enabled' => false,
+            ]));
+            self::$container->instance('translator', new Translator(new ArrayLoader(), 'en'));
 
             $schema = self::$capsule->schema();
 
@@ -72,6 +81,7 @@ namespace Tests\Unit\Models {
             $schema->create('products', static function ($table): void {
                 $table->increments('id');
                 $table->unsignedInteger('product_import_item_id');
+                $table->string('family_ulid', 26)->nullable();
                 $table->string('marked_to_shop')->nullable();
                 $table->string('model')->nullable();
                 $table->string('sku')->nullable();
@@ -137,6 +147,15 @@ namespace Tests\Unit\Models {
         protected function setUp(): void
         {
             parent::setUp();
+            Facade::clearResolvedInstances();
+            Container::setInstance(self::$container);
+            Facade::setFacadeApplication(self::$container);
+            self::$container->instance('db', self::$capsule->getDatabaseManager());
+            self::$container->instance('config', new Repository([
+                'database.db_prefix' => '',
+                'app.ai_translation_enabled' => false,
+            ]));
+            self::$container->instance('translator', new Translator(new ArrayLoader(), 'en'));
 
             Capsule::table('attribute_shop')->delete();
             Capsule::table('category_shop')->delete();
@@ -152,8 +171,8 @@ namespace Tests\Unit\Models {
         public function test_create_from_import_payload_links_product_and_import_item_bidirectionally(): void
         {
             $batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
-                'created_at' => get_now_date(),
-                'updated_at' => get_now_date(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             $product_import_item = ProductImportItem::query()->create([
@@ -189,12 +208,12 @@ namespace Tests\Unit\Models {
         public function test_ensure_batch_product_item_reuses_item_by_product_and_syncs_product_link(): void
         {
             $first_batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
-                'created_at' => get_now_date(),
-                'updated_at' => get_now_date(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
             $second_batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
-                'created_at' => get_now_date(),
-                'updated_at' => get_now_date(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             $existing_import_item = ProductImportItem::query()->create([
@@ -241,8 +260,8 @@ namespace Tests\Unit\Models {
         public function test_bind_to_first_shop_does_not_duplicate_product(): void
         {
             $batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
-                'created_at' => get_now_date(),
-                'updated_at' => get_now_date(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             $product_import_item = ProductImportItem::query()->create([
@@ -251,7 +270,7 @@ namespace Tests\Unit\Models {
                 'payload'                 => [],
                 'status'                  => 'successed',
                 'error_message'           => null,
-                'processed_at'            => get_now_date(),
+                'processed_at'            => now(),
             ]);
 
             $product = Product::query()->create([
@@ -274,8 +293,8 @@ namespace Tests\Unit\Models {
             Capsule::table('shops')->insert([
                 'id'         => 10,
                 'name'       => 'Strateg',
-                'created_at' => get_now_date(),
-                'updated_at' => get_now_date(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
 
             $service = new ProductShopBindingService();
@@ -291,6 +310,214 @@ namespace Tests\Unit\Models {
             self::assertSame(1, (int) $bind_result['bound']);
             self::assertSame(0, (int) $bind_result['duplicated']);
             self::assertSame(1, Product::query()->count());
+            self::assertSame(1, (int) Capsule::table('product_shop')->count());
+        }
+
+        public function test_bind_skips_when_family_product_is_already_bound_to_same_shop(): void
+        {
+            $batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $source_item = ProductImportItem::query()->create([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => null,
+                'payload'                 => [],
+                'status'                  => 'successed',
+                'error_message'           => null,
+                'processed_at'            => now(),
+            ]);
+
+            $source_product = Product::query()->create([
+                'product_import_item_id' => (int) $source_item->id,
+                'family_ulid'            => '01HTESTFAMILY00000000000001',
+                'marked_to_shop'         => null,
+                'model'                  => 'M-400',
+                'sku'                    => 'SKU-400',
+                'ean'                    => null,
+                'quantity'               => 1,
+                'minimum'                => 1,
+                'image'                  => null,
+                'price'                  => 0,
+                'is_active'              => true,
+                'date_available'         => null,
+                'date_added'             => null,
+            ]);
+            $source_item->update(['product_id' => (int) $source_product->id]);
+
+            $duplicated_item = ProductImportItem::query()->create([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => null,
+                'payload'                 => ['source_product_id' => (int) $source_product->id],
+                'status'                  => 'successed',
+                'error_message'           => null,
+                'processed_at'            => now(),
+            ]);
+
+            $duplicated_product = Product::query()->create([
+                'product_import_item_id' => (int) $duplicated_item->id,
+                'family_ulid'            => '01HTESTFAMILY00000000000001',
+                'marked_to_shop'         => 'Strateg',
+                'model'                  => 'M-400',
+                'sku'                    => 'SKU-400',
+                'ean'                    => null,
+                'quantity'               => 1,
+                'minimum'                => 1,
+                'image'                  => null,
+                'price'                  => 0,
+                'is_active'              => true,
+                'date_available'         => null,
+                'date_added'             => null,
+            ]);
+            $duplicated_item->update(['product_id' => (int) $duplicated_product->id]);
+
+            Capsule::table('shops')->insert([
+                'id'         => 10,
+                'name'       => 'Strateg',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            Capsule::table('product_shop')->insert([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => (int) $duplicated_product->id,
+                'shop_id'                 => 10,
+                'external_product_id'     => null,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+
+            $service = new ProductShopBindingService();
+
+            /** @var array{product_id:int,bound:int,duplicated:int} $bind_result */
+            $bind_result = $this->invokePrivateMethod($service, 'bindProductToShop', [
+                $source_product,
+                10,
+                $batch_id,
+            ]);
+
+            self::assertSame((int) $duplicated_product->id, (int) $bind_result['product_id']);
+            self::assertSame(0, (int) $bind_result['bound']);
+            self::assertSame(0, (int) $bind_result['duplicated']);
+            self::assertSame(2, Product::query()->count());
+            self::assertSame(1, (int) Capsule::table('product_shop')->count());
+        }
+
+        public function test_bind_skips_when_second_level_family_product_is_already_bound_to_same_shop(): void
+        {
+            $batch_id = (int) Capsule::table('product_import_batches')->insertGetId([
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $root_item = ProductImportItem::query()->create([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => null,
+                'payload'                 => [],
+                'status'                  => 'successed',
+                'error_message'           => null,
+                'processed_at'            => now(),
+            ]);
+
+            $root_product = Product::query()->create([
+                'product_import_item_id' => (int) $root_item->id,
+                'family_ulid'            => '01HTESTFAMILY00000000000002',
+                'marked_to_shop'         => null,
+                'model'                  => 'M-500',
+                'sku'                    => 'SKU-500',
+                'ean'                    => null,
+                'quantity'               => 1,
+                'minimum'                => 1,
+                'image'                  => null,
+                'price'                  => 0,
+                'is_active'              => true,
+                'date_available'         => null,
+                'date_added'             => null,
+            ]);
+            $root_item->update(['product_id' => (int) $root_product->id]);
+
+            $first_duplicate_item = ProductImportItem::query()->create([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => null,
+                'payload'                 => ['source_product_id' => (int) $root_product->id],
+                'status'                  => 'successed',
+                'error_message'           => null,
+                'processed_at'            => now(),
+            ]);
+
+            $first_duplicate_product = Product::query()->create([
+                'product_import_item_id' => (int) $first_duplicate_item->id,
+                'family_ulid'            => '01HTESTFAMILY00000000000002',
+                'marked_to_shop'         => null,
+                'model'                  => 'M-500',
+                'sku'                    => 'SKU-500',
+                'ean'                    => null,
+                'quantity'               => 1,
+                'minimum'                => 1,
+                'image'                  => null,
+                'price'                  => 0,
+                'is_active'              => true,
+                'date_available'         => null,
+                'date_added'             => null,
+            ]);
+            $first_duplicate_item->update(['product_id' => (int) $first_duplicate_product->id]);
+
+            $second_duplicate_item = ProductImportItem::query()->create([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => null,
+                'payload'                 => ['source_product_id' => (int) $first_duplicate_product->id],
+                'status'                  => 'successed',
+                'error_message'           => null,
+                'processed_at'            => now(),
+            ]);
+
+            $second_duplicate_product = Product::query()->create([
+                'product_import_item_id' => (int) $second_duplicate_item->id,
+                'family_ulid'            => '01HTESTFAMILY00000000000002',
+                'marked_to_shop'         => 'Strateg',
+                'model'                  => 'M-500',
+                'sku'                    => 'SKU-500',
+                'ean'                    => null,
+                'quantity'               => 1,
+                'minimum'                => 1,
+                'image'                  => null,
+                'price'                  => 0,
+                'is_active'              => true,
+                'date_available'         => null,
+                'date_added'             => null,
+            ]);
+            $second_duplicate_item->update(['product_id' => (int) $second_duplicate_product->id]);
+
+            Capsule::table('shops')->insert([
+                'id'         => 10,
+                'name'       => 'Strateg',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            Capsule::table('product_shop')->insert([
+                'product_import_batch_id' => $batch_id,
+                'product_id'              => (int) $second_duplicate_product->id,
+                'shop_id'                 => 10,
+                'external_product_id'     => null,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+
+            $service = new ProductShopBindingService();
+
+            /** @var array{product_id:int,bound:int,duplicated:int} $bind_result */
+            $bind_result = $this->invokePrivateMethod($service, 'bindProductToShop', [
+                $root_product,
+                10,
+                $batch_id,
+            ]);
+
+            self::assertSame((int) $second_duplicate_product->id, (int) $bind_result['product_id']);
+            self::assertSame(0, (int) $bind_result['bound']);
+            self::assertSame(0, (int) $bind_result['duplicated']);
+            self::assertSame(3, Product::query()->count());
             self::assertSame(1, (int) Capsule::table('product_shop')->count());
         }
 

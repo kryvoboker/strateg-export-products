@@ -81,7 +81,7 @@ class CreateProductUpdateBatch extends CreateRecord
 
         $batch = ProductUpdateBatch::query()->create([
             'user_id'         => $this->resolveUserId(),
-            'source_type'     => ProductUpdateBatchesSourceTypeEnum::API->value,
+            'source_type'     => ProductUpdateBatchesSourceTypeEnum::GOOGLE_SHEET->value,
             'source_name'     => __('admin/product_imports/batches.source_names.google_sheets', ['id' => $spreadsheet_id]),
             'source_path'     => $sheets_url,
             'status'          => ProductUpdateBatchesStatusEnum::NEW->value,

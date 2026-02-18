@@ -220,7 +220,7 @@ class CreateProductImportBatch extends CreateRecord
 
         $batch = ProductImportBatch::query()->create([
             'user_id' => $this->resolveUserId(),
-            'source_type' => ProductImportBatchesSourceTypeEnum::API->value,
+            'source_type' => ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value,
             'source_name' => __('admin/product_imports/batches.source_names.google_sheets', ['id' => $extract_spreadsheet_id]),
             'source_path' => $source_path,
             'status' => ProductImportBatchesStatusEnum::NEW->value,
@@ -256,7 +256,7 @@ class CreateProductImportBatch extends CreateRecord
         $batch = ProductImportBatch::query()->create([
             'user_id' => $this->resolveUserId(),
             'source_type' => ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value,
-            'source_name' => __('admin/product_imports/batches.source_names.manual_import', ['datetime' => get_now_date()->format('Y-m-d H:i:s')]),
+            'source_name' => __('admin/product_imports/batches.source_names.manual_import', ['datetime' => now()->format('Y-m-d H:i:s')]),
             'source_path' => null,
             'status' => ProductImportBatchesStatusEnum::NEW->value,
             'total_items' => 1,
@@ -356,7 +356,7 @@ class CreateProductImportBatch extends CreateRecord
             }
 
             $header = $rows[0] ?? [];
-            $normalized_header = array_map(fn ($cell) => Str::lower(Str::trim((string) $cell)), $header);
+            $normalized_header = array_map(fn ($cell) => $this->normalizeHeaderKey((string) $cell), $header);
 
             $missing_headers = [];
 
@@ -434,7 +434,7 @@ class CreateProductImportBatch extends CreateRecord
             $chunk_count = max($chunk_count, (int) ceil($data_row_count / self::MAX_ROWS_PER_FILE));
         }
 
-        $now = get_now_date();
+        $now = now();
         $year_month_path = sprintf('upload/excel/%s/%s', $now->format('Y'), $now->format('m'));
         $timestamp = $now->format('Ymd_His');
         $suffix = Str::replaceMatches('/[^a-zA-Z0-9_-]/', '', $spreadsheetId) ?: 'sheet';
@@ -565,14 +565,19 @@ class CreateProductImportBatch extends CreateRecord
      */
     private function isHeaderPresent(string $requiredHeader, array $normalizedHeader): bool
     {
-        $requiredHeader = Str::lower($requiredHeader);
+        $requiredHeader = $this->normalizeHeaderKey($requiredHeader);
 
-        if ($requiredHeader === 'attribute text') {
-            return in_array('attribute text', $normalizedHeader, true)
-                || in_array('attibute text', $normalizedHeader, true);
+        if ($requiredHeader === 'attribute_text') {
+            return in_array('attribute_text', $normalizedHeader, true)
+                || in_array('attibute_text', $normalizedHeader, true);
         }
 
         return in_array($requiredHeader, $normalizedHeader, true);
+    }
+
+    private function normalizeHeaderKey(string $header): string
+    {
+        return Str::snake(Str::squish(Str::replace(['-', '_'], ' ', Str::trim($header))));
     }
 
     /**

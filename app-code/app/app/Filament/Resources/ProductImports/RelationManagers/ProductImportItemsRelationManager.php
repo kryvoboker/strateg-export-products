@@ -46,6 +46,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -81,6 +82,9 @@ class ProductImportItemsRelationManager extends RelationManager
             ->poll('5s')
             ->recordTitleAttribute('id')
             ->defaultSort('id', 'desc')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'product.descriptions',
+            ])->where('product_import_batch_id', (int) $this->getOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
@@ -102,6 +106,43 @@ class ProductImportItemsRelationManager extends RelationManager
                 TextColumn::make('product_id')
                     ->label(__('admin/product_imports/batches.columns.product_id'))
                     ->sortable(),
+                TextColumn::make('product.product_name')
+                    ->label('Назва товару')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->product_name ?? '#'.(int) ($record->product_id ?? 0)))
+                    ->wrap(),
+                TextColumn::make('product.model')
+                    ->label('Model')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->model ?? ''))
+                    ->toggleable(),
+                TextColumn::make('product.sku')
+                    ->label('SKU')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->sku ?? '')),
+                TextColumn::make('product.ean')
+                    ->label('EAN')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->ean ?? ''))
+                    ->toggleable(),
+                TextColumn::make('external_product_id')
+                    ->label('External product id')
+                    ->state(static function (ProductImportItem $record): string {
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $batch_id   = (int) ($record->product_import_batch_id ?? 0);
+
+                        if ($product_id <= 0 || $batch_id <= 0) {
+                            return '';
+                        }
+
+                        return ProductShop::query()
+                            ->where('product_id', $product_id)
+                            ->where('product_import_batch_id', $batch_id)
+                            ->whereNotNull('external_product_id')
+                            ->pluck('external_product_id')
+                            ->map(static fn ($external_product_id): string => (string) $external_product_id)
+                            ->filter(static fn (string $external_product_id): bool => $external_product_id !== '')
+                            ->unique()
+                            ->values()
+                            ->implode(', ');
+                    })
+                    ->toggleable(),
                 TextColumn::make('export_status')
                     ->label(__('admin/product_imports/batches.columns.export_status'))
                     ->state(fn (ProductImportItem $record): string => $this->resolveExportStatus($record))
@@ -167,6 +208,25 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->filters([
+                Filter::make('search_fields')
+                    ->label(__('admin/products/products.filters.search_fields'))
+                    ->schema([
+                        TextInput::make('name')->label('Назва товару'),
+                        TextInput::make('model')->label('Model'),
+                        TextInput::make('sku')->label('SKU'),
+                        TextInput::make('ean')->label('EAN'),
+                        TextInput::make('external_product_id')->label('External product id'),
+                        TextInput::make('quantity')->label(__('admin/products/products.columns.quantity')),
+                        TextInput::make('price')->label(__('admin/products/products.columns.price')),
+                        TextInput::make('attribute_name')->label('Attribute name'),
+                        TextInput::make('attribute_value')->label('Attribute value'),
+                        TextInput::make('category_name')->label('Category name'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
+                        $query,
+                        $data,
+                        (int) $this->getOwnerRecord()->id
+                    )),
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
                     ->options([
@@ -703,6 +763,8 @@ class ProductImportItemsRelationManager extends RelationManager
                                 'items_skipped_without_product' => 0,
                                 'products_total'                => 0,
                                 'jobs_queued'                   => 0,
+                                'items_skipped_already_bound'   => 0,
+                                'products_skipped'              => 0,
                             ];
 
                             $processed_keys = [];
@@ -742,6 +804,17 @@ class ProductImportItemsRelationManager extends RelationManager
 
                                 $source_payload = is_array($record->payload) ? $record->payload : [];
                                 foreach ($shop_ids as $shop_id) {
+                                    $already_bound = ProductShop::query()
+                                        ->where('product_id', $product_id)
+                                        ->where('shop_id', (int) $shop_id)
+                                        ->exists();
+
+                                    if ($already_bound) {
+                                        $summary['items_skipped_already_bound']++;
+
+                                        continue;
+                                    }
+
                                     ProcessProductShopBindingJob::dispatchSync(
                                         $product_id,
                                         (int) $shop_id,
@@ -836,6 +909,144 @@ class ProductImportItemsRelationManager extends RelationManager
                 ])
                     ->dropdownWidth(Width::Large),
             ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function applyBatchSearchFieldsQuery(Builder $query, array $data, int $batch_id): Builder
+    {
+        if ($batch_id > 0) {
+            $query->where('product_import_batch_id', $batch_id);
+        }
+
+        $name                = Str::lower(Str::trim((string)Arr::get($data, 'name', '')));
+        $model               = Str::lower(Str::trim((string)Arr::get($data, 'model', '')));
+        $sku                 = Str::lower(Str::trim((string)Arr::get($data, 'sku', '')));
+        $ean                 = Str::lower(Str::trim((string)Arr::get($data, 'ean', '')));
+        $external_product_id = Str::trim((string)Arr::get($data, 'external_product_id', ''));
+        $quantity            = Str::trim((string)Arr::get($data, 'quantity', ''));
+        $price               = Str::trim((string)Arr::get($data, 'price', ''));
+        $attribute_name      = Str::lower(Str::trim((string)Arr::get($data, 'attribute_name', '')));
+        $attribute_value     = Str::lower(Str::trim((string)Arr::get($data, 'attribute_value', '')));
+        $category_name       = Str::lower(Str::trim((string)Arr::get($data, 'category_name', '')));
+
+        if ($name !== '') {
+            $query->whereHas(
+                'product.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $name . '%']
+                )
+            );
+        }
+
+        if ($model !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(model, \'\')) LIKE ?',
+                    ['%' . $model . '%']
+                )
+            );
+        }
+
+        if ($sku !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(sku, \'\')) LIKE ?',
+                    ['%' . $sku . '%']
+                )
+            );
+        }
+
+        if ($ean !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(ean, \'\')) LIKE ?',
+                    ['%' . $ean . '%']
+                )
+            );
+        }
+
+        if ($external_product_id !== '') {
+            $query->whereExists(static function ($product_shop_query) use ($external_product_id): void {
+                $product_shop_query
+                    ->selectRaw('1')
+                    ->from('product_shop')
+                    ->whereColumn('product_shop.product_id', 'product_import_items.product_id')
+                    ->whereColumn('product_shop.product_import_batch_id', 'product_import_items.product_import_batch_id');
+
+                if (is_numeric($external_product_id)) {
+                    $product_shop_query->where('product_shop.external_product_id', (int) $external_product_id);
+                } else {
+                    $product_shop_query->whereRaw(
+                        'LOWER(COALESCE(CAST(product_shop.external_product_id AS TEXT), \'\')) LIKE ?',
+                        ['%' . Str::lower($external_product_id) . '%']
+                    );
+                }
+            });
+        }
+
+        if ($quantity !== '') {
+            $query->whereHas('product', static function (Builder $product_query) use ($quantity): Builder {
+                if (is_numeric($quantity)) {
+                    return $product_query->where('quantity', (int) $quantity);
+                }
+
+                return $product_query->whereRaw(
+                    'LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?',
+                    ['%' . Str::lower($quantity) . '%']
+                );
+            });
+        }
+
+        if ($price !== '') {
+            $query->whereHas('product', static function (Builder $product_query) use ($price): Builder {
+                if (is_numeric($price)) {
+                    return $product_query->where('price', (float) $price);
+                }
+
+                return $product_query->whereRaw(
+                    'LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?',
+                    ['%' . Str::lower($price) . '%']
+                );
+            });
+        }
+
+        if ($attribute_name !== '') {
+            $query->whereHas(
+                'product.attributes.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $attribute_name . '%']
+                )
+            );
+        }
+
+        if ($attribute_value !== '') {
+            $query->whereHas(
+                'product.productToAttributes',
+                static fn (Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
+                    'LOWER(COALESCE(text, \'\')) LIKE ?',
+                    ['%' . $attribute_value . '%']
+                )
+            );
+        }
+
+        if ($category_name !== '') {
+            $query->whereHas(
+                'product.categories.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $category_name . '%']
+                )
+            );
+        }
+
+        return $query;
     }
 
     private function checkIsCanTryingExportProduct(ProductImportItem $record): bool
@@ -976,7 +1187,7 @@ class ProductImportItemsRelationManager extends RelationManager
             $existing_export_item->update([
                 'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
                 'payload'       => [
                     ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
                     'shop_id'              => $shop_id,
@@ -999,7 +1210,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 ],
                 'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
             ]);
         }
 
@@ -1198,7 +1409,7 @@ class ProductImportItemsRelationManager extends RelationManager
             'options' => [
                 ...($batch->options ?? []),
                 'export_state'       => 'processing',
-                'export_started_at'  => get_now_date()->toDateTimeString(),
+                'export_started_at'  => now()->toDateTimeString(),
                 'export_finished_at' => null,
             ],
         ]);
@@ -1377,13 +1588,6 @@ class ProductImportItemsRelationManager extends RelationManager
                 ]);
 
                 $this->ensureShopLinksForProduct($target_product->id, $bind_shop_id);
-                ProcessProductShopBindingJob::dispatchSync(
-                    (int) $target_product->id,
-                    $bind_shop_id,
-                    $batch_id,
-                    is_array($record->payload) ? $record->payload : [],
-                    auth()->id()
-                );
 
                 if ($batch_id > 0) {
                     ProductImportItem::ensureBatchProductItem(
@@ -1407,7 +1611,32 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function resolveTargetProductForShopBinding(Product $source_product, int $shop_id, int $batch_id): Product
     {
-        $shop_name     = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
+        $shop_name = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
+        $family_ulid = $this->ensureProductFamilyUlid($source_product);
+        $family_product_id = $this->resolveAlreadyBoundProductIdByFamilyUlid($family_ulid, $shop_id);
+
+        if ($family_product_id > 0) {
+            $family_product = Product::query()->find($family_product_id);
+            if ($family_product instanceof Product) {
+                if ($batch_id > 0) {
+                    ProductShop::query()
+                        ->where('product_id', $family_product_id)
+                        ->where('shop_id', $shop_id)
+                        ->update([
+                            'product_import_batch_id' => $batch_id,
+                        ]);
+                }
+
+                if ((string) ($family_product->marked_to_shop ?? '') !== $shop_name) {
+                    $family_product->update([
+                        'marked_to_shop' => $shop_name,
+                    ]);
+                }
+
+                return $family_product;
+            }
+        }
+
         $already_bound = ProductShop::query()
             ->where('product_id', $source_product->id)
             ->where('shop_id', $shop_id)
@@ -1450,6 +1679,63 @@ class ProductImportItemsRelationManager extends RelationManager
         return $this->duplicateProductWithRelationsForShop($source_product, $shop_id, $shop_name, $batch_id);
     }
 
+    private function resolveAlreadyBoundProductIdByFamilyUlid(string $family_ulid, int $shop_id): int
+    {
+        if ($shop_id <= 0 || $family_ulid === '') {
+            return 0;
+        }
+
+        return (int) (ProductShop::query()
+            ->join('products', 'products.id', '=', 'product_shop.product_id')
+            ->where('products.family_ulid', $family_ulid)
+            ->where('shop_id', $shop_id)
+            ->orderByDesc('product_shop.id')
+            ->value('product_shop.product_id') ?? 0);
+    }
+
+    private function ensureProductFamilyUlid(Product $product): string
+    {
+        $family_ulid = Str::trim((string) ($product->family_ulid ?? ''));
+        if ($family_ulid !== '') {
+            return $family_ulid;
+        }
+
+        $source_ulid = '';
+        $product_import_item_id = (int) ($product->product_import_item_id ?? 0);
+
+        if ($product_import_item_id > 0 && $this->hasProductImportItemUlidColumn()) {
+            $source_ulid = Str::trim((string) (ProductImportItem::query()
+                ->whereKey($product_import_item_id)
+                ->value('ulid') ?? ''));
+        }
+
+        $family_ulid = $source_ulid !== '' ? $source_ulid : (string) Str::ulid();
+        $product->update([
+            'family_ulid' => $family_ulid,
+        ]);
+
+        return $family_ulid;
+    }
+
+    private function hasProductImportItemUlidColumn(): bool
+    {
+        static $has_ulid_column = null;
+
+        if (is_bool($has_ulid_column)) {
+            return $has_ulid_column;
+        }
+
+        try {
+            $has_ulid_column = DB::connection()
+                ->getSchemaBuilder()
+                ->hasColumn('product_import_items', 'ulid');
+        } catch (Throwable) {
+            $has_ulid_column = false;
+        }
+
+        return $has_ulid_column;
+    }
+
     private function duplicateProductWithRelationsForShop(
         Product $source_product,
         int $shop_id,
@@ -1466,8 +1752,11 @@ class ProductImportItemsRelationManager extends RelationManager
             'shop_id'           => $shop_id,
         ]);
 
+        $family_ulid = $this->ensureProductFamilyUlid($source_product);
+
         $duplicated_product = Product::query()->create([
             'product_import_item_id' => (int) $duplicated_import_item->id,
+            'family_ulid'            => $family_ulid,
             'marked_to_shop'         => $shop_name,
             'model'                  => $source_product->model,
             'sku'                    => $source_product->sku,
@@ -1789,8 +2078,8 @@ class ProductImportItemsRelationManager extends RelationManager
                 'quantity'      => max((int) Arr::get($discount_row, 'quantity', 1), 1),
                 'price'         => (float) Arr::get($discount_row, 'price', 0),
                 'priority'      => (int) Arr::get($discount_row, 'priority', 1),
-                'date_start'    => Arr::get($discount_row, 'date_start') ?: get_now_date()->toDateTimeString(),
-                'date_end'      => Arr::get($discount_row, 'date_end') ?: get_now_date()->toDateTimeString(),
+                'date_start'    => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
+                'date_end'      => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
             ]);
         }
 
@@ -1805,8 +2094,8 @@ class ProductImportItemsRelationManager extends RelationManager
                 'user_group_id' => (int) Arr::get($special_row, 'user_group_id', 1),
                 'price'         => (float) Arr::get($special_row, 'price', 0),
                 'priority'      => (int) Arr::get($special_row, 'priority', 1),
-                'date_start'    => Arr::get($special_row, 'date_start') ?: get_now_date()->toDateTimeString(),
-                'date_end'      => Arr::get($special_row, 'date_end') ?: get_now_date()->toDateTimeString(),
+                'date_start'    => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
+                'date_end'      => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
             ]);
         }
     }

@@ -135,6 +135,8 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
     {
         parent::setUp();
 
+        app('config')->set('app.ai_translation_enabled', true);
+
         ProductToAttribute::query()->delete();
         AttributeDescription::query()->delete();
         Attribute::query()->delete();
@@ -240,6 +242,91 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             ->all();
 
         self::assertSame(['Red [uk]', 'XL [uk]'], $uk_attribute_texts);
+    }
+
+    public function test_it_uses_fake_translation_prefix_when_ai_translation_is_disabled(): void
+    {
+        app('config')->set('app.ai_translation_enabled', false);
+
+        $shop_id    = 11;
+        $product_id = 202;
+
+        $en_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $uk_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        ProductDescription::query()->create([
+            'product_id'       => $product_id,
+            'shop_language_id' => (int) $en_language->id,
+            'name'             => 'Phone',
+            'description'      => 'Smart phone',
+            'meta_title'       => 'Phone',
+            'meta_description' => 'Smart phone',
+            'meta_keywords'    => 'phone',
+        ]);
+
+        $source_attribute = Attribute::query()->create([
+            'parent_id'  => null,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        AttributeDescription::query()->create([
+            'attribute_id'     => (int) $source_attribute->id,
+            'shop_language_id' => (int) $en_language->id,
+            'name'             => 'Color',
+        ]);
+
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $source_attribute->id,
+            'shop_language_id' => (int) $en_language->id,
+            'text'             => 'Red',
+        ]);
+
+        $service = new ProductShopBindingService();
+
+        $this->invokePrivateMethod(
+            $service,
+            'translateProductTextsForShopLanguages',
+            [$product_id, $shop_id]
+        );
+
+        $uk_product_description = ProductDescription::query()
+            ->where('product_id', $product_id)
+            ->where('shop_language_id', (int) $uk_language->id)
+            ->first();
+
+        self::assertInstanceOf(ProductDescription::class, $uk_product_description);
+        self::assertSame('translated-to-uk-Phone', (string) $uk_product_description->name);
+        self::assertSame('translated-to-uk-Smart phone', (string) $uk_product_description->description);
+
+        $uk_attribute_name = AttributeDescription::query()
+            ->where('attribute_id', (int) $source_attribute->id)
+            ->where('shop_language_id', (int) $uk_language->id)
+            ->value('name');
+
+        self::assertSame('translated-to-uk-Color', (string) $uk_attribute_name);
+
+        $uk_attribute_text = ProductToAttribute::query()
+            ->where('product_id', $product_id)
+            ->where('attribute_id', (int) $source_attribute->id)
+            ->where('shop_language_id', (int) $uk_language->id)
+            ->value('text');
+
+        self::assertSame('translated-to-uk-Red', (string) $uk_attribute_text);
     }
 
     /**

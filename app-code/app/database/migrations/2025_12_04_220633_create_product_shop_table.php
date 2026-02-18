@@ -34,6 +34,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['product_id', 'shop_id']);
+            $table->unique(['shop_id', 'product_id']);
             $table->unique(['product_import_batch_id', 'product_id']);
         });
     }

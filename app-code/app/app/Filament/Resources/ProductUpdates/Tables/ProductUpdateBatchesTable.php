@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ProductUpdates\Tables;
 
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Filament\Resources\ProductUpdates\ProductUpdateBatchResource;
 use App\Jobs\ProcessProductUpdateItemJob;
@@ -40,6 +41,7 @@ class ProductUpdateBatchesTable
                 TextColumn::make('source_type')
                     ->label(__('admin/product_imports/batches.columns.source_type'))
                     ->badge()
+                    ->formatStateUsing(static fn (string $state): string => self::resolveSourceTypeLabel($state))
                     ->sortable(),
                 TextColumn::make('source_name')
                     ->label(__('admin/product_imports/batches.columns.source_name'))
@@ -170,6 +172,18 @@ class ProductUpdateBatchesTable
             ->defaultSort('id', 'desc');
     }
 
+    private static function resolveSourceTypeLabel(string $state): string
+    {
+        return match ($state) {
+            ProductUpdateBatchesSourceTypeEnum::CSV_FILE->value => __('admin/product_updates/batches.source_types.csv_file'),
+            ProductUpdateBatchesSourceTypeEnum::EXCEL_FILE->value => __('admin/product_updates/batches.source_types.excel_file'),
+            ProductUpdateBatchesSourceTypeEnum::GOOGLE_SHEET->value => __('admin/product_updates/batches.source_types.google_sheet'),
+            ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value => __('admin/product_updates/batches.source_types.local_products'),
+            ProductUpdateBatchesSourceTypeEnum::EDIT_PRODUCT_API->value => __('admin/product_updates/batches.source_types.edit_product_api'),
+            default => $state,
+        };
+    }
+
     /**
      * @param  Collection<int, ProductUpdateBatch>  $records
      * @param  list<int>  $shop_ids
@@ -298,7 +312,7 @@ class ProductUpdateBatchesTable
                 'processed_at'  => null,
             ]);
 
-            ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
+            ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
             $summary['updates_queued']++;
 
             self::markBatchAsUpdating($batch_id);
@@ -370,7 +384,7 @@ class ProductUpdateBatchesTable
                 'processed_at'  => null,
             ]);
 
-            ProcessProductUpdateItemJob::dispatch((int) $failed_update_item->id);
+            ProcessProductUpdateItemJob::dispatchSync((int) $failed_update_item->id);
             $queued++;
         }
 
@@ -386,7 +400,7 @@ class ProductUpdateBatchesTable
                     'options' => [
                         ...($batch->options ?? []),
                         'update_state'       => 'processing',
-                        'update_started_at'  => get_now_date()->toDateTimeString(),
+                        'update_started_at'  => now()->toDateTimeString(),
                         'update_finished_at' => null,
                     ],
                 ]);
@@ -415,7 +429,7 @@ class ProductUpdateBatchesTable
             'options' => [
                 ...($batch->options ?? []),
                 'update_state'       => 'processing',
-                'update_started_at'  => get_now_date()->toDateTimeString(),
+                'update_started_at'  => now()->toDateTimeString(),
                 'update_finished_at' => null,
             ],
         ]);

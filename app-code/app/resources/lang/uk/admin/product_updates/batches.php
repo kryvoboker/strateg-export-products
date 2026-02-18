@@ -32,6 +32,14 @@ return [
         'canceled' => 'Скасовано',
     ],
 
+    'source_types' => [
+        'csv_file' => 'CSV файл',
+        'excel_file' => 'Excel файл',
+        'google_sheet' => 'Google Sheet',
+        'local_products' => 'Локальні товари',
+        'edit_product_api' => 'Точкове API-оновлення (Edit Product)',
+    ],
+
     'item_statuses' => [
         'new' => 'Новий',
         'processing' => 'В обробці',

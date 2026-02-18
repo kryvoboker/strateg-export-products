@@ -91,7 +91,7 @@ class ProductImportItem extends Model
                 'payload'       => $payload !== [] ? $payload : ($existing_item->payload ?? []),
                 'status'        => $status ?? $existing_item->status,
                 'error_message' => null,
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
             ]);
 
             return $existing_item;
@@ -108,7 +108,7 @@ class ProductImportItem extends Model
                 'payload'                 => $payload !== [] ? $payload : ($existing_item_by_product_id->payload ?? []),
                 'status'                  => $status ?? $existing_item_by_product_id->status,
                 'error_message'           => null,
-                'processed_at'            => get_now_date(),
+                'processed_at'            => now(),
             ]);
 
             Product::query()
@@ -126,7 +126,7 @@ class ProductImportItem extends Model
             'payload'                 => $payload,
             'status'                  => $status ?? ProductImportItemsStatusEnum::SUCCESSED->value,
             'error_message'           => null,
-            'processed_at'            => get_now_date(),
+            'processed_at'            => now(),
         ]);
 
         Product::query()
@@ -152,7 +152,7 @@ class ProductImportItem extends Model
             'payload'                 => $payload,
             'status'                  => $status ?? ProductImportItemsStatusEnum::SUCCESSED->value,
             'error_message'           => null,
-            'processed_at'            => get_now_date(),
+            'processed_at'            => now(),
         ]);
     }
 
@@ -166,7 +166,7 @@ class ProductImportItem extends Model
             'product_id'    => $product_id,
             'status'        => ProductImportItemsStatusEnum::SUCCESSED->value,
             'error_message' => null,
-            'processed_at'  => get_now_date(),
+            'processed_at'  => now(),
         ]);
 
         if ($updated) {

@@ -92,7 +92,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             $product_export_item->update([
                 'status'        => ProductExportItemsStatusEnum::EXPORTED->value,
                 'error_message' => null,
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
                 'payload'       => [
                     ...$payload,
                     'request_payload'     => $request_payload,
@@ -114,7 +114,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             $product_export_item->update([
                 'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => Str::limit(Str::trim($exception->getMessage()), 10000),
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
             ]);
         } finally {
             $this->syncBatchStatusByExportItems((int)$product_export_item->product_import_batch_id);
@@ -666,7 +666,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                 'export_total_items'    => $total_export_items,
                 'export_exported_items' => $exported_count,
                 'export_failed_items'   => $failed_count,
-                'export_finished_at'    => get_now_date()->toDateTimeString(),
+                'export_finished_at'    => now()->toDateTimeString(),
             ],
         ]);
     }

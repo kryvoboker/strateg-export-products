@@ -98,8 +98,7 @@ class ProductUpdateItem extends Model
             'payload' => $payload,
             'status' => $status ?? ProductUpdateItemsStatusEnum::SUCCESSED->value,
             'error_message' => null,
-            'processed_at' => get_now_date(),
+            'processed_at' => now(),
         ]);
     }
 }
-

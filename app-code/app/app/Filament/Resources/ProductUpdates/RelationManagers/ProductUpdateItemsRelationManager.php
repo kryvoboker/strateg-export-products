@@ -15,17 +15,21 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Enums\Width;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class ProductUpdateItemsRelationManager extends RelationManager
 {
@@ -47,6 +51,9 @@ class ProductUpdateItemsRelationManager extends RelationManager
             ->poll('5s')
             ->recordTitleAttribute('id')
             ->defaultSort('id', 'desc')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'product.descriptions',
+            ])->where('product_update_batch_id', (int) $this->getOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')->label('ID')->sortable(),
                 TextColumn::make('status')
@@ -57,6 +64,63 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 TextColumn::make('product_id')
                     ->label(__('admin/product_imports/batches.columns.product_id'))
                     ->sortable(),
+                TextColumn::make('product.product_name')
+                    ->label('Назва товару')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->product_name ?? '#'.(int) ($record->product_id ?? 0)))
+                    ->wrap(),
+                TextColumn::make('product.model')
+                    ->label('Model')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->model ?? ''))
+                    ->toggleable(),
+                TextColumn::make('product.sku')
+                    ->label('SKU')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->sku ?? '')),
+                TextColumn::make('product.ean')
+                    ->label('EAN')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->ean ?? ''))
+                    ->toggleable(),
+                TextColumn::make('external_product_id')
+                    ->label('External product id')
+                    ->state(static function (ProductUpdateItem $record): string {
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $shop_id    = (int) Arr::get($record->payload ?? [], 'shop_id', 0);
+
+                        if ($product_id <= 0) {
+                            return '';
+                        }
+
+                        $product_shop_query = ProductShop::query()
+                            ->where('product_id', $product_id)
+                            ->whereNotNull('external_product_id');
+
+                        if ($shop_id > 0) {
+                            $product_shop_query->where('shop_id', $shop_id);
+                        }
+
+                        return $product_shop_query
+                            ->pluck('external_product_id')
+                            ->map(static fn ($external_product_id): string => (string) $external_product_id)
+                            ->filter(static fn (string $external_product_id): bool => $external_product_id !== '')
+                            ->unique()
+                            ->values()
+                            ->implode(', ');
+                    })
+                    ->toggleable(),
+                TextColumn::make('shop_name')
+                    ->label('Магазин')
+                    ->state(static function (ProductUpdateItem $record): string {
+                        $shop_id = (int) Arr::get($record->payload ?? [], 'shop_id', 0);
+
+                        if ($shop_id <= 0) {
+                            $shop_id = (int) Arr::get($record->payload ?? [], 'resolved_shop_id', 0);
+                        }
+
+                        if ($shop_id <= 0) {
+                            return '';
+                        }
+
+                        return (string) (Shop::query()->whereKey($shop_id)->value('name') ?? '');
+                    }),
                 TextColumn::make('error_message')
                     ->label(__('admin/product_imports/batches.columns.item_error'))
                     ->wrap()
@@ -72,6 +136,25 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->filters([
+                Filter::make('search_fields')
+                    ->label(__('admin/products/products.filters.search_fields'))
+                    ->schema([
+                        TextInput::make('name')->label('Назва товару'),
+                        TextInput::make('model')->label('Model'),
+                        TextInput::make('sku')->label('SKU'),
+                        TextInput::make('ean')->label('EAN'),
+                        TextInput::make('external_product_id')->label('External product id'),
+                        TextInput::make('quantity')->label(__('admin/products/products.columns.quantity')),
+                        TextInput::make('price')->label(__('admin/products/products.columns.price')),
+                        TextInput::make('attribute_name')->label('Attribute name'),
+                        TextInput::make('attribute_value')->label('Attribute value'),
+                        TextInput::make('category_name')->label('Category name'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
+                        $query,
+                        $data,
+                        (int) $this->getOwnerRecord()->id
+                    )),
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
                     ->options([
@@ -126,7 +209,10 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ->label(__('admin/product_updates/batches.actions.update_product_to_shops'))
                     ->icon(Heroicon::ArrowPathRoundedSquare)
                     ->color('success')
-                    ->visible(fn (ProductUpdateItem $record): bool => $this->hasBoundShopsForRecord($record))
+                    ->visible(function (ProductUpdateItem $record): bool {
+                        return $this->hasBoundShopsForRecord($record) &&
+                            $record->status === ProductUpdateItemsStatusEnum::SUCCESSED->value;
+                    })
                     ->disabled(fn (ProductUpdateItem $record): bool => $record->status === ProductUpdateItemsStatusEnum::PROCESSING->value)
                     ->action(function (ProductUpdateItem $record): void {
                         $shop_ids = $this->getBoundShopIdsForRecord($record);
@@ -159,7 +245,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             'processed_at'  => null,
                         ]);
 
-                        ProcessProductUpdateItemJob::dispatch((int) $record->id);
+                        ProcessProductUpdateItemJob::dispatchSync((int) $record->id);
 
                         Notification::make()
                             ->title(__('admin/product_updates/batches.messages.item_retry_queued'))
@@ -243,7 +329,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                                     'error_message' => null,
                                     'processed_at'  => null,
                                 ]);
-                                ProcessProductUpdateItemJob::dispatch((int) $record->id);
+                                ProcessProductUpdateItemJob::dispatchSync((int) $record->id);
                                 $queued++;
                             }
 
@@ -258,6 +344,143 @@ class ProductUpdateItemsRelationManager extends RelationManager
                         }),
                 ])->dropdownWidth(Width::Large),
             ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function applyBatchSearchFieldsQuery(Builder $query, array $data, int $batch_id): Builder
+    {
+        if ($batch_id > 0) {
+            $query->where('product_update_batch_id', $batch_id);
+        }
+
+        $name                = Str::lower(Str::trim((string) Arr::get($data, 'name', '')));
+        $model               = Str::lower(Str::trim((string) Arr::get($data, 'model', '')));
+        $sku                 = Str::lower(Str::trim((string) Arr::get($data, 'sku', '')));
+        $ean                 = Str::lower(Str::trim((string) Arr::get($data, 'ean', '')));
+        $external_product_id = Str::trim((string) Arr::get($data, 'external_product_id', ''));
+        $quantity            = Str::trim((string) Arr::get($data, 'quantity', ''));
+        $price               = Str::trim((string) Arr::get($data, 'price', ''));
+        $attribute_name      = Str::lower(Str::trim((string) Arr::get($data, 'attribute_name', '')));
+        $attribute_value     = Str::lower(Str::trim((string) Arr::get($data, 'attribute_value', '')));
+        $category_name       = Str::lower(Str::trim((string) Arr::get($data, 'category_name', '')));
+
+        if ($name !== '') {
+            $query->whereHas(
+                'product.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $name . '%']
+                )
+            );
+        }
+
+        if ($model !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(model, \'\')) LIKE ?',
+                    ['%' . $model . '%']
+                )
+            );
+        }
+
+        if ($sku !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(sku, \'\')) LIKE ?',
+                    ['%' . $sku . '%']
+                )
+            );
+        }
+
+        if ($ean !== '') {
+            $query->whereHas(
+                'product',
+                static fn (Builder $product_query): Builder => $product_query->whereRaw(
+                    'LOWER(COALESCE(ean, \'\')) LIKE ?',
+                    ['%' . $ean . '%']
+                )
+            );
+        }
+
+        if ($external_product_id !== '') {
+            $query->whereExists(static function ($product_shop_query) use ($external_product_id): void {
+                $product_shop_query
+                    ->selectRaw('1')
+                    ->from('product_shop')
+                    ->whereColumn('product_shop.product_id', 'product_update_items.product_id');
+
+                if (is_numeric($external_product_id)) {
+                    $product_shop_query->where('product_shop.external_product_id', (int) $external_product_id);
+                } else {
+                    $product_shop_query->whereRaw(
+                        'LOWER(COALESCE(CAST(product_shop.external_product_id AS TEXT), \'\')) LIKE ?',
+                        ['%' . Str::lower($external_product_id) . '%']
+                    );
+                }
+            });
+        }
+
+        if ($quantity !== '') {
+            $query->whereHas('product', static function (Builder $product_query) use ($quantity): Builder {
+                if (is_numeric($quantity)) {
+                    return $product_query->where('quantity', (int) $quantity);
+                }
+
+                return $product_query->whereRaw(
+                    'LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?',
+                    ['%' . Str::lower($quantity) . '%']
+                );
+            });
+        }
+
+        if ($price !== '') {
+            $query->whereHas('product', static function (Builder $product_query) use ($price): Builder {
+                if (is_numeric($price)) {
+                    return $product_query->where('price', (float) $price);
+                }
+
+                return $product_query->whereRaw(
+                    'LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?',
+                    ['%' . Str::lower($price) . '%']
+                );
+            });
+        }
+
+        if ($attribute_name !== '') {
+            $query->whereHas(
+                'product.attributes.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $attribute_name . '%']
+                )
+            );
+        }
+
+        if ($attribute_value !== '') {
+            $query->whereHas(
+                'product.productToAttributes',
+                static fn (Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
+                    'LOWER(COALESCE(text, \'\')) LIKE ?',
+                    ['%' . $attribute_value . '%']
+                )
+            );
+        }
+
+        if ($category_name !== '') {
+            $query->whereHas(
+                'product.categories.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%' . $category_name . '%']
+                )
+            );
+        }
+
+        return $query;
     }
 
     private function hasBoundShopsForRecord(ProductUpdateItem $record): bool
@@ -442,7 +665,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             'processed_at'  => null,
         ]);
 
-        ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
+        ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
         $summary['updates_queued']++;
 
         $this->markBatchAsUpdating($batch_id);
@@ -492,7 +715,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             'options' => [
                 ...($batch->options ?? []),
                 'update_state'       => 'processing',
-                'update_started_at'  => get_now_date()->toDateTimeString(),
+                'update_started_at'  => now()->toDateTimeString(),
                 'update_finished_at' => null,
             ],
         ]);

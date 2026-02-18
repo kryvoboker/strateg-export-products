@@ -125,6 +125,7 @@ return [
             'model'                   => 'Model',
             'sku'                     => 'SKU',
             'ean'                     => 'EAN',
+            'external_product_id'     => 'External Product ID',
             'quantity'                => 'Кількість',
             'minimum'                 => 'Мінімум',
             'image'                   => 'Головне зображення',

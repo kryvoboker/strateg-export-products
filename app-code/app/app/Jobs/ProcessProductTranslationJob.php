@@ -21,6 +21,12 @@ class ProcessProductTranslationJob implements ShouldQueue
         public int $product_id,
     ) {}
 
+    /**
+     * @param ProductShopBindingService $product_shop_binding_service
+     *
+     * @return void
+     * @throws Throwable
+     */
     public function handle(ProductShopBindingService $product_shop_binding_service): void
     {
         if ($this->product_id <= 0) {

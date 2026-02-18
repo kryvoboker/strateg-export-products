@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class Product extends Model
@@ -23,6 +24,7 @@ class Product extends Model
 
     protected $fillable = [
         'product_import_item_id',
+        'family_ulid',
         'marked_to_shop',
         'model',
         'sku',
@@ -43,6 +45,7 @@ class Product extends Model
     {
         return [
             'product_import_item_id' => 'integer',
+            'family_ulid'            => 'string',
             'quantity'               => 'integer',
             'minimum'                => 'integer',
             'price'                  => 'decimal:4',
@@ -194,8 +197,9 @@ class Product extends Model
             throw new RuntimeException('Invalid product_import_item_id for product creation');
         }
 
-        $now_date                             = get_now_date();
+        $now_date                             = now();
         $attributes['product_import_item_id'] = $product_import_item_id;
+        $attributes['family_ulid']            = Str::trim((string) ($attributes['family_ulid'] ?? '')) ?: (string) Str::ulid();
         $attributes['created_at']             = $now_date;
         $attributes['updated_at']             = $now_date;
 

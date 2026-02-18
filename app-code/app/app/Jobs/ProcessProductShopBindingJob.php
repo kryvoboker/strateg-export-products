@@ -9,15 +9,18 @@ use App\Models\Products\Imports\ProductImportItem;
 use App\Supports\Services\Catalog\ProductShopBindingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class ProcessProductShopBindingJob implements ShouldQueue
+class ProcessProductShopBindingJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $uniqueFor = 120;
 
     /**
      * @param array<string, mixed> $source_payload
@@ -30,6 +33,11 @@ class ProcessProductShopBindingJob implements ShouldQueue
         public ?int $requested_by_user_id = null,
     ) {}
 
+    public function uniqueId(): string
+    {
+        return 'product-shop-binding:'.$this->shop_id.':'.$this->product_id;
+    }
+
     public function handle(ProductShopBindingService $product_shop_binding_service): void
     {
         try {
@@ -41,6 +49,18 @@ class ProcessProductShopBindingJob implements ShouldQueue
             );
 
             $target_product_id = (int) ($bind_result['product_id'] ?? 0);
+            $bound             = (int) ($bind_result['bound'] ?? 0);
+            $duplicated        = (int) ($bind_result['duplicated'] ?? 0);
+
+            if ($target_product_id > 0 && $bound === 0 && $duplicated === 0) {
+                Log::channel('stack')->info('Product shop binding skipped because already bound', [
+                    'source_product_id' => $this->product_id,
+                    'target_product_id' => $target_product_id,
+                    'shop_id'           => $this->shop_id,
+                    'product_import_batch_id' => $this->product_import_batch_id,
+                    'requested_by_user_id'    => $this->requested_by_user_id,
+                ]);
+            }
 
             if ($this->product_import_batch_id > 0 && $target_product_id > 0) {
                 ProductImportItem::ensureBatchProductItem(
@@ -57,6 +77,7 @@ class ProcessProductShopBindingJob implements ShouldQueue
                 'shop_id' => $this->shop_id,
                 'product_import_batch_id' => $this->product_import_batch_id,
                 'requested_by_user_id' => $this->requested_by_user_id,
+                'ai_translation_enabled' => (bool) config('app.ai_translation_enabled', true),
                 'message' => $exception->getMessage(),
             ]);
 

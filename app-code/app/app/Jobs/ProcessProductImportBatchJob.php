@@ -101,21 +101,21 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         $batch->update([
             'status'      => ProductImportBatchesStatusEnum::PROCESSING->value,
-            'started_at'  => get_now_date(),
+            'started_at'  => now(),
             'finished_at' => null,
             'options'     => [
                 ...($batch->options ?? []),
-                'prepare_started_at' => get_now_date()->toDateTimeString(),
+                'prepare_started_at' => now()->toDateTimeString(),
                 'last_error'         => null,
             ],
         ]);
 
         try {
             [$items_payloads, $failed_rows, $failed_details] = match ($batch->source_type) {
-                ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value  => $this->prepareItemsFromExcelBatch($batch),
-                ProductImportBatchesSourceTypeEnum::API->value         => $this->prepareItemsFromGoogleSheetsBatch($batch),
-                ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value => $this->prepareItemsFromManualBatch($batch),
-                default                                                => throw new RuntimeException('Unknown source type: '.$batch->source_type),
+                ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value   => $this->prepareItemsFromExcelBatch($batch),
+                ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value => $this->prepareItemsFromGoogleSheetsBatch($batch),
+                ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value  => $this->prepareItemsFromManualBatch($batch),
+                default                                                 => throw new RuntimeException('Unknown source type: '.$batch->source_type),
             };
 
             $total_items = count($items_payloads);
@@ -139,10 +139,10 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'total_items'     => $total_items,
                 'processed_items' => 0,
                 'failed_items'    => $failed_rows,
-                'finished_at'     => get_now_date(),
+                'finished_at'     => now(),
                 'options'         => [
                     ...($batch->options ?? []),
-                    'prepare_finished_at' => get_now_date()->toDateTimeString(),
+                    'prepare_finished_at' => now()->toDateTimeString(),
                     'prepared_items'      => $total_items,
                     'prepare_failed_rows' => $failed_rows,
                     'error_log_path'      => $error_log_path,
@@ -325,16 +325,16 @@ class ProcessProductImportBatchJob implements ShouldQueue
             $payload = [
                 'product' => [
                     'product_id'     => null,
-                    'model'          => Arr::get($product_assoc, 'Model'),
-                    'sku'            => Arr::get($product_assoc, 'SKU'),
-                    'ean'            => Arr::get($product_assoc, 'EAN'),
-                    'quantity'       => Arr::get($product_assoc, 'Quantity'),
-                    'minimum'        => Arr::get($product_assoc, 'Minimum'),
-                    'image'          => Arr::get($product_assoc, 'Image'),
-                    'price'          => Arr::get($product_assoc, 'Price'),
-                    'is_active'      => $this->normalizeBooleanValue(Arr::get($product_assoc, 'Is Active')),
-                    'date_available' => Arr::get($product_assoc, 'Date Available'),
-                    'date_added'     => Arr::get($product_assoc, 'Date Added'),
+                    'model'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Model')),
+                    'sku'            => Arr::get($product_assoc, $this->normalizeHeaderKey('SKU')),
+                    'ean'            => Arr::get($product_assoc, $this->normalizeHeaderKey('EAN')),
+                    'quantity'       => Arr::get($product_assoc, $this->normalizeHeaderKey('Quantity')),
+                    'minimum'        => Arr::get($product_assoc, $this->normalizeHeaderKey('Minimum')),
+                    'image'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Image')),
+                    'price'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Price')),
+                    'is_active'      => $this->normalizeBooleanValue(Arr::get($product_assoc, $this->normalizeHeaderKey('Is Active'))),
+                    'date_available' => Arr::get($product_assoc, $this->normalizeHeaderKey('Date Available')),
+                    'date_added'     => Arr::get($product_assoc, $this->normalizeHeaderKey('Date Added')),
                 ],
                 'descriptions' => [],
                 'images'       => [],
@@ -382,55 +382,57 @@ class ProcessProductImportBatchJob implements ShouldQueue
      */
     private function mapSheetRow(string $sheet_name, array $row_assoc): array
     {
+        $get = fn (string $header): mixed => Arr::get($row_assoc, $this->normalizeHeaderKey($header));
+
         return match ($sheet_name) {
             'Description' => [
                 'product_id'         => null,
-                'shop_language_code' => $this->normalizeLanguageCode(Arr::get($row_assoc, 'Shop Language Code', Arr::get($row_assoc, 'Language Code'))),
-                'name'               => Arr::get($row_assoc, 'Name'),
-                'description'        => Arr::get($row_assoc, 'Description'),
-                'meta_title'         => Arr::get($row_assoc, 'Meta Title'),
-                'meta_description'   => Arr::get($row_assoc, 'Meta Description'),
-                'meta_keywords'      => Arr::get($row_assoc, 'Meta Keywords'),
+                'shop_language_code' => $this->normalizeLanguageCode($get('Shop Language Code') ?? $get('Language Code') ?? ''),
+                'name'               => $get('Name'),
+                'description'        => $get('Description'),
+                'meta_title'         => $get('Meta Title'),
+                'meta_description'   => $get('Meta Description'),
+                'meta_keywords'      => $get('Meta Keywords'),
             ],
             'Image' => [
                 'product_id' => null,
-                'image'      => Arr::get($row_assoc, 'Image'),
-                'sort_order' => Arr::get($row_assoc, 'Sort Order'),
+                'image'      => $get('Image'),
+                'sort_order' => $get('Sort Order'),
             ],
             'Product Category' => [
                 'product_id'    => null,
-                'category_name' => Arr::get($row_assoc, 'Category Name'),
+                'category_name' => $get('Category Name'),
             ],
             'Product Attribute' => [
                 'product_id'         => null,
-                'shop_language_code' => $this->normalizeLanguageCode(Arr::get($row_assoc, 'Shop Language Code', Arr::get($row_assoc, 'Language Code'))),
-                'attribute_name'     => Arr::get($row_assoc, 'Attribute Name'),
-                'attribute_text'     => Arr::get($row_assoc, 'Attribute Text', Arr::get($row_assoc, 'Attibute Text')),
+                'shop_language_code' => $this->normalizeLanguageCode($get('Shop Language Code') ?? $get('Language Code') ?? ''),
+                'attribute_name'     => $get('Attribute Name'),
+                'attribute_text'     => $get('Attribute Text') ?? $get('Attibute Text'),
             ],
             'Seo Url' => [
                 'product_id'         => null,
-                'shop_language_code' => $this->normalizeLanguageCode(Arr::get($row_assoc, 'Shop Language Code', Arr::get($row_assoc, 'Language Code'))),
-                'query_key'          => Arr::get($row_assoc, 'Query Key'),
-                'query_value'        => Arr::get($row_assoc, 'Query Value'),
-                'keyword'            => Arr::get($row_assoc, 'Keyword'),
-                'sort_order'         => Arr::get($row_assoc, 'Sort Order'),
+                'shop_language_code' => $this->normalizeLanguageCode($get('Shop Language Code') ?? $get('Language Code') ?? ''),
+                'query_key'          => $get('Query Key'),
+                'query_value'        => $get('Query Value'),
+                'keyword'            => $get('Keyword'),
+                'sort_order'         => $get('Sort Order'),
             ],
             'Special' => [
                 'product_id'    => null,
-                'user_group_id' => Arr::get($row_assoc, 'User Group Id'),
-                'price'         => Arr::get($row_assoc, 'Price'),
-                'priority'      => Arr::get($row_assoc, 'Priority'),
-                'date_start'    => Arr::get($row_assoc, 'Date Start'),
-                'date_end'      => Arr::get($row_assoc, 'Date End'),
+                'user_group_id' => $get('User Group Id'),
+                'price'         => $get('Price'),
+                'priority'      => $get('Priority'),
+                'date_start'    => $get('Date Start'),
+                'date_end'      => $get('Date End'),
             ],
             'Discount' => [
                 'product_id'    => null,
-                'user_group_id' => Arr::get($row_assoc, 'User Group Id'),
-                'quantity'      => Arr::get($row_assoc, 'Quantity'),
-                'price'         => Arr::get($row_assoc, 'Price'),
-                'priority'      => Arr::get($row_assoc, 'Priority'),
-                'date_start'    => Arr::get($row_assoc, 'Date Start'),
-                'date_end'      => Arr::get($row_assoc, 'Date End'),
+                'user_group_id' => $get('User Group Id'),
+                'quantity'      => $get('Quantity'),
+                'price'         => $get('Price'),
+                'priority'      => $get('Priority'),
+                'date_start'    => $get('Date Start'),
+                'date_end'      => $get('Date End'),
             ],
             default => [],
         };
@@ -682,7 +684,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 return;
             }
 
-            $created_at     = get_now_date();
+            $created_at     = now();
             $rows_to_insert = [];
 
             foreach ($items_payloads as $payload) {
@@ -725,13 +727,13 @@ class ProcessProductImportBatchJob implements ShouldQueue
                             'payload'       => $normalized_payload,
                             'status'        => ProductImportItemsStatusEnum::SUCCESSED->value,
                             'error_message' => null,
-                            'processed_at'  => get_now_date(),
+                            'processed_at'  => now(),
                         ]);
                     } catch (Throwable $exception) {
                         $item->update([
                             'status'        => ProductImportItemsStatusEnum::FAILED->value,
                             'error_message' => Str::trim($exception->getMessage()),
-                            'processed_at'  => get_now_date(),
+                            'processed_at'  => now(),
                         ]);
 
                         throw $exception;
@@ -746,6 +748,11 @@ class ProcessProductImportBatchJob implements ShouldQueue
     private function createProductForImportPayload(ProductImportItem $product_import_item, array $payload): int
     {
         $product_attributes = $this->buildProductAttributesForInsert($payload);
+        $source_ulid = Str::trim((string) ($product_import_item->getAttribute('ulid') ?? ''));
+
+        if ($source_ulid !== '') {
+            $product_attributes['family_ulid'] = $source_ulid;
+        }
 
         return Product::createFromImportPayload(
             $product_attributes,
@@ -1020,8 +1027,8 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 [
                     'price'      => (float) Arr::get($special_row, 'price', 0),
                     'priority'   => (int) Arr::get($special_row, 'priority', 1),
-                    'date_start' => Arr::get($special_row, 'date_start') ?: get_now_date()->toDateTimeString(),
-                    'date_end'   => Arr::get($special_row, 'date_end') ?: get_now_date()->toDateTimeString(),
+                    'date_start' => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
+                    'date_end'   => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
                 ]
             );
         }
@@ -1047,8 +1054,8 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     'quantity'   => max((int) Arr::get($discount_row, 'quantity', 1), 1),
                     'price'      => (float) Arr::get($discount_row, 'price', 0),
                     'priority'   => (int) Arr::get($discount_row, 'priority', 1),
-                    'date_start' => Arr::get($discount_row, 'date_start') ?: get_now_date()->toDateTimeString(),
-                    'date_end'   => Arr::get($discount_row, 'date_end') ?: get_now_date()->toDateTimeString(),
+                    'date_start' => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
+                    'date_end'   => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
                 ]
             );
         }
@@ -1229,7 +1236,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
             return;
         }
 
-        AttributeDescription::upsertName($attribute_id, (int) ($shop_language_id ?? 0), $attribute_name);
+        AttributeDescription::upsertName($attribute_id, $shop_language_id ?? 0, $attribute_name);
     }
 
     /**
@@ -1274,7 +1281,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     {
         $header = $rows[0] ?? [];
 
-        return array_map(static fn ($value) => Str::trim((string) $value), $header);
+        return array_map(fn ($value) => $this->normalizeHeaderKey((string) $value), $header);
     }
 
     /**
@@ -1330,6 +1337,11 @@ class ProcessProductImportBatchJob implements ShouldQueue
         return $normalized_rows;
     }
 
+    private function normalizeHeaderKey(string $header): string
+    {
+        return Str::snake(Str::squish(Str::replace(['-', '_'], ' ', Str::trim($header))));
+    }
+
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
@@ -1359,10 +1371,10 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         $batch->update([
             'status'      => ProductImportBatchesStatusEnum::FAILED->value,
-            'finished_at' => get_now_date(),
+            'finished_at' => now(),
             'options'     => [
                 ...($batch->options ?? []),
-                'prepare_finished_at' => get_now_date()->toDateTimeString(),
+                'prepare_finished_at' => now()->toDateTimeString(),
                 'last_error'          => $reason,
                 'error_log_path'      => $error_log_path,
             ],
@@ -1385,7 +1397,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         ?string $reason = null
     ): ?string {
         $log_lines   = [];
-        $log_lines[] = 'datetime: '.get_now_date()->toDateTimeString();
+        $log_lines[] = 'datetime: '.now()->toDateTimeString();
         $log_lines[] = 'batch_id: '.$batch->id;
         $log_lines[] = 'source_type: '.$batch->source_type;
 
@@ -1430,7 +1442,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
     private function buildBatchErrorLogPath(int $batch_id): string
     {
-        $now_date  = get_now_date();
+        $now_date  = now();
         $directory = 'logs/product-imports/'.$now_date->format('Y/m');
         $file_name = 'product-import-batch-'.$batch_id.'-errors-'.$now_date->format('Ymd_His').'.log';
 

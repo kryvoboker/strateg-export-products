@@ -310,7 +310,8 @@ class ProductImportBatchesTable
             'batches_selected'           => $records->count(),
             'batches_skipped_processing' => 0,
             'products_total'             => 0,
-            'jobs_queued'               => 0,
+            'jobs_queued'                => 0,
+            'skipped_already_bound'      => 0,
         ];
 
         foreach ($records as $batch) {
@@ -342,6 +343,17 @@ class ProductImportBatchesTable
                     : [];
 
                 foreach ($shop_ids as $shop_id) {
+                    $already_bound = ProductShop::query()
+                        ->where('product_id', (int) $product_id)
+                        ->where('shop_id', (int) $shop_id)
+                        ->exists();
+
+                    if ($already_bound) {
+                        $summary['skipped_already_bound']++;
+
+                        continue;
+                    }
+
                     ProcessProductShopBindingJob::dispatch(
                         (int) $product_id,
                         $shop_id,
@@ -473,7 +485,7 @@ class ProductImportBatchesTable
                             'options' => [
                                 ...($batch->options ?? []),
                                 'export_state'       => 'processing',
-                                'export_started_at'  => get_now_date()->toDateTimeString(),
+                                'export_started_at'  => now()->toDateTimeString(),
                                 'export_finished_at' => null,
                             ],
                         ]);
@@ -506,7 +518,7 @@ class ProductImportBatchesTable
             $existing_export_item->update([
                 'status' => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => get_now_date(),
+                'processed_at' => now(),
                 'payload' => [
                     ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
                     'shop_id' => $shop_id,
@@ -529,7 +541,7 @@ class ProductImportBatchesTable
                 ],
                 'status' => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => get_now_date(),
+                'processed_at' => now(),
             ]);
         }
 
@@ -592,7 +604,7 @@ class ProductImportBatchesTable
                     'options' => [
                         ...($batch->options ?? []),
                         'export_state'       => 'processing',
-                        'export_started_at'  => get_now_date()->toDateTimeString(),
+                        'export_started_at'  => now()->toDateTimeString(),
                         'export_finished_at' => null,
                     ],
                 ]);

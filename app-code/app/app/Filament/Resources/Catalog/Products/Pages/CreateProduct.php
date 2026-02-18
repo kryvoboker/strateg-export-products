@@ -7,7 +7,6 @@ namespace App\Filament\Resources\Catalog\Products\Pages;
 use App\Filament\Resources\Catalog\Products\ProductResource;
 use App\Jobs\ProcessAttributeNameTranslationJob;
 use App\Jobs\ProcessCategoryNameTranslationJob;
-use App\Jobs\ProcessProductTranslationJob;
 use App\Models\Categories\CategoryProduct;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
@@ -29,7 +28,6 @@ class CreateProduct extends CreateRecord
 
         $this->dispatchAttributeNameTranslationJobs($product_id);
         $this->dispatchCategoryNameTranslationJobs($product_id);
-        $this->dispatchProductTranslationJob($product_id);
     }
 
     private function dispatchAttributeNameTranslationJobs(int $product_id): void
@@ -58,8 +56,8 @@ class CreateProduct extends CreateRecord
         }
 
         foreach ($attribute_ids as $attribute_id) {
-            ProcessAttributeNameTranslationJob::dispatch(
-                (int) $attribute_id,
+            ProcessAttributeNameTranslationJob::dispatchSync(
+                $attribute_id,
                 $shop_ids
             );
         }
@@ -91,19 +89,10 @@ class CreateProduct extends CreateRecord
         }
 
         foreach ($category_ids as $category_id) {
-            ProcessCategoryNameTranslationJob::dispatch(
-                (int) $category_id,
+            ProcessCategoryNameTranslationJob::dispatchSync(
+                $category_id,
                 $shop_ids
             );
         }
-    }
-
-    private function dispatchProductTranslationJob(int $product_id): void
-    {
-        if ($product_id <= 0) {
-            return;
-        }
-
-        ProcessProductTranslationJob::dispatch($product_id);
     }
 }

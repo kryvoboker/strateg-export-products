@@ -11,6 +11,7 @@ use App\Services\Api\Ai\OpenAiTranslatorService;
 use App\Supports\Services\Ai\AiPromptHasherService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Throwable;
 
 abstract class AiDbCachedTranslatorAbstract
@@ -33,6 +34,10 @@ abstract class AiDbCachedTranslatorAbstract
      */
     public function translate(string $prompt): string
     {
+        if (! (bool) config('app.ai_translation_enabled', true)) {
+            return $this->buildFakeTranslationFromPrompt($prompt);
+        }
+
         $normalized = AiPromptHasherService::normalize($prompt);
         $hash       = AiPromptHasherService::hash($normalized);
 
@@ -54,6 +59,21 @@ abstract class AiDbCachedTranslatorAbstract
         });
 
         return $translated;
+    }
+
+    private function buildFakeTranslationFromPrompt(string $prompt): string
+    {
+        preg_match('/ to ([a-z]{2})\\./i', $prompt, $target_matches);
+        $target_language_code = Str::lower((string) ($target_matches[1] ?? 'uk'));
+
+        $source_text = (string) preg_replace('/^.*\\n\\n/s', '', $prompt);
+        $source_text = Str::trim($source_text);
+
+        if ($source_text === '') {
+            $source_text = Str::trim($prompt);
+        }
+
+        return sprintf('translated-to-%s-%s', $target_language_code, $source_text);
     }
 
     /**

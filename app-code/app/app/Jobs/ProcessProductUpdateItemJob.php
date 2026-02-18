@@ -104,7 +104,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 'external_product_id' => $external_product_id,
                 'backup_product_id'   => $backup_product_id,
                 'backup_payload'      => $backup_payload,
-                'received_at'         => get_now_date()->toDateTimeString(),
+                'received_at'         => now()->toDateTimeString(),
             ], $shop_id, (string) $external_product_id);
 
             $update_instructions = Arr::get($payload, 'update_instructions', []);
@@ -122,7 +122,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             $product_update_item->update([
                 'status'        => ProductUpdateItemsStatusEnum::SUCCESSED->value,
                 'error_message' => null,
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
                 'payload'       => [
                     ...$payload,
                     'operation'         => 'update',
@@ -145,7 +145,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             $product_update_item->update([
                 'status'        => ProductUpdateItemsStatusEnum::FAILED->value,
                 'error_message' => Str::limit(Str::trim($exception->getMessage()), 10000),
-                'processed_at'  => get_now_date(),
+                'processed_at'  => now(),
             ]);
         } finally {
             $this->syncBatchStatusByUpdateItems((int) $product_update_item->product_update_batch_id);
@@ -821,8 +821,12 @@ class ProcessProductUpdateItemJob implements ShouldQueue
 
         if ($processing_count > 0) {
             $batch->update([
-                'status'  => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-                'options' => [
+                'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+                'total_items'     => $total_update_items,
+                'processed_items' => max($updated_count + $failed_count, 0),
+                'failed_items'    => max($failed_count, 0),
+                'finished_at'     => null,
+                'options'         => [
                     ...($batch->options ?? []),
                     'update_state'         => 'processing',
                     'update_total_items'   => $total_update_items,
@@ -842,14 +846,18 @@ class ProcessProductUpdateItemJob implements ShouldQueue
         };
 
         $batch->update([
-            'status'  => $final_status,
-            'options' => [
+            'status'          => $final_status,
+            'total_items'     => $total_update_items,
+            'processed_items' => max($updated_count + $failed_count, 0),
+            'failed_items'    => max($failed_count, 0),
+            'finished_at'     => now(),
+            'options'         => [
                 ...($batch->options ?? []),
                 'update_state'         => 'finished',
                 'update_total_items'   => $total_update_items,
                 'update_success_items' => $updated_count,
                 'update_failed_items'  => $failed_count,
-                'update_finished_at'   => get_now_date()->toDateTimeString(),
+                'update_finished_at'   => now()->toDateTimeString(),
             ],
         ]);
     }

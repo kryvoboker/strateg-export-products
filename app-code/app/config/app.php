@@ -88,6 +88,8 @@ return [
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
+    'ai_translation_enabled' => (bool) env('AI_TRANSLATION_ENABLED', true),
+
     /*
     |--------------------------------------------------------------------------
     | Encryption Key

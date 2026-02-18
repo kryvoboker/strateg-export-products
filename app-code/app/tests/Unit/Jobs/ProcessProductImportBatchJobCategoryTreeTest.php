@@ -12,12 +12,16 @@ use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\Facade;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\Translator;
+use Illuminate\Validation\Factory as ValidationFactory;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
 class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 {
     private static ?Capsule $capsule = null;
+    private static ?Container $container = null;
 
     public static function setUpBeforeClass(): void
     {
@@ -36,12 +40,17 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
 
-        $container = new Container();
-        Container::setInstance($container);
-        Facade::setFacadeApplication($container);
-        $container->instance('config', new Repository([
+        self::$container = new Container();
+        Container::setInstance(self::$container);
+        Facade::setFacadeApplication(self::$container);
+        self::$container->instance('config', new Repository([
             'database.db_prefix' => '',
         ]));
+        self::$container->instance('translator', new Translator(new ArrayLoader(), 'en'));
+        self::$container->instance('validator', new ValidationFactory(
+            self::$container->make('translator'),
+            self::$container
+        ));
 
         $schema = self::$capsule->schema();
 
@@ -59,6 +68,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
             $table->string('code')->nullable();
             $table->string('name')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
             $table->timestamps();
         });
 
@@ -80,16 +90,22 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Facade::clearResolvedInstances();
+        Container::setInstance(self::$container);
+        Facade::setFacadeApplication(self::$container);
 
         CategoryDescription::query()->delete();
         Category::query()->delete();
-        ShopLanguage::query()->delete();
+        ShopLanguage::withoutEvents(static function (): void {
+            ShopLanguage::query()->delete();
+        });
 
         ShopLanguage::query()->create([
             'shop_id'   => 1,
             'code'      => 'uk',
             'name'      => 'Українська',
             'is_active' => true,
+            'is_default' => true,
         ]);
     }
 

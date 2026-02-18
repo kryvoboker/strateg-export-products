@@ -19,6 +19,11 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->cascadeOnDelete();
 
+            $table->string('family_ulid', 26)
+                ->nullable(false)
+                ->index()
+                ->comment('ULID is the identifier of the original product, which makes it clear that the product will be linked to the store only once');
+
             $table->string('marked_to_shop')
                 ->nullable()
                 ->index()

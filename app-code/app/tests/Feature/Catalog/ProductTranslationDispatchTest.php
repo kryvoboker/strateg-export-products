@@ -8,7 +8,6 @@ use App\Filament\Resources\Catalog\Products\Pages\CreateProduct;
 use App\Filament\Resources\Catalog\Products\Pages\EditProduct;
 use App\Jobs\ProcessAttributeNameTranslationJob;
 use App\Jobs\ProcessCategoryNameTranslationJob;
-use App\Jobs\ProcessProductTranslationJob;
 use App\Models\Products\Product;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -72,53 +71,14 @@ class ProductTranslationDispatchTest extends TestCase
 
         Queue::assertPushed(ProcessAttributeNameTranslationJob::class);
         Queue::assertPushed(ProcessCategoryNameTranslationJob::class);
-        Queue::assertPushed(ProcessProductTranslationJob::class, 1);
+        Queue::assertNotPushed(\App\Jobs\ProcessProductTranslationJob::class);
     }
 
-    public function test_edit_product_page_dispatch_methods_push_translation_jobs(): void
+    public function test_edit_product_page_no_longer_has_translation_dispatch_methods(): void
     {
-        Queue::fake();
-
-        $product = Product::query()->create([
-            'model' => 'EDIT-MODEL',
-            'sku' => 'EDIT-SKU',
-            'is_active' => true,
-        ]);
-
-        DB::table('product_to_attributes')->insert([
-            'product_id' => (int) $product->id,
-            'attribute_id' => 777,
-            'shop_language_id' => 2,
-            'text' => 'Text',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('category_product')->insert([
-            'product_id' => (int) $product->id,
-            'category_id' => 888,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        DB::table('product_shop')->insert([
-            'product_id' => (int) $product->id,
-            'shop_id' => 22,
-            'product_import_batch_id' => null,
-            'external_product_id' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $page = new EditProduct();
-
-        $this->invokeMethod($page, 'dispatchAttributeNameTranslationJobs', [(int) $product->id, ['bind_shop_id' => 22]]);
-        $this->invokeMethod($page, 'dispatchCategoryNameTranslationJobs', [(int) $product->id, ['bind_shop_id' => 22]]);
-        $this->invokeMethod($page, 'dispatchProductTranslationJob', [(int) $product->id]);
-
-        Queue::assertPushed(ProcessAttributeNameTranslationJob::class);
-        Queue::assertPushed(ProcessCategoryNameTranslationJob::class);
-        Queue::assertPushed(ProcessProductTranslationJob::class, 1);
+        self::assertFalse(method_exists(EditProduct::class, 'dispatchAttributeNameTranslationJobs'));
+        self::assertFalse(method_exists(EditProduct::class, 'dispatchCategoryNameTranslationJobs'));
+        self::assertFalse(method_exists(EditProduct::class, 'dispatchProductTranslationJob'));
     }
 
     private function recreateSchema(): void
@@ -188,4 +148,3 @@ class ProductTranslationDispatchTest extends TestCase
         $property->setValue($target, $value);
     }
 }
-

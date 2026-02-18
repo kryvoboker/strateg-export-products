@@ -1,23 +1,28 @@
+DEV_DOCKER_COMPOSE_FILE=.docker/dev/docker-compose.yml
+PROD_DOCKER_COMPOSE_FILE=.docker/prod/docker-compose.yml
+SLIM_DOCKER_COMPOSE_FILE=.docker/prod/docker-compose.slim.yml
+PART_OF_CONTAINER_NAME=dev-strateg-export-products
+
 up-dev:
-	docker compose -f .docker/dev/docker-compose.yml up -d
+	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) up -d
 
 down-dev:
-	docker compose -f .docker/dev/docker-compose.yml down
+	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) down
 
 build-dev:
-	docker compose -f .docker/dev/docker-compose.yml build
+	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) build
 
 restart-dev: down-dev up-dev
 rebuild-dev: down-dev build-dev up-dev
 
 up-prod:
-	docker compose -f .docker/prod/docker-compose.yml up -d
+	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) up -d
 
 down-prod:
-	docker compose -f .docker/prod/docker-compose.yml down
+	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) down
 
 build-prod:
-	docker compose -f .docker/prod/docker-compose.yml build
+	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) build
 
 restart-prod: down-prod up-prod
 rebuild-prod: down-prod build-prod up-prod
@@ -37,8 +42,8 @@ optimize-all:
 optimize-php:
 	echo "Optimizing PHP-FPM image..."
 	slim build \
-		--target dev-strateg-export-products-php-fpm:1.0 \
-		--tag dev-strateg-export-products-php-fpm:1.0-slim \
+		--target $(PART_OF_CONTAINER_NAME)-php-fpm:1.0 \
+		--tag $(PART_OF_CONTAINER_NAME)-php-fpm:1.0-slim \
 		--http-probe=false \
 		--include-path /bin/bash \
 		--include-path /bin/ls \
@@ -62,8 +67,8 @@ optimize-php:
 optimize-nginx:
 	echo "Optimizing Nginx image..."
 	slim build \
-		--target dev-strateg-export-products-nginx:1.0 \
-		--tag dev-strateg-export-products-nginx:1.0-slim \
+		--target $(PART_OF_CONTAINER_NAME)-nginx:1.0 \
+		--tag $(PART_OF_CONTAINER_NAME)-nginx:1.0-slim \
 		--http-probe=true \
 		--http-probe-cmd GET:/ \
 		--include-path /etc/nginx \
@@ -77,8 +82,8 @@ optimize-nginx:
 optimize-cron:
 	echo "Optimizing Cron image..."
 	slim build \
-		--target dev-strateg-export-products-cron:1.0 \
-		--tag dev-strateg-export-products-cron:1.0-slim \
+		--target $(PART_OF_CONTAINER_NAME)-cron:1.0 \
+		--tag $(PART_OF_CONTAINER_NAME)-cron:1.0-slim \
 		--http-probe=false \
 		--include-path /usr/local/bin \
 		--include-path /usr/local/lib \
@@ -92,16 +97,16 @@ optimize-cron:
 
 # Use slim images
 up-prod-slim:
-	docker compose -f .docker/prod/docker-compose.slim.yml up -d
+	docker compose -f $(SLIM_DOCKER_COMPOSE_FILE) up -d
 
 down-prod-slim:
-	docker compose -f .docker/prod/docker-compose.slim.yml down
+	docker compose -f $(SLIM_DOCKER_COMPOSE_FILE) down
 
 restart-prod-slim: down-prod-slim up-prod-slim
 
 # Show image sizes
 show-sizes:
-	docker images | grep dev-strateg-export-products
+	docker images | grep $(PART_OF_CONTAINER_NAME)
 
 # Compare sizes with detailed breakdown
 compare-sizes:
