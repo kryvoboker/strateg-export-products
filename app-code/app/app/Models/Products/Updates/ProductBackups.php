@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Products\Updates;
 
 use App\Models\Products\Product;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
@@ -31,9 +32,9 @@ class ProductBackups extends Model
     {
         return [
             'backupable_id' => 'integer',
-            'shop_id' => 'integer',
-            'payload' => 'array',
-            'is_used' => 'boolean',
+            'shop_id'       => 'integer',
+            'payload'       => 'array',
+            'is_used'       => 'boolean',
         ];
     }
 
@@ -46,7 +47,7 @@ class ProductBackups extends Model
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     public static function createUsingBackupForProduct(
         int $product_id,
@@ -65,7 +66,7 @@ class ProductBackups extends Model
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     public static function createOrUpdateProductBackup(
         int $product_id,
@@ -80,7 +81,7 @@ class ProductBackups extends Model
         }
 
         $normalized_backup_source = Str::lower(Str::trim($backup_source));
-        $normalized_backup_kind = Str::lower(Str::trim($backup_kind));
+        $normalized_backup_kind   = Str::lower(Str::trim($backup_kind));
 
         if ($normalized_backup_source === '') {
             throw new RuntimeException('backup_source is required');
@@ -94,7 +95,7 @@ class ProductBackups extends Model
             throw new RuntimeException('For external backups backup_kind must be external_product_snapshot');
         }
 
-        $normalized_shop_id = $shop_id !== null && $shop_id > 0 ? $shop_id : null;
+        $normalized_shop_id             = $shop_id !== null && $shop_id > 0 ? $shop_id : null;
         $normalized_external_product_id = Str::trim((string) ($external_product_id ?? ''));
 
         if ($normalized_backup_source === 'external_api') {
@@ -123,14 +124,14 @@ class ProductBackups extends Model
             ->first();
 
         $backup_attributes = [
-            'backupable_type' => Product::class,
-            'backupable_id' => $product_id,
-            'backup_source' => $normalized_backup_source,
-            'backup_kind' => $normalized_backup_kind,
-            'shop_id' => $normalized_shop_id,
+            'backupable_type'     => Product::class,
+            'backupable_id'       => $product_id,
+            'backup_source'       => $normalized_backup_source,
+            'backup_kind'         => $normalized_backup_kind,
+            'shop_id'             => $normalized_shop_id,
             'external_product_id' => $normalized_external_product_id !== '' ? $normalized_external_product_id : null,
-            'payload' => $payload,
-            'is_used' => false,
+            'payload'             => $payload,
+            'is_used'             => false,
         ];
 
         if ($existing_backup instanceof self) {
@@ -147,7 +148,7 @@ class ProductBackups extends Model
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     public static function createOrUpdateInternalProductBackup(int $product_id, array $payload): self
     {
@@ -181,5 +182,73 @@ class ProductBackups extends Model
         }
 
         return $backup->markAsUsed();
+    }
+
+    public function scopeLocalProductSnapshots(Builder $query): Builder
+    {
+        return $query
+            ->where('backupable_type', Product::class)
+            ->where('backup_source', 'internal')
+            ->where('backup_kind', 'local_product_snapshot');
+    }
+
+    public function scopeExternalProductSnapshots(Builder $query): Builder
+    {
+        return $query
+            ->where('backupable_type', Product::class)
+            ->where('backup_source', 'external_api')
+            ->where('backup_kind', 'external_product_snapshot');
+    }
+
+    public static function hasLocalSnapshotForProduct(int $product_id): bool
+    {
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        return static::query()
+            ->localProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->exists();
+    }
+
+    public static function getLatestLocalSnapshotForProduct(int $product_id): ?self
+    {
+        if ($product_id <= 0) {
+            return null;
+        }
+
+        $backup = static::query()
+            ->localProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->orderByDesc('id')
+            ->first();
+
+        return $backup instanceof self ? $backup : null;
+    }
+
+    public static function getLatestExternalSnapshotForProductShop(
+        int $product_id,
+        int $shop_id,
+        ?int $external_product_id = null
+    ): ?self {
+        if ($product_id <= 0 || $shop_id <= 0) {
+            return null;
+        }
+
+        $query = static::query()
+            ->externalProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->where('shop_id', $shop_id);
+
+        if ($external_product_id !== null && $external_product_id > 0) {
+            $query->where('external_product_id', (string) $external_product_id);
+        }
+
+        $backup = $query
+            ->orderByDesc('id')
+            ->first();
+
+        return $backup instanceof self ? $backup : null;
     }
 }

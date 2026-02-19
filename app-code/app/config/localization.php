@@ -13,7 +13,7 @@ return [
      *
      * @see https://laravel-lang.com/configuration.html#aliases
      */
-    'aliases'           => [
+    'aliases' => [
         // \LaravelLang\LocaleList\Locale::German->value => 'de-DE',
         // \LaravelLang\LocaleList\Locale::GermanSwitzerland->value => 'de-CH',
     ],
@@ -27,7 +27,7 @@ return [
      * By default, false
      */
     'smart_punctuation' => [
-        'enable' => (bool)env('LOCALIZATION_SMART_ENABLED', false),
+        'enable' => (bool) env('LOCALIZATION_SMART_ENABLED', false),
 
         'common' => [
             'double_quote_opener' => '“',
@@ -45,5 +45,5 @@ return [
             ],
         ],
     ],
-    'locale_parameter'  => 'locale',
+    'locale_parameter' => 'locale',
 ];

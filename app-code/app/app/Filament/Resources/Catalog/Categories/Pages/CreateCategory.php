@@ -16,15 +16,15 @@ class CreateCategory extends CreateRecord
     protected static string $resource = CategoryResource::class;
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     protected function handleRecordCreation(array $data): Category
     {
         /** @var Category $category */
         $category = Category::query()->create([
-            'parent_id' => $data['parent_id'] ?? null,
+            'parent_id'  => $data['parent_id'] ?? null,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
-            'is_active' => (bool) ($data['is_active'] ?? true),
+            'is_active'  => (bool) ($data['is_active'] ?? true),
         ]);
 
         CategoryForm::syncCategoryAdditionalData($category, $data);

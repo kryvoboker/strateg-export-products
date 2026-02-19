@@ -6,8 +6,8 @@ namespace App\Filament\Resources\Catalog\Attributes\Pages;
 
 use App\Filament\Resources\Catalog\Attributes\AttributeResource;
 use App\Filament\Resources\Catalog\Attributes\Schemas\AttributeForm;
-use App\Jobs\ProcessAttributeNameTranslationJob;
 use App\Filament\Resources\Trait\EditPageTrait;
+use App\Jobs\ProcessAttributeNameTranslationJob;
 use App\Models\Attributes\Attribute;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
@@ -21,7 +21,8 @@ class EditAttribute extends EditRecord
 
     #[Locked]
     public Model|int|string|null|Attribute $record;
-    protected static string                $resource = AttributeResource::class;
+
+    protected static string $resource = AttributeResource::class;
 
     protected function getHeaderActions(): array
     {
@@ -33,8 +34,8 @@ class EditAttribute extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         if ($this->record instanceof Attribute) {
-            $data['attribute_name'] = (string)($this->record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '');
-            $data['shop_ids']       = $this->record->shops()->pluck('shops.id')->map(static fn($shop_id): int => (int)$shop_id)->all();
+            $data['attribute_name'] = (string) ($this->record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '');
+            $data['shop_ids']       = $this->record->shops()->pluck('shops.id')->map(static fn ($shop_id): int => (int) $shop_id)->all();
         }
 
         return $data;
@@ -43,8 +44,8 @@ class EditAttribute extends EditRecord
     protected function handleRecordUpdate(Model|Attribute $record, array $data): Attribute
     {
         $record->update([
-            'sort_order' => (int)Arr::get($data, 'sort_order', 1),
-            'is_active'  => (bool)Arr::get($data, 'is_active', true),
+            'sort_order' => (int) Arr::get($data, 'sort_order', 1),
+            'is_active'  => (bool) Arr::get($data, 'is_active', true),
         ]);
 
         AttributeForm::syncAttributeAdditionalData($record, $data);

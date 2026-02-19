@@ -66,7 +66,7 @@ class CategoriesTable
                             'descriptions',
                             static fn (Builder $description_query): Builder => $description_query->whereRaw(
                                 'LOWER(name) LIKE ?',
-                                ['%' . mb_strtolower(trim($search)) . '%']
+                                ['%'.mb_strtolower(trim($search)).'%']
                             )
                         )
                     )
@@ -198,14 +198,14 @@ class CategoriesTable
                                 ->title(__('admin/categories/categories.messages.bulk_bind_completed'))
                                 ->body(__('admin/categories/categories.messages.bulk_bind_result', [
                                     'categories_total' => $categories_total,
-                                    'shops_total' => count($shop_ids),
+                                    'shops_total'      => count($shop_ids),
                                 ]))
                                 ->success()
                                 ->send();
                         }),
                     DeleteBulkAction::make(),
                 ])
-                ->dropdownWidth(Width::Large),
+                    ->dropdownWidth(Width::Large),
             ]);
     }
 
@@ -230,7 +230,7 @@ class CategoriesTable
             return $name_from_db;
         }
 
-        return '#' . (int) $category->id;
+        return '#'.(int) $category->id;
     }
 
     private static function resolveCategoryShopsText(Category $category): string
@@ -261,7 +261,7 @@ class CategoriesTable
     private static function renderChildrenTreeHtml(int $root_category_id): string
     {
         if ($root_category_id <= 0) {
-            return '<p>' . e(__('admin/categories/categories.messages.no_children')) . '</p>';
+            return '<p>'.e(__('admin/categories/categories.messages.no_children')).'</p>';
         }
 
         $children = Category::query()
@@ -277,14 +277,14 @@ class CategoriesTable
             ->get(['id', 'parent_id', 'sort_order']);
 
         if ($children->isEmpty()) {
-            return '<p>' . e(__('admin/categories/categories.messages.no_children')) . '</p>';
+            return '<p>'.e(__('admin/categories/categories.messages.no_children')).'</p>';
         }
 
         return self::renderTreeListHtml($children->all());
     }
 
     /**
-     * @param array<int, Category> $categories
+     * @param  array<int, Category>  $categories
      */
     private static function renderTreeListHtml(array $categories): string
     {
@@ -313,11 +313,11 @@ class CategoriesTable
                 ->all();
 
             $category_name = self::resolveCategoryDisplayName($category);
-            $shops_text = self::resolveCategoryShopsText($category);
+            $shops_text    = self::resolveCategoryShopsText($category);
 
             $html .= '<li>';
-            $html .= '<span style="font-weight: 600;">' . e($category_name) . '</span>';
-            $html .= '<span style="color: #6b7280;"> (' . e($shops_text) . ')</span>';
+            $html .= '<span style="font-weight: 600;">'.e($category_name).'</span>';
+            $html .= '<span style="color: #6b7280;"> ('.e($shops_text).')</span>';
 
             if ($child_categories !== []) {
                 $html .= self::renderTreeListHtml($child_categories);
@@ -341,7 +341,7 @@ class CategoriesTable
         }
 
         $category_ids = [$root_category_id];
-        $queue = [$root_category_id];
+        $queue        = [$root_category_id];
 
         while ($queue !== []) {
             $current_parent_id = (int) array_shift($queue);
@@ -360,7 +360,7 @@ class CategoriesTable
                 }
 
                 $category_ids[] = $child_id;
-                $queue[] = $child_id;
+                $queue[]        = $child_id;
             }
         }
 

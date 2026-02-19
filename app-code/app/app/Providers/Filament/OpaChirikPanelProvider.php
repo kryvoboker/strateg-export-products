@@ -45,15 +45,15 @@ class OpaChirikPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Catalog->getLabel())
+                    ->label(fn () => AdminNavigationGroupEnum::Catalog->getLabel())
                     ->collapsed(),
 
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Shops->getLabel())
+                    ->label(fn () => AdminNavigationGroupEnum::Shops->getLabel())
                     ->collapsed(),
 
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Users->getLabel())
+                    ->label(fn () => AdminNavigationGroupEnum::Users->getLabel())
                     ->collapsed(false),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
@@ -76,7 +76,7 @@ class OpaChirikPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
-                LogFilamentErrors::class
+                LogFilamentErrors::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

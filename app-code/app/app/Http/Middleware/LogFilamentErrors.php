@@ -15,10 +15,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyFoundationResponse;
 class LogFilamentErrors
 {
     /**
-     * @param Request                                       $request
-     * @param Closure(Request): (SymfonyFoundationResponse) $next
-     *
-     * @return JsonResponse|Response|RedirectResponse
+     * @param  Closure(Request): (SymfonyFoundationResponse)  $next
      */
     public function handle(Request $request, Closure $next): JsonResponse|Response|RedirectResponse
     {
@@ -28,13 +25,13 @@ class LogFilamentErrors
         $is_filament = $request->is('admin/*');
         $is_livewire = $request->is('livewire/*');
 
-        $message = 'Filament error' . ($is_livewire ? ' (Livewire)' : '');
+        $message = 'Filament error'.($is_livewire ? ' (Livewire)' : '');
 
         if ($response->getStatusCode() >= SymfonyFoundationResponse::HTTP_BAD_REQUEST && ($is_filament || $is_livewire)) {
             $exception = $response->exception;
 
             if ($exception) {
-                $message .= ': ' . $exception->getMessage();
+                $message .= ': '.$exception->getMessage();
             }
 
             Log::channel('stack')->error($message, [

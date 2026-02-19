@@ -40,9 +40,9 @@ class ProductAttributeTextAiTranslatorService extends AiDbCachedTranslatorAbstra
 
         if ($product_attribute_text_hash === null) {
             $product_attribute_text_hash = ProductAttributeTextHash::create([
-                'product_id' => $this->product_id,
+                'product_id'   => $this->product_id,
                 'attribute_id' => $this->attribute_id,
-                'hash' => $hash,
+                'hash'         => $hash,
             ]);
         }
 

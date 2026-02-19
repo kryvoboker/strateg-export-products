@@ -11,9 +11,6 @@ use Illuminate\Support\Facades\Log;
 
 trait ProcessSlugsTrait
 {
-    /**
-     * @return bool
-     */
     protected function updateOrCreateSlugs(): bool
     {
         foreach ($this->slugs as $language_id => $slug_data) {
@@ -23,7 +20,7 @@ trait ProcessSlugsTrait
 
             try {
                 $this->record->slugs()->updateOrCreate(
-                    ['language_id' => (int)$language_id],
+                    ['language_id' => (int) $language_id],
                     ['slug' => $slug_data['name']]
                 );
             } catch (Exception $e) {
@@ -42,18 +39,13 @@ trait ProcessSlugsTrait
         return true;
     }
 
-    /**
-     * @param array $data
-     *
-     * @return void
-     */
     protected function getSlugs(array &$data): void
     {
         // Load slugs
         $slugs = $this->record->slugs()
             ->get()
             ->keyBy('language_id')
-            ->map(fn(Slug $slug): array => [
+            ->map(fn (Slug $slug): array => [
                 'language_id' => $slug->language_id,
                 'name'        => $slug->slug,
             ])

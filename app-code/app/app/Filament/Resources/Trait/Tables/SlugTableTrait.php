@@ -9,11 +9,6 @@ use Filament\Tables\Columns\TextColumn;
 
 trait SlugTableTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getSlugTableField(array $params = []): Column
     {
         return TextColumn::make($params['field_name'] ?? 'slugs.slug')

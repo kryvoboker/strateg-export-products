@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Jobs;
 
+use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Jobs\ProcessProductUpdateItemJob;
+use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductBackups;
@@ -111,6 +113,14 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
         self::assertSame(ProductUpdateItemsStatusEnum::FAILED->value, $update_item->status);
         self::assertStringContainsString('Backup API failed', (string) $update_item->error_message);
         self::assertSame(0, ProductBackups::query()->count());
+        self::assertSame(1, ProductExportItem::query()->count());
+
+        $product_export_item = ProductExportItem::query()->first();
+        self::assertInstanceOf(ProductExportItem::class, $product_export_item);
+        self::assertSame(ProductUpdateBatch::class, (string) $product_export_item->batchable_type);
+        self::assertSame((int) $batch->id, (int) $product_export_item->batchable_id);
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $product_export_item->status);
+        self::assertStringContainsString('Backup API failed', (string) $product_export_item->error_message);
 
         Http::assertSentCount(1);
         Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/backup'));
@@ -123,6 +133,7 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
         Schema::dropIfExists('product_backups');
         Schema::dropIfExists('product_update_items');
         Schema::dropIfExists('product_update_batches');
+        Schema::dropIfExists('product_export_items');
         Schema::dropIfExists('product_shop');
         Schema::dropIfExists('products');
         Schema::dropIfExists('shops');
@@ -189,6 +200,18 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             $table->unsignedBigInteger('product_id')->nullable();
             $table->json('payload')->nullable();
             $table->string('status', 100)->nullable()->default('new');
+            $table->text('error_message')->nullable();
+            $table->timestamp('processed_at')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('product_export_items', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('batchable_type');
+            $table->unsignedBigInteger('batchable_id');
+            $table->unsignedBigInteger('product_id')->nullable();
+            $table->json('payload')->nullable();
+            $table->string('status', 100)->nullable();
             $table->text('error_message')->nullable();
             $table->timestamp('processed_at')->nullable();
             $table->timestamps();

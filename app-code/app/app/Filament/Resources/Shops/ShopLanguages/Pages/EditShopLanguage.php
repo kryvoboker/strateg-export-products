@@ -19,7 +19,8 @@ class EditShopLanguage extends EditRecord
 {
     use CommonTrait;
 
-    protected static string                   $resource = ShopLanguageResource::class;
+    protected static string $resource = ShopLanguageResource::class;
+
     #[Locked]
     public string|int|null|Model|ShopLanguage $record;
 
@@ -34,9 +35,6 @@ class EditShopLanguage extends EditRecord
     }
 
     /**
-     * @param array $data
-     *
-     * @return array
      * @throws Halt
      */
     protected function mutateFormDataBeforeSave(array $data): array

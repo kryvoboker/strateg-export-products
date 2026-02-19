@@ -5,7 +5,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class() extends Migration
 {
     /**
      * Run the migrations.
@@ -15,10 +15,7 @@ return new class extends Migration
         Schema::create('product_export_items', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('product_import_batch_id')
-                ->constrained()
-                ->cascadeOnUpdate()
-                ->cascadeOnDelete();
+            $table->morphs('batchable');
 
             $table->foreignId('product_id')
                 ->nullable()
@@ -41,14 +38,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['product_import_batch_id', 'status']);
-
-            // Create JSONB indexes using raw SQL
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_export_items_payload_product_id ON " . config('database.db_prefix') . "product_export_items ((payload->>'product_id'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_export_items_payload_model ON " . config('database.db_prefix') . "product_export_items ((payload->>'model'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_export_items_payload_sku ON " . config('database.db_prefix') . "product_export_items ((payload->>'sku'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_export_items_payload_ean ON " . config('database.db_prefix') . "product_export_items ((payload->>'ean'))");
-            DB::statement("CREATE INDEX IF NOT EXISTS " . config('database.db_prefix') . "product_export_items_payload_description_name ON " . config('database.db_prefix') . "product_export_items (LEFT(payload->'description'->>'name', 2000))");
+            $table->index(['batchable_type', 'batchable_id', 'status']);
         });
     }
 

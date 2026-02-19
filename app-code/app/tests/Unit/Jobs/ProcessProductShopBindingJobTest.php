@@ -25,4 +25,3 @@ class ProcessProductShopBindingJobTest extends TestCase
         self::assertSame(120, $job->uniqueFor);
     }
 }
-

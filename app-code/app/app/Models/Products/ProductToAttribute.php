@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Products;
 
-use App\Models\Attributes\ProductAttribute;
+use App\Models\Attributes\Attribute;
 use App\Models\Shops\ShopLanguage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,8 +26,8 @@ class ProductToAttribute extends Model
     protected function casts(): array
     {
         return [
-            'product_id' => 'integer',
-            'attribute_id' => 'integer',
+            'product_id'       => 'integer',
+            'attribute_id'     => 'integer',
             'shop_language_id' => 'integer',
         ];
     }
@@ -41,11 +41,11 @@ class ProductToAttribute extends Model
     }
 
     /**
-     * @return BelongsTo<ProductAttribute, $this>
+     * @return BelongsTo<Attribute, $this>
      */
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(ProductAttribute::class);
+        return $this->belongsTo(Attribute::class);
     }
 
     /**

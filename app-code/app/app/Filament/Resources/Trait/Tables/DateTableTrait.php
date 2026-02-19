@@ -9,11 +9,6 @@ use Filament\Tables\Columns\TextColumn;
 
 trait DateTableTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getCreatedAtTableField(array $params = []): Column
     {
         return TextColumn::make('created_at')
@@ -23,11 +18,6 @@ trait DateTableTrait
             ->toggleable(isToggledHiddenByDefault: $params['isToggledHiddenByDefault'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getDateAvailableTableField(array $params = []): Column
     {
         return TextColumn::make('date_available')
@@ -37,11 +27,6 @@ trait DateTableTrait
             ->toggleable(isToggledHiddenByDefault: $params['isToggledHiddenByDefault'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getDateAddedTableField(array $params = []): Column
     {
         return TextColumn::make('date_added')
@@ -51,11 +36,6 @@ trait DateTableTrait
             ->toggleable(isToggledHiddenByDefault: $params['isToggledHiddenByDefault'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getUpdatedAtTableField(array $params = []): Column
     {
         return TextColumn::make('updated_at')
@@ -65,11 +45,6 @@ trait DateTableTrait
             ->toggleable(isToggledHiddenByDefault: $params['isToggledHiddenByDefault'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getEmailVerifiedAtTableField(array $params = []): Column
     {
         return TextColumn::make('email_verified_at')

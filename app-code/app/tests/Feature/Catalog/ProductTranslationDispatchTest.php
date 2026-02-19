@@ -31,34 +31,34 @@ class ProductTranslationDispatchTest extends TestCase
         Queue::fake();
 
         $product = Product::query()->create([
-            'model' => 'TEST-MODEL',
-            'sku' => 'TEST-SKU',
+            'model'     => 'TEST-MODEL',
+            'sku'       => 'TEST-SKU',
             'is_active' => true,
         ]);
 
         DB::table('product_to_attributes')->insert([
-            'product_id' => (int) $product->id,
-            'attribute_id' => 501,
+            'product_id'       => (int) $product->id,
+            'attribute_id'     => 501,
             'shop_language_id' => 1,
-            'text' => 'Value',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'text'             => 'Value',
+            'created_at'       => now(),
+            'updated_at'       => now(),
         ]);
 
         DB::table('category_product')->insert([
-            'product_id' => (int) $product->id,
+            'product_id'  => (int) $product->id,
             'category_id' => 301,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at'  => now(),
+            'updated_at'  => now(),
         ]);
 
         DB::table('product_shop')->insert([
-            'product_id' => (int) $product->id,
-            'shop_id' => 11,
+            'product_id'              => (int) $product->id,
+            'shop_id'                 => 11,
             'product_import_batch_id' => null,
-            'external_product_id' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'external_product_id'     => null,
+            'created_at'              => now(),
+            'updated_at'              => now(),
         ]);
 
         $page = new CreateProduct();
@@ -131,7 +131,7 @@ class ProductTranslationDispatchTest extends TestCase
     }
 
     /**
-     * @param array<int, mixed> $arguments
+     * @param  array<int, mixed>  $arguments
      */
     private function invokeMethod(object $target, string $method_name, array $arguments = []): mixed
     {

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Jobs;
 
+use App\Jobs\ProcessProductImportBatchJob;
 use App\Jobs\ProcessProductUpdateBatchJob;
 use App\Jobs\ProcessProductUpdateItemJob;
-use App\Jobs\ProcessProductImportBatchJob;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -16,14 +16,14 @@ class ProductUpdateInstructionsLogicTest extends TestCase
     {
         $job = new ProcessProductUpdateBatchJob(1);
 
-        $no_change_instruction = $this->invokePrivateMethod($job, 'buildFieldInstruction', [' X ', false]);
-        $delete_instruction    = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['', false]);
-        $skip_instruction      = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['', true]);
-        $set_instruction       = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['MODEL-001', true]);
+        $delete_instruction_latin_x    = $this->invokePrivateMethod($job, 'buildFieldInstruction', [' X ']);
+        $delete_instruction_cyrillic_x = $this->invokePrivateMethod($job, 'buildFieldInstruction', [' х ']);
+        $no_change_instruction         = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['']);
+        $set_instruction               = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['MODEL-001']);
 
+        self::assertSame(['action' => 'delete', 'value' => null], $delete_instruction_latin_x);
+        self::assertSame(['action' => 'delete', 'value' => null], $delete_instruction_cyrillic_x);
         self::assertSame(['action' => 'no_change', 'value' => null], $no_change_instruction);
-        self::assertSame(['action' => 'delete', 'value' => null], $delete_instruction);
-        self::assertSame(['action' => 'skip', 'value' => null], $skip_instruction);
         self::assertSame(['action' => 'set', 'value' => 'MODEL-001'], $set_instruction);
     }
 
@@ -51,6 +51,29 @@ class ProductUpdateInstructionsLogicTest extends TestCase
 
         $all_empty = $this->invokePrivateMethod($job, 'isAllUniqueValuesEmpty', [$unique_values]);
         self::assertFalse($all_empty);
+    }
+
+    public function test_batch_job_extract_unique_values_treats_delete_marker_as_empty(): void
+    {
+        $job = new ProcessProductUpdateBatchJob(1);
+
+        /** @var array<string, string> $product_row */
+        $product_row = [
+            'product_id'          => 'x',
+            'shop_id'             => 'Х',
+            'external_product_id' => ' x ',
+            'model'               => 'х',
+            'ean'                 => 'X',
+        ];
+
+        /** @var array{product_id:string,shop_id:string,external_product_id:string,model:string,ean:string} $unique_values */
+        $unique_values = $this->invokePrivateMethod($job, 'extractUniqueValuesFromProductRow', [$product_row]);
+
+        self::assertSame('', $unique_values['product_id']);
+        self::assertSame('', $unique_values['shop_id']);
+        self::assertSame('', $unique_values['external_product_id']);
+        self::assertSame('', $unique_values['model']);
+        self::assertSame('', $unique_values['ean']);
     }
 
     public function test_update_item_job_build_api_update_directives_removes_skip_and_invalid_actions(): void
@@ -103,10 +126,10 @@ class ProductUpdateInstructionsLogicTest extends TestCase
             'sku'            => ['action' => 'set', 'value' => 'SKU-1'],
         ];
 
-        $is_active = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'is_active']);
+        $is_active      = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'is_active']);
         $date_available = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'date_available']);
-        $sku = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'sku']);
-        $missing = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'minimum']);
+        $sku            = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'sku']);
+        $missing        = $this->invokePrivateMethod($job, 'resolveSheetFieldInstruction', [$sheet_fields, 'minimum']);
 
         self::assertSame(['action' => 'set', 'value' => '1'], $is_active);
         self::assertSame(['action' => 'set', 'value' => '2026-02-17'], $date_available);
@@ -119,12 +142,12 @@ class ProductUpdateInstructionsLogicTest extends TestCase
         $job = new ProcessProductUpdateBatchJob(1);
 
         $cases = [
-            'Product Id'     => 'product_id',
-            'product_id'     => 'product_id',
-            'product id'     => 'product_id',
-            'ProductId'      => 'product_id',
-            'Shop-Language'  => 'shop_language',
-            'MetaDescription'=> 'meta_description',
+            'Product Id'      => 'product_id',
+            'product_id'      => 'product_id',
+            'product id'      => 'product_id',
+            'ProductId'       => 'product_id',
+            'Shop-Language'   => 'shop_language',
+            'MetaDescription' => 'meta_description',
         ];
 
         foreach ($cases as $input => $expected) {
@@ -138,12 +161,12 @@ class ProductUpdateInstructionsLogicTest extends TestCase
         $job = new ProcessProductImportBatchJob(1);
 
         $cases = [
-            'Product Id'        => 'product_id',
-            'product_id'        => 'product_id',
-            'product id'        => 'product_id',
-            'ProductId'         => 'product_id',
-            'Shop Language Code'=> 'shop_language_code',
-            'ShopLanguageCode'  => 'shop_language_code',
+            'Product Id'         => 'product_id',
+            'product_id'         => 'product_id',
+            'product id'         => 'product_id',
+            'ProductId'          => 'product_id',
+            'Shop Language Code' => 'shop_language_code',
+            'ShopLanguageCode'   => 'shop_language_code',
         ];
 
         foreach ($cases as $input => $expected) {

@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class() extends Migration
 {
     /**
      * Run the migrations.
@@ -22,9 +22,10 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->nullOnDelete();
 
-            $table->string('query_value')->nullable(false);
-            $table->string('keyword')->nullable(false)->index();
-            $table->unsignedSmallInteger('sort_order')->nullable(false)->default(1);
+            $table->string('query_key')->nullable();
+            $table->string('query_value')->nullable();
+            $table->string('keyword')->nullable()->index();
+            $table->unsignedSmallInteger('sort_order')->nullable()->default(1);
 
             $table->timestamps();
 

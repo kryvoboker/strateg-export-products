@@ -21,8 +21,6 @@ class ListUsers extends ListRecords
 
     /**
      * Get page title
-     *
-     * @return string
      */
     public function getTitle(): string
     {
@@ -31,8 +29,6 @@ class ListUsers extends ListRecords
 
     /**
      * Get page heading
-     *
-     * @return string|null
      */
     public function getHeading(): ?string
     {

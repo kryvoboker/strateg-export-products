@@ -23,7 +23,7 @@ class ProcessAttributeNameTranslationJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * @param list<int> $shop_ids
+     * @param  list<int>  $shop_ids
      */
     public function __construct(
         public int $attribute_id,
@@ -49,10 +49,10 @@ class ProcessAttributeNameTranslationJob implements ShouldQueue
         }
 
         $source_language_code = $this->resolveLanguageCode((int) ($source_description->shop_language_id ?? 0), 'uk');
-        $target_languages = $this->resolveTargetLanguages($this->shop_ids);
+        $target_languages     = $this->resolveTargetLanguages($this->shop_ids);
 
         foreach ($target_languages as $target_language) {
-            $shop_language_id = (int) ($target_language->id ?? 0);
+            $shop_language_id     = (int) ($target_language->id ?? 0);
             $target_language_code = $this->resolveLanguageCode($shop_language_id, '');
             if ($shop_language_id <= 0 || $target_language_code === '') {
                 continue;
@@ -81,11 +81,11 @@ class ProcessAttributeNameTranslationJob implements ShouldQueue
                 );
             } catch (Throwable $exception) {
                 Log::channel('stack')->warning('Attribute name translation failed', [
-                    'attribute_id' => $this->attribute_id,
-                    'shop_language_id' => $shop_language_id,
+                    'attribute_id'         => $this->attribute_id,
+                    'shop_language_id'     => $shop_language_id,
                     'source_language_code' => $source_language_code,
                     'target_language_code' => $target_language_code,
-                    'message' => $exception->getMessage(),
+                    'message'              => $exception->getMessage(),
                 ]);
             }
         }
@@ -110,7 +110,7 @@ class ProcessAttributeNameTranslationJob implements ShouldQueue
     }
 
     /**
-     * @param list<int> $shop_ids
+     * @param  list<int>  $shop_ids
      * @return Collection<int, ShopLanguage>
      */
     private function resolveTargetLanguages(array $shop_ids): Collection

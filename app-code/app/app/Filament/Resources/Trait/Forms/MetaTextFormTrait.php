@@ -15,11 +15,6 @@ use Illuminate\Database\Eloquent\Collection;
 
 trait MetaTextFormTrait
 {
-    /**
-     * @param Collection $active_languages
-     *
-     * @return array
-     */
     protected static function createMetaTextsLanguageFormTabs(Collection $active_languages): array
     {
         $tabs = [];
@@ -56,11 +51,6 @@ trait MetaTextFormTrait
         return $tabs;
     }
 
-    /**
-     * @param Collection $active_languages
-     *
-     * @return Tabs\Tab
-     */
     protected static function createMetaTextsFormTabs(Collection $active_languages): Tabs\Tab
     {
         return Tabs\Tab::make(__('admin/default.tabs.meta_texts'))
@@ -80,8 +70,7 @@ trait MetaTextFormTrait
     /**
      * Create language tabs for translations
      *
-     * @param Collection<Language> $active_languages
-     *
+     * @param  Collection<Language>  $active_languages
      * @return array<Tabs\Tab>
      */
     protected static function processCreateTranslationsFormTabs(Collection $active_languages): array
@@ -124,9 +113,7 @@ trait MetaTextFormTrait
     /**
      * Create translations tab with language tabs
      *
-     * @param Collection<Language> $active_languages
-     *
-     * @return Tabs\Tab
+     * @param  Collection<Language>  $active_languages
      */
     protected static function createTranslationsFormTabs(Collection $active_languages): Tabs\Tab
     {

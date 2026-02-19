@@ -36,7 +36,7 @@ class AttributeNameAiTranslatorService extends AiDbCachedTranslatorAbstract
     {
         $attribute_name_hash = AttributeNameHash::query()->firstOrCreate([
             'attribute_id' => (int) $this->attribute_id,
-            'hash' => $hash,
+            'hash'         => $hash,
         ]);
 
         return $attribute_name_hash

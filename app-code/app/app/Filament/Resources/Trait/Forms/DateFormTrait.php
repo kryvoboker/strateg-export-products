@@ -8,11 +8,6 @@ use Filament\Forms\Components\DateTimePicker;
 
 trait DateFormTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return DateTimePicker
-     */
     protected static function getDateAvailableFormField(array $params = []): DateTimePicker
     {
         return DateTimePicker::make($params['field_name'] ?? 'date_available')
@@ -22,11 +17,6 @@ trait DateFormTrait
             ->required($params['required'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return DateTimePicker
-     */
     protected static function getEmailVerifiedAtFormField(array $params = []): DateTimePicker
     {
         return DateTimePicker::make($params['field_name'] ?? 'email_verified_at')
@@ -36,11 +26,6 @@ trait DateFormTrait
             ->required($params['required'] ?? false);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return DateTimePicker
-     */
     protected static function getDateAddedFormField(array $params = []): DateTimePicker
     {
         return DateTimePicker::make($params['field_name'] ?? 'date_added')
@@ -50,11 +35,6 @@ trait DateFormTrait
             ->required($params['required'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return DateTimePicker
-     */
     protected static function getDateStartFormField(array $params = []): DateTimePicker
     {
         return DateTimePicker::make($params['field_name'] ?? 'date_start')
@@ -64,11 +44,6 @@ trait DateFormTrait
             ->required($params['required'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return DateTimePicker
-     */
     protected static function getDateEndFormField(array $params = []): DateTimePicker
     {
         return DateTimePicker::make($params['field_name'] ?? 'date_end')

@@ -17,7 +17,7 @@ class ViewProductImportBatchItemsPageTest extends TestCase
             $this->markTestSkipped('Test requires users and product_import_batches tables.');
         }
 
-        $user = User::query()->first();
+        $user  = User::query()->first();
         $batch = ProductImportBatch::query()->first();
 
         if ($user === null || $batch === null) {

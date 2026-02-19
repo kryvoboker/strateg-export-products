@@ -31,6 +31,7 @@ namespace Tests\Unit\Models {
     class ProductImportItemProductLinkingTest extends TestCase
     {
         private static ?Capsule $capsule = null;
+
         private static ?Container $container = null;
 
         public static function setUpBeforeClass(): void
@@ -55,7 +56,7 @@ namespace Tests\Unit\Models {
             Facade::setFacadeApplication(self::$container);
             self::$container->instance('db', self::$capsule->getDatabaseManager());
             self::$container->instance('config', new Repository([
-                'database.db_prefix' => '',
+                'database.db_prefix'         => '',
                 'app.ai_translation_enabled' => false,
             ]));
             self::$container->instance('translator', new Translator(new ArrayLoader(), 'en'));
@@ -152,7 +153,7 @@ namespace Tests\Unit\Models {
             Facade::setFacadeApplication(self::$container);
             self::$container->instance('db', self::$capsule->getDatabaseManager());
             self::$container->instance('config', new Repository([
-                'database.db_prefix' => '',
+                'database.db_prefix'         => '',
                 'app.ai_translation_enabled' => false,
             ]));
             self::$container->instance('translator', new Translator(new ArrayLoader(), 'en'));

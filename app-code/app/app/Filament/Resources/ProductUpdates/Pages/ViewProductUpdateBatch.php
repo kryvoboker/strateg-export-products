@@ -37,7 +37,6 @@ class ViewProductUpdateBatch extends ViewRecord
 
     public function getTitle(): string
     {
-        return __('admin/product_updates/batches.navigation_label') . ' #' . (string) $this->record->id;
+        return __('admin/product_updates/batches.navigation_label').' #'.(string) $this->record->id;
     }
 }
-

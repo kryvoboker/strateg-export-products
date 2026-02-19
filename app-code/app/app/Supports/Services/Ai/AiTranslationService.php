@@ -14,10 +14,10 @@ use Throwable;
 final readonly class AiTranslationService
 {
     public function __construct(
-        private CategoryNameAiTranslatorService         $category_name_ai_translator_service,
-        private AttributeNameAiTranslatorService        $attribute_name_ai_translator_service,
-        private ProductNameAiTranslatorService          $product_name_ai_translator_service,
-        private ProductDescriptionAiTranslatorService   $product_description_ai_translator_service,
+        private CategoryNameAiTranslatorService $category_name_ai_translator_service,
+        private AttributeNameAiTranslatorService $attribute_name_ai_translator_service,
+        private ProductNameAiTranslatorService $product_name_ai_translator_service,
+        private ProductDescriptionAiTranslatorService $product_description_ai_translator_service,
         private ProductAttributeTextAiTranslatorService $product_attribute_text_ai_translator_service,
     ) {}
 
@@ -46,7 +46,7 @@ final readonly class AiTranslationService
      */
     public function productName(int $product_id, string $prompt): string
     {
-//        $service = app(ProductNameAiTranslatorService::class);
+        //        $service = app(ProductNameAiTranslatorService::class);
 
         return $this->product_name_ai_translator_service
             ->setProductId($product_id)
@@ -58,7 +58,7 @@ final readonly class AiTranslationService
      */
     public function productDescription(int $product_id, string $prompt): string
     {
-//        $service = app(ProductDescriptionAiTranslatorService::class);
+        //        $service = app(ProductDescriptionAiTranslatorService::class);
 
         return $this->product_description_ai_translator_service
             ->setProductId($product_id)
@@ -70,7 +70,7 @@ final readonly class AiTranslationService
      */
     public function productAttributeText(int $product_id, int $attribute_id, string $prompt): string
     {
-//        $service = app(ProductAttributeTextAiTranslatorService::class);
+        //        $service = app(ProductAttributeTextAiTranslatorService::class);
 
         return $this->product_attribute_text_ai_translator_service
             ->setProductId($product_id)

@@ -20,10 +20,10 @@ final class ApiTelegramMessageService
      * Sends a message to Telegram chat
      * Falls back to plain text message if markdown parsing fails
      *
-     * @param int   $chat_id Chat identifier
-     * @param array $params  Additional parameters for the message
-     *
+     * @param  int  $chat_id  Chat identifier
+     * @param  array  $params  Additional parameters for the message
      * @return ServerResponse Response from Telegram API or null on error
+     *
      * @throws TelegramException
      */
     public function sendMessage(int $chat_id, array $params): ServerResponse
@@ -39,7 +39,7 @@ final class ApiTelegramMessageService
         $server_response = Request::sendMessage(array_merge($data, $params));
 
         // If error is related to entity parsing (markdown formatting), retry with plain text
-        if (!$server_response->isOk() &&
+        if (! $server_response->isOk() &&
             $server_response->getErrorCode() === 400 &&
             str_contains($server_response->getDescription(), "can't parse entities")) {
 
@@ -50,7 +50,7 @@ final class ApiTelegramMessageService
             Log::channel('stack')->info(
                 'Retrying to send message without formatting',
                 [
-                    'chat_id' => $chat_id
+                    'chat_id' => $chat_id,
                 ]
             );
 
@@ -63,7 +63,7 @@ final class ApiTelegramMessageService
         }
 
         Log::channel('stack')->error(
-            'Telegram sendMessage error: ' . $server_response->getDescription(),
+            'Telegram sendMessage error: '.$server_response->getDescription(),
             [
                 'error_code' => $server_response->getErrorCode(),
                 'chat_id'    => $chat_id,
@@ -74,12 +74,6 @@ final class ApiTelegramMessageService
         return Request::emptyResponse();
     }
 
-    /**
-     * @param int $chat_id
-     * @param int $message_id
-     *
-     * @return ServerResponse
-     */
     public function deleteMessage(int $chat_id, int $message_id): ServerResponse
     {
         $data = [
@@ -96,11 +90,6 @@ final class ApiTelegramMessageService
         return Request::emptyResponse();
     }
 
-    /**
-     * @param array $params
-     *
-     * @return ServerResponse
-     */
     public function answerCallbackQuery(array $params): ServerResponse
     {
         $data = [
@@ -110,12 +99,6 @@ final class ApiTelegramMessageService
         return Request::answerCallbackQuery(array_merge($data, $params));
     }
 
-    /**
-     * @param int                           $chat_id
-     * @param TelegramChatMessageActionEnum $chat_message_action_enum
-     *
-     * @return ServerResponse
-     */
     public function sendChatAction(int $chat_id, TelegramChatMessageActionEnum $chat_message_action_enum): ServerResponse
     {
         $data = [
@@ -133,21 +116,16 @@ final class ApiTelegramMessageService
     }
 
     /**
-     * @param int    $chat_id
-     * @param string $photo_path
-     * @param array  $params
-     *
-     * @return ServerResponse
      * @throws TelegramException
      */
     public function sendPhoto(int $chat_id, string $photo_path, array $params = []): ServerResponse
     {
         $data = [
-            'chat_id' => (string)$chat_id,
+            'chat_id' => (string) $chat_id,
             'photo'   => Request::encodeFile(Storage::path($photo_path)),
         ];
 
-        if (!empty($params)) {
+        if (! empty($params)) {
             $data = array_merge($data, $params);
         }
 
@@ -164,20 +142,19 @@ final class ApiTelegramMessageService
      * Send document to Telegram chat with automatic type detection
      * Determines document format and sends with appropriate MIME type
      *
-     * @param int    $chat_id     Chat identifier
-     * @param string $file_path   Path to file (using Laravel Storage)
-     * @param array  $params      Additional parameters for the document
-     * @param string $custom_name Custom filename (optional)
-     *
+     * @param  int  $chat_id  Chat identifier
+     * @param  string  $file_path  Path to file (using Laravel Storage)
+     * @param  array  $params  Additional parameters for the document
+     * @param  string  $custom_name  Custom filename (optional)
      * @return ServerResponse Response from Telegram API or null on error
      */
     public function sendDocument(int $chat_id, string $file_path, array $params = [], string $custom_name = ''): ServerResponse
     {
         try {
             // Check if file exists
-            if (!Storage::exists($file_path)) {
+            if (! Storage::exists($file_path)) {
                 Log::channel('stack')->warning('Document file not found', [
-                    'path' => $file_path
+                    'path' => $file_path,
                 ]);
 
                 return Request::emptyResponse();
@@ -192,7 +169,7 @@ final class ApiTelegramMessageService
             ];
 
             // Merge additional parameters
-            if (!empty($params)) {
+            if (! empty($params)) {
                 $data = array_merge($data, $params);
             }
 
@@ -204,7 +181,7 @@ final class ApiTelegramMessageService
             }
 
             Log::channel('stack')->error(
-                'Telegram sendDocument error: ' . $server_response->getDescription(),
+                'Telegram sendDocument error: '.$server_response->getDescription(),
                 [
                     'error_code' => $server_response->getErrorCode(),
                     'chat_id'    => $chat_id,
@@ -218,7 +195,7 @@ final class ApiTelegramMessageService
             Log::channel('stack')->error('Exception in sendDocument', [
                 'error'     => $e->getMessage(),
                 'chat_id'   => $chat_id,
-                'file_path' => $file_path
+                'file_path' => $file_path,
             ]);
 
             return Request::emptyResponse();
@@ -228,9 +205,9 @@ final class ApiTelegramMessageService
     /**
      * Download and save photos from message
      *
-     * @param Update $update
      *
      * @return array|null ['photo' => path, 'caption' => caption] or null
+     *
      * @throws TelegramException
      */
     public function downloadPhotosFromUpdate(Update $update): ?array
@@ -248,8 +225,8 @@ final class ApiTelegramMessageService
         // Get file info from Telegram
         $response = Request::getFile(['file_id' => $file_id]);
 
-        if (!$response->isOk()) {
-            throw new TelegramException('Failed to get file info: ' . $response->getDescription());
+        if (! $response->isOk()) {
+            throw new TelegramException('Failed to get file info: '.$response->getDescription());
         }
 
         $file      = $response->getResult();
@@ -268,13 +245,13 @@ final class ApiTelegramMessageService
 
         // Generate unique filename
         $extension    = pathinfo($file_path, PATHINFO_EXTENSION) ?: 'jpg';
-        $filename     = $photo->getFileUniqueId() . '.' . $extension;
-        $storage_path = 'telegram/photos/' . date('Y/m/') . $filename;
+        $filename     = $photo->getFileUniqueId().'.'.$extension;
+        $storage_path = 'telegram/photos/'.date('Y/m/').$filename;
         $directory    = dirname($storage_path);
         $message      = get_telegram_message($update);
 
         // Create directory if not exists
-        if (!Storage::directoryExists($directory)) {
+        if (! Storage::directoryExists($directory)) {
             Storage::makeDirectory($directory);
         }
 
@@ -290,9 +267,9 @@ final class ApiTelegramMessageService
     /**
      * Download and save document from message
      *
-     * @param Update $update
      *
      * @return array|null ['document' => path, 'caption' => caption] or null
+     *
      * @throws TelegramException
      */
     public function downloadDocumentFromUpdate(Update $update): ?array
@@ -308,8 +285,8 @@ final class ApiTelegramMessageService
         // Get file info from Telegram
         $response = Request::getFile(['file_id' => $file_id]);
 
-        if (!$response->isOk()) {
-            throw new TelegramException('Failed to get file info: ' . $response->getDescription());
+        if (! $response->isOk()) {
+            throw new TelegramException('Failed to get file info: '.$response->getDescription());
         }
 
         /** @var File $file */
@@ -330,18 +307,18 @@ final class ApiTelegramMessageService
         // Generate unique filename
         $original_name = $document->getFileName() ?? 'document';
         $extension     = pathinfo($file_path, PATHINFO_EXTENSION);
-        $filename      = $file->getFileUniqueId() . '_' . $original_name;
+        $filename      = $file->getFileUniqueId().'_'.$original_name;
         $message       = get_telegram_message($update);
 
-        if ($extension && !str_ends_with($filename, '.' . $extension)) {
-            $filename .= '.' . $extension;
+        if ($extension && ! str_ends_with($filename, '.'.$extension)) {
+            $filename .= '.'.$extension;
         }
 
-        $storage_path = 'telegram/documents/' . date('Y/m/') . $filename;
+        $storage_path = 'telegram/documents/'.date('Y/m/').$filename;
         $directory    = dirname($storage_path);
 
         // Create directory if not exists
-        if (!Storage::directoryExists($directory)) {
+        if (! Storage::directoryExists($directory)) {
             Storage::makeDirectory($directory);
         }
 
@@ -357,23 +334,23 @@ final class ApiTelegramMessageService
     /**
      * Download all photos and documents from update
      *
-     * @param Update $update
      *
      * @return array ['photos' => [...paths], 'documents' => [...paths]]
+     *
      * @throws TelegramException
      */
     public function downloadAllFilesFromUpdate(Update $update): array
     {
         $result = [
             'photos'    => [],
-            'documents' => []
+            'documents' => [],
         ];
 
         // Download photo with caption if present
         if (is_telegram_has_photo($update)) {
             $photo_data = $this->downloadPhotosFromUpdate($update);
 
-            if (!empty($photo_data)) {
+            if (! empty($photo_data)) {
                 $result['photos'][] = $photo_data;
             }
         }
@@ -382,7 +359,7 @@ final class ApiTelegramMessageService
         if (is_telegram_has_doc($update)) {
             $document_data = $this->downloadDocumentFromUpdate($update);
 
-            if (!empty($document_data)) {
+            if (! empty($document_data)) {
                 $result['documents'][] = $document_data;
             }
         }
@@ -393,9 +370,9 @@ final class ApiTelegramMessageService
     /**
      * Download and save voice message from update
      *
-     * @param Update $update
      *
      * @return string|null Saved file path or null
+     *
      * @throws TelegramException
      */
     public function downloadVoiceFromUpdate(Update $update): ?string
@@ -412,8 +389,8 @@ final class ApiTelegramMessageService
         // Get file info from Telegram
         $response = Request::getFile(['file_id' => $file_id]);
 
-        if (!$response->isOk()) {
-            throw new TelegramException('Failed to get voice file info: ' . $response->getDescription());
+        if (! $response->isOk()) {
+            throw new TelegramException('Failed to get voice file info: '.$response->getDescription());
         }
 
         /** @var File $file */
@@ -433,12 +410,12 @@ final class ApiTelegramMessageService
 
         // Generate unique filename (voice messages are typically OGG format)
         $extension    = pathinfo($file_path, PATHINFO_EXTENSION) ?: 'ogg';
-        $filename     = $file->getFileUniqueId() . '.' . $extension;
-        $storage_path = 'telegram/voices/' . date('Y/m/') . $filename;
+        $filename     = $file->getFileUniqueId().'.'.$extension;
+        $storage_path = 'telegram/voices/'.date('Y/m/').$filename;
         $directory    = dirname($storage_path);
 
         // Create directory if not exists
-        if (!Storage::directoryExists($directory)) {
+        if (! Storage::directoryExists($directory)) {
             Storage::makeDirectory($directory);
         }
 
@@ -451,18 +428,16 @@ final class ApiTelegramMessageService
     /**
      * Send voice message to Telegram chat
      *
-     * @param int    $chat_id   Chat identifier
-     * @param string $file_path Path to voice file
-     * @param array  $params    Additional parameters
-     *
-     * @return ServerResponse
+     * @param  int  $chat_id  Chat identifier
+     * @param  string  $file_path  Path to voice file
+     * @param  array  $params  Additional parameters
      */
     public function sendVoice(int $chat_id, string $file_path, array $params = []): ServerResponse
     {
         try {
-            if (!Storage::exists($file_path)) {
+            if (! Storage::exists($file_path)) {
                 Log::channel('stack')->warning('Voice file not found', [
-                    'path' => $file_path
+                    'path' => $file_path,
                 ]);
 
                 return Request::emptyResponse();
@@ -473,7 +448,7 @@ final class ApiTelegramMessageService
                 'voice'   => Request::encodeFile(Storage::path($file_path)),
             ];
 
-            if (!empty($params)) {
+            if (! empty($params)) {
                 $data = array_merge($data, $params);
             }
 
@@ -484,7 +459,7 @@ final class ApiTelegramMessageService
             }
 
             Log::channel('stack')->error(
-                'Telegram sendVoice error: ' . $server_response->getDescription(),
+                'Telegram sendVoice error: '.$server_response->getDescription(),
                 [
                     'error_code' => $server_response->getErrorCode(),
                     'chat_id'    => $chat_id,
@@ -496,7 +471,7 @@ final class ApiTelegramMessageService
             Log::channel('stack')->error('Exception in sendVoice', [
                 'error'     => $e->getMessage(),
                 'chat_id'   => $chat_id,
-                'file_path' => $file_path
+                'file_path' => $file_path,
             ]);
 
             return Request::emptyResponse();
@@ -506,9 +481,9 @@ final class ApiTelegramMessageService
     /**
      * Download and save video message from update
      *
-     * @param Update $update
      *
      * @return array|null ['video' => path, 'caption' => caption] or null
+     *
      * @throws TelegramException
      */
     public function downloadVideoFromUpdate(Update $update): ?array
@@ -525,8 +500,8 @@ final class ApiTelegramMessageService
         // Get file info from Telegram
         $response = Request::getFile(['file_id' => $file_id]);
 
-        if (!$response->isOk()) {
-            throw new TelegramException('Failed to get video file info: ' . $response->getDescription());
+        if (! $response->isOk()) {
+            throw new TelegramException('Failed to get video file info: '.$response->getDescription());
         }
 
         /** @var File $file */
@@ -547,12 +522,12 @@ final class ApiTelegramMessageService
 
         // Generate unique filename
         $extension    = pathinfo($file_path, PATHINFO_EXTENSION) ?: 'mp4';
-        $filename     = $file->getFileUniqueId() . '_' . ($file_name ?? '.' . $extension);
-        $storage_path = 'telegram/videos/' . date('Y/m/') . $filename;
+        $filename     = $file->getFileUniqueId().'_'.($file_name ?? '.'.$extension);
+        $storage_path = 'telegram/videos/'.date('Y/m/').$filename;
         $directory    = dirname($storage_path);
 
         // Create directory if not exists
-        if (!Storage::directoryExists($directory)) {
+        if (! Storage::directoryExists($directory)) {
             Storage::makeDirectory($directory);
         }
 
@@ -568,18 +543,16 @@ final class ApiTelegramMessageService
     /**
      * Send video message to Telegram chat with caption support
      *
-     * @param int    $chat_id   Chat identifier
-     * @param string $file_path Path to video file
-     * @param array  $params    Additional parameters (caption, parse_mode, etc.)
-     *
-     * @return ServerResponse
+     * @param  int  $chat_id  Chat identifier
+     * @param  string  $file_path  Path to video file
+     * @param  array  $params  Additional parameters (caption, parse_mode, etc.)
      */
     public function sendVideo(int $chat_id, string $file_path, array $params = []): ServerResponse
     {
         try {
-            if (!Storage::exists($file_path)) {
+            if (! Storage::exists($file_path)) {
                 Log::channel('stack')->warning('Video file not found', [
-                    'path' => $file_path
+                    'path' => $file_path,
                 ]);
 
                 return Request::emptyResponse();
@@ -590,7 +563,7 @@ final class ApiTelegramMessageService
                 'video'   => Request::encodeFile(Storage::path($file_path)),
             ];
 
-            if (!empty($params)) {
+            if (! empty($params)) {
                 $data = array_merge($data, $params);
             }
 
@@ -601,7 +574,7 @@ final class ApiTelegramMessageService
             }
 
             Log::channel('stack')->error(
-                'Telegram sendVideo error: ' . $server_response->getDescription(),
+                'Telegram sendVideo error: '.$server_response->getDescription(),
                 [
                     'error_code' => $server_response->getErrorCode(),
                     'chat_id'    => $chat_id,
@@ -614,7 +587,7 @@ final class ApiTelegramMessageService
             Log::channel('stack')->error('Exception in sendVideo', [
                 'error'     => $e->getMessage(),
                 'chat_id'   => $chat_id,
-                'file_path' => $file_path
+                'file_path' => $file_path,
             ]);
 
             return Request::emptyResponse();

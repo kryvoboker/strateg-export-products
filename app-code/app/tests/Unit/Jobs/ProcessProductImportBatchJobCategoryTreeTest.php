@@ -21,6 +21,7 @@ use ReflectionMethod;
 class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 {
     private static ?Capsule $capsule = null;
+
     private static ?Container $container = null;
 
     public static function setUpBeforeClass(): void
@@ -101,10 +102,10 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         });
 
         ShopLanguage::query()->create([
-            'shop_id'   => 1,
-            'code'      => 'uk',
-            'name'      => 'Українська',
-            'is_active' => true,
+            'shop_id'    => 1,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
             'is_default' => true,
         ]);
     }

@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class() extends Migration
 {
     /**
      * Run the migrations.
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->unique(['shop_id', 'code']);
             $table->index(['shop_id', 'is_default']);
 
-            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS " . config('database.db_prefix') . "shop_languages_shop_id_default_unique ON " . config('database.db_prefix') . "shop_languages (shop_id) WHERE is_default = true");
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS '.config('database.db_prefix').'shop_languages_shop_id_default_unique ON '.config('database.db_prefix').'shop_languages (shop_id) WHERE is_default = true');
         });
     }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums\Product\Update;
 
-enum ProductUpdateBatchesStatusEnum:string
+enum ProductUpdateBatchesStatusEnum: string
 {
     case NEW            = 'new';
     case PROCESSING     = 'processing';

@@ -55,7 +55,7 @@ class EditProductApiSaveSanitizationTest extends TestCase
         $page = new EditProduct();
 
         $input = [
-            'model' => 'MODEL-1',
+            'model'                           => 'MODEL-1',
             'attributes_selected_by_language' => [
                 2 => [55],
             ],

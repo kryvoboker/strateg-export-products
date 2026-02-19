@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
 
 class UsersTable
 {
-    use CommonTextTableTrait, BooleanTableTrait, DateTableTrait, ImageTableTrait, BooleanFilterTrait;
+    use BooleanFilterTrait, BooleanTableTrait, CommonTextTableTrait, DateTableTrait, ImageTableTrait;
 
     public static function configure(Table $table): Table
     {
@@ -41,9 +41,9 @@ class UsersTable
                 ]),
 
                 self::getTextTableField([
-                    'field_name'                   => 'telephone',
-                    'label'                        => __('admin/default.columns.telephone'),
-                    'format_state_using_cb'        => function ($state) {
+                    'field_name'            => 'telephone',
+                    'label'                 => __('admin/default.columns.telephone'),
+                    'format_state_using_cb' => function ($state) {
                         return parse_telephone($state);
                     },
                     'is_toggled_hidden_by_default' => true,
@@ -52,7 +52,7 @@ class UsersTable
                 self::getImageTableField([
                     'field_name'        => 'avatar',
                     'label'             => __('admin/default.columns.avatar'),
-                    'image_size'        => (int)config('app.images.user.preview_in_list_in_admin.width'),
+                    'image_size'        => (int) config('app.images.user.preview_in_list_in_admin.width'),
                     'circular'          => true,
                     'default_image_url' => Storage::url(config('app.images.user.no_image')),
                 ]),

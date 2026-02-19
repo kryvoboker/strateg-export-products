@@ -22,9 +22,6 @@ class ProcessProductTranslationJob implements ShouldQueue
     ) {}
 
     /**
-     * @param ProductShopBindingService $product_shop_binding_service
-     *
-     * @return void
      * @throws Throwable
      */
     public function handle(ProductShopBindingService $product_shop_binding_service): void
@@ -38,7 +35,7 @@ class ProcessProductTranslationJob implements ShouldQueue
         } catch (Throwable $exception) {
             Log::channel('stack')->error('Product translation job failed', [
                 'product_id' => $this->product_id,
-                'message' => $exception->getMessage(),
+                'message'    => $exception->getMessage(),
             ]);
 
             throw $exception;

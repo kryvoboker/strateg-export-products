@@ -13,7 +13,6 @@ use App\Filament\Resources\Catalog\Categories\Tables\CategoriesTable;
 use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
 use App\Models\Categories\Category;
 use BackedEnum;
-use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -25,8 +24,11 @@ class CategoryResource extends Resource
     use TotalModelItemsResourceTrait;
 
     protected static ?string $model = Category::class;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
     protected static ?string $recordTitleAttribute = 'category_name';
+
     protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Catalog;
 
     public static function form(Schema $schema): Schema
@@ -55,25 +57,16 @@ class CategoryResource extends Resource
         ];
     }
 
-    /**
-     * @return string
-     */
     public static function getNavigationLabel(): string
     {
         return __('admin/categories/categories.navigation_label');
     }
 
-    /**
-     * @return string
-     */
     public static function getModelLabel(): string
     {
         return __('admin/categories/categories.labels.model');
     }
 
-    /**
-     * @return string
-     */
     public static function getPluralModelLabel(): string
     {
         return __('admin/categories/categories.labels.plural_model');

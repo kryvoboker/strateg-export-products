@@ -9,11 +9,6 @@ use Filament\Tables\Columns\TextColumn;
 
 trait NumericTableTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getNumericTableField(array $params = []): Column
     {
         $numeric_params = $params['numeric_params'] ?? [];

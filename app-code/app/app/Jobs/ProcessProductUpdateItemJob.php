@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductBackups;
@@ -44,15 +46,24 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             return;
         }
 
-        $payload    = is_array($product_update_item->payload) ? $product_update_item->payload : [];
-        $shop_id    = (int) Arr::get($payload, 'shop_id', 0);
-        $product_id = (int) ($product_update_item->product_id ?? 0);
+        $payload             = is_array($product_update_item->payload) ? $product_update_item->payload : [];
+        $shop_id             = (int) Arr::get($payload, 'shop_id', 0);
+        $product_id          = (int) ($product_update_item->product_id ?? 0);
+        $product_export_item = $this->resolveOrCreateProductExportItem($product_update_item, $product_id, $shop_id, $payload);
 
         $product_update_item->update([
             'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
             'error_message' => null,
             'processed_at'  => null,
         ]);
+
+        if ($product_export_item instanceof ProductExportItem) {
+            $product_export_item->update([
+                'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
+                'error_message' => null,
+                'processed_at'  => null,
+            ]);
+        }
 
         try {
             if ($shop_id <= 0 || $product_id <= 0) {
@@ -132,6 +143,23 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                     'backup_product_id' => $backup_product_id,
                 ],
             ]);
+
+            if ($product_export_item instanceof ProductExportItem) {
+                $product_export_item->update([
+                    'status'        => ProductExportItemsStatusEnum::EXPORTED->value,
+                    'error_message' => null,
+                    'processed_at'  => now(),
+                    'payload'       => [
+                        ...(is_array($product_export_item->payload) ? $product_export_item->payload : []),
+                        ...$payload,
+                        'operation'         => 'update',
+                        'request_payload'   => $request_payload,
+                        'response_status'   => $response->status(),
+                        'response_body'     => $this->truncateResponseBody($response->body()),
+                        'backup_product_id' => $backup_product_id,
+                    ],
+                ]);
+            }
         } catch (Throwable $exception) {
             Log::channel('stack')->error('Failed to update product with id '.$product_id.' for shop with id '.$shop_id, [
                 'error_msg'  => $exception->getMessage(),
@@ -147,9 +175,62 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 'error_message' => Str::limit(Str::trim($exception->getMessage()), 10000),
                 'processed_at'  => now(),
             ]);
+
+            if ($product_export_item instanceof ProductExportItem) {
+                $product_export_item->update([
+                    'status'        => ProductExportItemsStatusEnum::FAILED->value,
+                    'error_message' => Str::limit(Str::trim($exception->getMessage()), 10000),
+                    'processed_at'  => now(),
+                    'payload'       => [
+                        ...(is_array($product_export_item->payload) ? $product_export_item->payload : []),
+                        ...$payload,
+                        'operation' => 'update',
+                    ],
+                ]);
+            }
         } finally {
             $this->syncBatchStatusByUpdateItems((int) $product_update_item->product_update_batch_id);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function resolveOrCreateProductExportItem(
+        ProductUpdateItem $product_update_item,
+        int $product_id,
+        int $shop_id,
+        array $payload
+    ): ?ProductExportItem {
+        $batch_id = (int) ($product_update_item->product_update_batch_id ?? 0);
+        if ($batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
+            return null;
+        }
+
+        $existing_product_export_item = ProductExportItem::query()
+            ->forBatchable(ProductUpdateBatch::class, $batch_id)
+            ->where('product_id', $product_id)
+            ->where('payload->shop_id', $shop_id)
+            ->where('payload->operation', 'update')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($existing_product_export_item instanceof ProductExportItem) {
+            return $existing_product_export_item;
+        }
+
+        return ProductExportItem::query()->create([
+            'batchable_type' => ProductUpdateBatch::class,
+            'batchable_id'   => $batch_id,
+            'product_id'     => $product_id,
+            'payload'        => [
+                ...$payload,
+                'operation' => 'update',
+            ],
+            'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
+            'error_message' => null,
+            'processed_at'  => null,
+        ]);
     }
 
     /**
@@ -162,6 +243,8 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             'images',
             'categories.descriptions',
             'productToAttributes',
+            'productToManufacturerBrand.manufacturer.descriptions',
+            'productToManufacturerBrand.brand.descriptions',
             'specials',
             'discounts',
         ]);
@@ -223,17 +306,21 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             'shop_languages'    => array_values($shop_language_map_by_id),
             'update_directives' => $this->buildApiUpdateDirectives($update_instructions),
             'product'           => [
-                'id'             => $product->id,
-                'model'          => $product->model,
-                'sku'            => $product->sku,
-                'ean'            => $product->ean,
-                'quantity'       => $product->quantity,
-                'minimum'        => $product->minimum,
-                'image'          => $product->image,
-                'price'          => $product->price,
-                'is_active'      => (bool) $product->is_active,
-                'date_available' => $product->date_available?->toDateTimeString(),
-                'date_added'     => $product->date_added?->toDateTimeString(),
+                'id'              => $product->id,
+                'model'           => $product->model,
+                'sku'             => $product->sku,
+                'ean'             => $product->ean,
+                'quantity'        => $product->quantity,
+                'minimum'         => $product->minimum,
+                'image'           => $product->image,
+                'price'           => $product->price,
+                'manufacturer_id' => $product->productToManufacturerBrand?->manufacturer_id,
+                'manufacturer'    => $product->productToManufacturerBrand?->manufacturer?->manufacturer_name,
+                'brand_id'        => $product->productToManufacturerBrand?->brand_id,
+                'brand'           => $product->productToManufacturerBrand?->brand?->brand_name,
+                'is_active'       => (bool) $product->is_active,
+                'date_available'  => $product->date_available?->toDateTimeString(),
+                'date_added'      => $product->date_added?->toDateTimeString(),
             ],
             'descriptions' => $product->descriptions
                 ->filter(static fn ($description): bool => $shop_language_ids === []
@@ -810,7 +897,8 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             ->groupBy('status')
             ->get();
 
-        $total_update_items = (int) $status_rows->sum(static fn ($row): int => (int) ($row->status_total ?? 0));
+        $total_update_items = (int) $status_rows->sum('status_total');
+
         if ($total_update_items <= 0) {
             return;
         }

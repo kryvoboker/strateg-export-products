@@ -15,18 +15,16 @@ class CreateShopLanguage extends CreateRecord
 {
     use CommonTrait;
 
-    protected static string        $resource = ShopLanguageResource::class;
-    public null|Model|ShopLanguage $record   = null;
+    protected static string $resource = ShopLanguageResource::class;
+
+    public null|Model|ShopLanguage $record = null;
 
     /**
-     * @param array $data
-     *
-     * @return array
      * @throws Halt
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (!isset($data['shop_id'])) {
+        if (! isset($data['shop_id'])) {
             return $data;
         }
 

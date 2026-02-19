@@ -25,9 +25,9 @@ class ProductAttributeTextHash extends Model
     protected function casts(): array
     {
         return [
-            'product_id' => 'integer',
+            'product_id'   => 'integer',
             'attribute_id' => 'integer',
-            'hash' => 'string',
+            'hash'         => 'string',
         ];
     }
 

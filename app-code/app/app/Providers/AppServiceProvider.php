@@ -6,9 +6,9 @@ namespace App\Providers;
 
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
-//use App\Supports\Services\Translations\Product\ProductAttributeTextAiTranslatorService;
-//use App\Supports\Services\Translations\Product\ProductDescriptionAiTranslatorService;
-//use App\Supports\Services\Translations\Product\ProductNameAiTranslatorService;
+// use App\Supports\Services\Translations\Product\ProductAttributeTextAiTranslatorService;
+// use App\Supports\Services\Translations\Product\ProductDescriptionAiTranslatorService;
+// use App\Supports\Services\Translations\Product\ProductNameAiTranslatorService;
 use DateTimeInterface;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
@@ -29,11 +29,11 @@ class AppServiceProvider extends ServiceProvider
         if ($new_storage_path) {
             config([
                 // Override compiled views path
-                'view.compiled'                => $new_storage_path . '/framework/views',
-                'debugbar.storage.path'        => $new_storage_path . '/debugbar',
-                'logging.channels.single.path' => $new_storage_path . '/logs/laravel.log',
-                'logging.channels.daily.path'  => $new_storage_path . '/logs/laravel.log',
-                'logging.channels.stack.path'  => $new_storage_path . '/logs/laravel.log',
+                'view.compiled'                => $new_storage_path.'/framework/views',
+                'debugbar.storage.path'        => $new_storage_path.'/debugbar',
+                'logging.channels.single.path' => $new_storage_path.'/logs/laravel.log',
+                'logging.channels.daily.path'  => $new_storage_path.'/logs/laravel.log',
+                'logging.channels.stack.path'  => $new_storage_path.'/logs/laravel.log',
             ]);
         }
 
@@ -49,9 +49,9 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(AiTranslationService::class);
         $this->app->singleton(AiTranslationPromptBuilderService::class);
-//        $this->app->singleton(ProductNameAiTranslatorService::class);
-//        $this->app->singleton(ProductDescriptionAiTranslatorService::class);
-//        $this->app->singleton(ProductAttributeTextAiTranslatorService::class);
+        //        $this->app->singleton(ProductNameAiTranslatorService::class);
+        //        $this->app->singleton(ProductDescriptionAiTranslatorService::class);
+        //        $this->app->singleton(ProductAttributeTextAiTranslatorService::class);
     }
 
     /**
@@ -66,7 +66,7 @@ class AppServiceProvider extends ServiceProvider
             // Override symbolic links configuration
             config([
                 'filesystems.links' => [
-                    $new_public_path . '/storage' => $new_storage_path . '/app/public',
+                    $new_public_path.'/storage' => $new_storage_path.'/app/public',
                 ],
             ]);
         }
@@ -83,11 +83,11 @@ class AppServiceProvider extends ServiceProvider
 
                 $sql = vsprintf($sql_template, array_map(function ($binding) {
                     if (is_string($binding)) {
-                        return "'" . addslashes($binding) . "'";
+                        return "'".addslashes($binding)."'";
                     }
 
                     if ($binding instanceof DateTimeInterface) {
-                        return "'" . $binding->format('Y-m-d H:i:s') . "'";
+                        return "'".$binding->format('Y-m-d H:i:s')."'";
                     }
 
                     if (is_bool($binding)) {

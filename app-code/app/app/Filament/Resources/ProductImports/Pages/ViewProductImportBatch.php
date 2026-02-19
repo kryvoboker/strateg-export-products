@@ -14,7 +14,8 @@ use Livewire\Attributes\Locked;
 
 class ViewProductImportBatch extends ViewRecord
 {
-    protected static string                         $resource = ProductImportBatchResource::class;
+    protected static string $resource = ProductImportBatchResource::class;
+
     #[Locked]
     public Model|int|string|null|ProductImportBatch $record;
 
@@ -23,9 +24,9 @@ class ViewProductImportBatch extends ViewRecord
         return [
             Action::make('downloadErrorLog')
                 ->label(__('admin/product_imports/batches.actions.download_error_log'))
-                ->visible(fn(): bool => (bool)$this->record?->hasErrorLog())
-                ->url(fn(): ?string => $this->record?->hasErrorLog()
-                    ? Storage::url((string)$this->record?->getErrorLogPath())
+                ->visible(fn (): bool => (bool) $this->record?->hasErrorLog())
+                ->url(fn (): ?string => $this->record?->hasErrorLog()
+                    ? Storage::url((string) $this->record?->getErrorLogPath())
                     : null)
                 ->openUrlInNewTab(),
             Action::make('back')
@@ -37,7 +38,7 @@ class ViewProductImportBatch extends ViewRecord
     public function getTitle(): string
     {
         return __('admin/product_imports/batches.titles.view', [
-            'id' => (string)$this->record->id,
+            'id' => (string) $this->record->id,
         ]);
     }
 }

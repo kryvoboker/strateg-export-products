@@ -10,21 +10,28 @@ use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
+use App\Jobs\ProcessCatalogProductRestoreBatchJob;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductShopBindingJob;
 use App\Jobs\ProcessProductUpdateItemJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandDescription;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
+use App\Models\Products\Updates\ProductBackups;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
+use App\Supports\Services\Products\ProductBackupRestoreService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -55,13 +62,15 @@ class ProductsTable
     {
         return $table
             ->poll('5s')
-            ->modifyQueryUsing(fn(Builder $query): Builder => $query->with([
-                'descriptions'      => static fn($description_query) => $description_query
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
+                'descriptions' => static fn ($description_query) => $description_query
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id'),
-                'productShops.shop' => static fn($shop_query) => $shop_query
+                'productShops.shop' => static fn ($shop_query) => $shop_query
                     ->orderBy('name'),
                 'importItem',
+                'productToManufacturerBrand.manufacturer.descriptions',
+                'productToManufacturerBrand.brand.descriptions',
             ]))
             ->columns([
                 TextColumn::make('id')
@@ -70,13 +79,13 @@ class ProductsTable
 
                 TextColumn::make('product_name')
                     ->label(__('admin/products/products.columns.name'))
-                    ->state(static fn(Product $record): string => self::resolveProductName($record))
+                    ->state(static fn (Product $record): string => self::resolveProductName($record))
                     ->searchable(
-                        query: static fn(Builder $query, string $search): Builder => $query->whereHas(
+                        query: static fn (Builder $query, string $search): Builder => $query->whereHas(
                             'descriptions',
-                            static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                            static fn (Builder $description_query): Builder => $description_query->whereRaw(
                                 'LOWER(name) LIKE ?',
-                                ['%' . mb_strtolower(Str::trim($search)) . '%']
+                                ['%'.mb_strtolower(Str::trim($search)).'%']
                             )
                         )
                     )
@@ -96,31 +105,39 @@ class ProductsTable
                     ->label(__('admin/products/products.columns.ean'))
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('manufacturer_name')
+                    ->label('Manufacturer')
+                    ->state(static fn (Product $record): string => (string) ($record->productToManufacturerBrand?->manufacturer?->manufacturer_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('brand_name')
+                    ->label('Brand')
+                    ->state(static fn (Product $record): string => (string) ($record->productToManufacturerBrand?->brand?->brand_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('bound_shops')
                     ->label(__('admin/products/products.columns.shops'))
-                    ->state(static fn(Product $record): string => self::resolveBoundShopsText($record))
+                    ->state(static fn (Product $record): string => self::resolveBoundShopsText($record))
                     ->wrap(),
 
                 TextColumn::make('bound_batch_ids')
                     ->label(__('admin/products/products.columns.batch_ids'))
-                    ->state(static fn(Product $record): string => self::resolveBoundBatchIdsText($record))
+                    ->state(static fn (Product $record): string => self::resolveBoundBatchIdsText($record))
                     ->wrap(),
 
                 IconColumn::make('status')
                     ->label(__('admin/products/products.columns.status'))
                     ->boolean()
-                    ->state(static fn(Product $record): bool => (bool)$record->is_active),
+                    ->state(static fn (Product $record): bool => (bool) $record->is_active),
 
                 IconColumn::make('is_processed')
                     ->label(__('admin/products/products.columns.is_processed'))
                     ->boolean()
-                    ->state(static fn(Product $record): bool => self::resolveProcessedState($record)),
+                    ->state(static fn (Product $record): bool => self::resolveProcessedState($record)),
 
                 IconColumn::make('is_exported')
                     ->label(__('admin/products/products.columns.is_exported'))
                     ->boolean()
-                    ->state(static fn(Product $record): bool => self::resolveExportedState($record)),
+                    ->state(static fn (Product $record): bool => self::resolveExportedState($record)),
 
                 TextColumn::make('date_added')
                     ->label(__('admin/products/products.columns.date_added'))
@@ -137,11 +154,11 @@ class ProductsTable
                     ->query(static function (Builder $query, array $data): Builder {
                         $value = Arr::get($data, 'value');
 
-                        if (!in_array((string)$value, ['0', '1'], true)) {
+                        if (! in_array((string) $value, ['0', '1'], true)) {
                             return $query;
                         }
 
-                        return $query->where('is_active', (bool)((int)$value));
+                        return $query->where('is_active', (bool) ((int) $value));
                     }),
 
                 Filter::make('search_fields')
@@ -157,18 +174,20 @@ class ProductsTable
                         TextInput::make('attribute_name')->label('Attribute name'),
                         TextInput::make('attribute_value')->label('Attribute value'),
                         TextInput::make('category_name')->label('Category name'),
+                        TextInput::make('manufacturer_name')->label('Manufacturer'),
+                        TextInput::make('brand_name')->label('Brand'),
                     ])
-                    ->query(static fn(Builder $query, array $data): Builder => self::applySearchFieldsQuery($query, $data)),
+                    ->query(static fn (Builder $query, array $data): Builder => self::applySearchFieldsQuery($query, $data)),
 
                 SelectFilter::make('shop_id')
                     ->label(__('admin/products/products.filters.shop'))
-                    ->options(static fn(): array => Shop::query()
+                    ->options(static fn (): array => Shop::query()
                         ->where('is_active', true)
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->toArray())
                     ->query(static function (Builder $query, array $data): Builder {
-                        $shop_id = (int)($data['value'] ?? 0);
+                        $shop_id = (int) ($data['value'] ?? 0);
 
                         if ($shop_id <= 0) {
                             return $query;
@@ -176,15 +195,15 @@ class ProductsTable
 
                         return $query->whereHas(
                             'productShops',
-                            static fn(Builder $product_shops_query): Builder => $product_shops_query->where('shop_id', $shop_id)
+                            static fn (Builder $product_shops_query): Builder => $product_shops_query->where('shop_id', $shop_id)
                         );
                     }),
 
                 SelectFilter::make('category_id')
                     ->label(__('admin/products/products.filters.category'))
-                    ->options(static fn(): array => self::resolveCategoryFilterOptions())
+                    ->options(static fn (): array => self::resolveCategoryFilterOptions())
                     ->query(static function (Builder $query, array $data): Builder {
-                        $category_id = (int)($data['value'] ?? 0);
+                        $category_id = (int) ($data['value'] ?? 0);
 
                         if ($category_id <= 0) {
                             return $query;
@@ -192,15 +211,15 @@ class ProductsTable
 
                         return $query->whereHas(
                             'categories',
-                            static fn(Builder $categories_query): Builder => $categories_query->where('categories.id', $category_id)
+                            static fn (Builder $categories_query): Builder => $categories_query->where('categories.id', $category_id)
                         );
                     }),
 
                 SelectFilter::make('attribute_id')
                     ->label(__('admin/products/products.filters.attribute'))
-                    ->options(static fn(): array => self::resolveAttributeFilterOptions())
+                    ->options(static fn (): array => self::resolveAttributeFilterOptions())
                     ->query(static function (Builder $query, array $data): Builder {
-                        $attribute_id = (int)($data['value'] ?? 0);
+                        $attribute_id = (int) ($data['value'] ?? 0);
 
                         if ($attribute_id <= 0) {
                             return $query;
@@ -208,46 +227,76 @@ class ProductsTable
 
                         return $query->whereHas(
                             'attributes',
-                            static fn(Builder $attributes_query): Builder => $attributes_query->where('attributes.id', $attribute_id)
+                            static fn (Builder $attributes_query): Builder => $attributes_query->where('attributes.id', $attribute_id)
+                        );
+                    }),
+                SelectFilter::make('manufacturer_id')
+                    ->label('Manufacturer')
+                    ->options(static fn (): array => self::resolveManufacturerFilterOptions())
+                    ->query(static function (Builder $query, array $data): Builder {
+                        $manufacturer_id = (int) ($data['value'] ?? 0);
+
+                        if ($manufacturer_id <= 0) {
+                            return $query;
+                        }
+
+                        return $query->whereHas(
+                            'productToManufacturerBrand',
+                            static fn (Builder $binding_query): Builder => $binding_query->where('manufacturer_id', $manufacturer_id)
+                        );
+                    }),
+                SelectFilter::make('brand_id')
+                    ->label('Brand')
+                    ->options(static fn (): array => self::resolveBrandFilterOptions())
+                    ->query(static function (Builder $query, array $data): Builder {
+                        $brand_id = (int) ($data['value'] ?? 0);
+
+                        if ($brand_id <= 0) {
+                            return $query;
+                        }
+
+                        return $query->whereHas(
+                            'productToManufacturerBrand',
+                            static fn (Builder $binding_query): Builder => $binding_query->where('brand_id', $brand_id)
                         );
                     }),
 
                 TernaryFilter::make('is_processed')
                     ->label(__('admin/products/products.filters.is_processed'))
                     ->queries(
-                        true : static fn(Builder $query): Builder => $query->whereHas(
+                        true : static fn (Builder $query): Builder => $query->whereHas(
                             'importItem',
-                            static fn(Builder $item_query): Builder => $item_query->whereIn('status', [
+                            static fn (Builder $item_query): Builder => $item_query->whereIn('status', [
                                 ProductImportItemsStatusEnum::NORMALIZED->value,
                                 ProductImportItemsStatusEnum::SUCCESSED->value,
                             ])
                         ),
-                        false: static fn(Builder $query): Builder => $query->whereDoesntHave(
+                        false: static fn (Builder $query): Builder => $query->whereDoesntHave(
                             'importItem',
-                            static fn(Builder $item_query): Builder => $item_query->whereIn('status', [
+                            static fn (Builder $item_query): Builder => $item_query->whereIn('status', [
                                 ProductImportItemsStatusEnum::NORMALIZED->value,
                                 ProductImportItemsStatusEnum::SUCCESSED->value,
                             ])
                         ),
-                        blank: static fn(Builder $query): Builder => $query,
+                        blank: static fn (Builder $query): Builder => $query,
                     ),
 
                 TernaryFilter::make('is_exported')
                     ->label(__('admin/products/products.filters.is_exported'))
                     ->queries(
-                        true : static fn(Builder $query): Builder => $query->whereHas(
+                        true : static fn (Builder $query): Builder => $query->whereHas(
                             'productShops',
-                            static fn(Builder $product_shops_query): Builder => $product_shops_query
+                            static fn (Builder $product_shops_query): Builder => $product_shops_query
                                 ->whereNotNull('external_product_id')
                                 ->where('external_product_id', '>', 0)
                         ),
-                        false: static fn(Builder $query): Builder => $query->whereDoesntHave(
+                        false: static fn (Builder $query): Builder => $query->whereDoesntHave(
                             'productShops',
-                            static fn(Builder $product_shops_query): Builder => $product_shops_query
+                            static fn (Builder $product_shops_query): Builder => $product_shops_query
                                 ->whereNotNull('external_product_id')
                                 ->where('external_product_id', '>', 0)
                         ),
-                        blank: static fn(Builder $query): Builder => $query,
+                        blank: static fn (Builder $query): Builder => $query,
                     ),
             ])
             ->recordActions([
@@ -285,6 +334,33 @@ class ProductsTable
                             ->success()
                             ->send();
                     }),
+                Action::make('restoreProductInShops')
+                    ->label(__('admin/products/products.actions.restore_product_in_shops'))
+                    ->icon(Heroicon::ArrowUturnLeft)
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->visible(static fn (Product $record): bool => self::hasValidExternalBackupForAnyBoundShop($record))
+                    ->action(function (Product $record): void {
+                        $shop_ids = ProductShop::query()
+                            ->where('product_id', (int) ($record->id ?? 0))
+                            ->pluck('shop_id')
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        $summary = self::queueRestoreForSelectedProducts(
+                            new Collection([$record]),
+                            $shop_ids
+                        );
+
+                        Notification::make()
+                            ->title(__('admin/products/products.messages.item_restore_queued'))
+                            ->body(__('admin/products/products.messages.item_restore_result', $summary))
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
             ])
             ->toolbarActions([
@@ -297,7 +373,7 @@ class ProductsTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/products/products.filters.shop'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -309,8 +385,8 @@ class ProductsTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -341,7 +417,7 @@ class ProductsTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/products/products.filters.shop'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -353,8 +429,8 @@ class ProductsTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -385,7 +461,7 @@ class ProductsTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/products/products.filters.shop'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -397,8 +473,8 @@ class ProductsTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -421,63 +497,101 @@ class ProductsTable
                                 ->send();
                         }),
 
+                    BulkAction::make('restoreProductsInShops')
+                        ->label(__('admin/products/products.actions.restore_products_in_shops'))
+                        ->icon(Heroicon::ArrowUturnLeft)
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->schema([
+                            Select::make('shop_ids')
+                                ->label(__('admin/products/products.filters.shop'))
+                                ->options(fn (): array => Shop::query()
+                                    ->where('is_active', true)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray())
+                                ->multiple()
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $shop_ids = collect($data['shop_ids'] ?? [])
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            $summary = self::queueRestoreForSelectedProducts($records, $shop_ids);
+
+                            Notification::make()
+                                ->title(__('admin/products/products.messages.bulk_restore_queued'))
+                                ->body(__('admin/products/products.messages.bulk_restore_result', $summary))
+                                ->success()
+                                ->send();
+                        }),
+
                     DeleteBulkAction::make(),
                 ])
-                ->dropdownWidth(Width::Large),
+                    ->dropdownWidth(Width::Large),
             ])
             ->defaultSort('id', 'desc');
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public static function applySearchFieldsQuery(Builder $query, array $data): Builder
     {
-        $name                = Str::lower(Str::trim((string)Arr::get($data, 'name', '')));
-        $sku                 = Str::lower(Str::trim((string)Arr::get($data, 'sku', '')));
-        $model               = Str::lower(Str::trim((string)Arr::get($data, 'model', '')));
-        $ean                 = Str::lower(Str::trim((string)Arr::get($data, 'ean', '')));
-        $external_product_id = Str::trim((string)Arr::get($data, 'external_product_id', ''));
-        $quantity            = Str::trim((string)Arr::get($data, 'quantity', ''));
-        $price               = Str::trim((string)Arr::get($data, 'price', ''));
-        $attribute_name      = Str::lower(Str::trim((string)Arr::get($data, 'attribute_name', '')));
-        $attribute_value     = Str::lower(Str::trim((string)Arr::get($data, 'attribute_value', '')));
-        $category_name       = Str::lower(Str::trim((string)Arr::get($data, 'category_name', '')));
+        $name                = Str::lower(Str::trim((string) Arr::get($data, 'name', '')));
+        $sku                 = Str::lower(Str::trim((string) Arr::get($data, 'sku', '')));
+        $model               = Str::lower(Str::trim((string) Arr::get($data, 'model', '')));
+        $ean                 = Str::lower(Str::trim((string) Arr::get($data, 'ean', '')));
+        $external_product_id = Str::trim((string) Arr::get($data, 'external_product_id', ''));
+        $quantity            = Str::trim((string) Arr::get($data, 'quantity', ''));
+        $price               = Str::trim((string) Arr::get($data, 'price', ''));
+        $attribute_name      = Str::lower(Str::trim((string) Arr::get($data, 'attribute_name', '')));
+        $attribute_value     = Str::lower(Str::trim((string) Arr::get($data, 'attribute_value', '')));
+        $category_name       = Str::lower(Str::trim((string) Arr::get($data, 'category_name', '')));
+        $manufacturer_name   = Str::lower(Str::trim((string) Arr::get($data, 'manufacturer_name', '')));
+        $brand_name          = Str::lower(Str::trim((string) Arr::get($data, 'brand_name', '')));
 
         if ($name !== '') {
             $query->whereHas(
                 'descriptions',
-                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $name . '%']
+                    ['%'.$name.'%']
                 )
             );
         }
 
         if ($sku !== '') {
-            $query->whereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', ['%' . $sku . '%']);
+            $query->whereRaw('LOWER(COALESCE(sku, \'\')) LIKE ?', ['%'.$sku.'%']);
         }
 
         if ($model !== '') {
-            $query->whereRaw('LOWER(COALESCE(model, \'\')) LIKE ?', ['%' . $model . '%']);
+            $query->whereRaw('LOWER(COALESCE(model, \'\')) LIKE ?', ['%'.$model.'%']);
         }
 
         if ($ean !== '') {
-            $query->whereRaw('LOWER(COALESCE(ean, \'\')) LIKE ?', ['%' . $ean . '%']);
+            $query->whereRaw('LOWER(COALESCE(ean, \'\')) LIKE ?', ['%'.$ean.'%']);
         }
 
         if ($external_product_id !== '') {
             if (is_numeric($external_product_id)) {
                 $query->whereHas(
                     'productShops',
-                    static fn(Builder $product_shops_query): Builder => $product_shops_query->where('external_product_id', (int)$external_product_id)
+                    static fn (Builder $product_shops_query): Builder => $product_shops_query->where('external_product_id', (int) $external_product_id)
                 );
             } else {
                 $query->whereHas(
                     'productShops',
-                    static fn(Builder $product_shops_query): Builder => $product_shops_query->whereRaw(
+                    static fn (Builder $product_shops_query): Builder => $product_shops_query->whereRaw(
                         'LOWER(COALESCE(CAST(external_product_id AS TEXT), \'\')) LIKE ?',
-                        ['%' . Str::lower($external_product_id) . '%']
+                        ['%'.Str::lower($external_product_id).'%']
                     )
                 );
             }
@@ -485,26 +599,26 @@ class ProductsTable
 
         if ($quantity !== '') {
             if (is_numeric($quantity)) {
-                $query->where('quantity', (int)$quantity);
+                $query->where('quantity', (int) $quantity);
             } else {
-                $query->whereRaw('LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?', ['%' . Str::lower($quantity) . '%']);
+                $query->whereRaw('LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?', ['%'.Str::lower($quantity).'%']);
             }
         }
 
         if ($price !== '') {
             if (is_numeric($price)) {
-                $query->where('price', (float)$price);
+                $query->where('price', (float) $price);
             } else {
-                $query->whereRaw('LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?', ['%' . Str::lower($price) . '%']);
+                $query->whereRaw('LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?', ['%'.Str::lower($price).'%']);
             }
         }
 
         if ($attribute_name !== '') {
             $query->whereHas(
                 'attributes.descriptions',
-                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $attribute_name . '%']
+                    ['%'.$attribute_name.'%']
                 )
             );
         }
@@ -512,9 +626,9 @@ class ProductsTable
         if ($attribute_value !== '') {
             $query->whereHas(
                 'productToAttributes',
-                static fn(Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
+                static fn (Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
                     'LOWER(COALESCE(text, \'\')) LIKE ?',
-                    ['%' . $attribute_value . '%']
+                    ['%'.$attribute_value.'%']
                 )
             );
         }
@@ -522,9 +636,29 @@ class ProductsTable
         if ($category_name !== '') {
             $query->whereHas(
                 'categories.descriptions',
-                static fn(Builder $description_query): Builder => $description_query->whereRaw(
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $category_name . '%']
+                    ['%'.$category_name.'%']
+                )
+            );
+        }
+
+        if ($manufacturer_name !== '') {
+            $query->whereHas(
+                'productToManufacturerBrand.manufacturer.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$manufacturer_name.'%']
+                )
+            );
+        }
+
+        if ($brand_name !== '') {
+            $query->whereHas(
+                'productToManufacturerBrand.brand.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$brand_name.'%']
                 )
             );
         }
@@ -534,30 +668,30 @@ class ProductsTable
 
     private static function resolveProductName(Product $product): string
     {
-        $name = Str::trim((string)$product->product_name);
+        $name = Str::trim((string) $product->product_name);
 
         if ($name !== '') {
             return $name;
         }
 
-        return '#' . (int)$product->id;
+        return '#'.(int) $product->id;
     }
 
     private static function resolveBoundShopsText(Product $product): string
     {
         $shop_names = collect($product->productShops)
-            ->map(static fn(ProductShop $product_shop): string => Str::squish((string)($product_shop->shop?->name ?? '')))
-            ->filter(static fn(string $shop_name): bool => $shop_name !== '')
+            ->map(static fn (ProductShop $product_shop): string => Str::squish((string) ($product_shop->shop?->name ?? '')))
+            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
             ->all();
 
         if ($shop_names === []) {
             $shop_names = ProductShop::query()
-                ->where('product_id', (int)$product->id)
+                ->where('product_id', (int) $product->id)
                 ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
                 ->orderBy('shops.name')
                 ->pluck('shops.name')
-                ->map(static fn($shop_name): string => Str::squish((string)$shop_name))
-                ->filter(static fn(string $shop_name): bool => $shop_name !== '')
+                ->map(static fn ($shop_name): string => Str::squish((string) $shop_name))
+                ->filter(static fn (string $shop_name): bool => $shop_name !== '')
                 ->all();
         }
 
@@ -577,8 +711,8 @@ class ProductsTable
     {
         $batch_ids = collect($product->productShops)
             ->pluck('product_import_batch_id')
-            ->map(static fn($batch_id): int => (int)$batch_id)
-            ->filter(static fn(int $batch_id): bool => $batch_id > 0)
+            ->map(static fn ($batch_id): int => (int) $batch_id)
+            ->filter(static fn (int $batch_id): bool => $batch_id > 0)
             ->unique()
             ->sort()
             ->values()
@@ -586,10 +720,10 @@ class ProductsTable
 
         if ($batch_ids === []) {
             $batch_ids = ProductImportItem::query()
-                ->where('product_id', (int)$product->id)
+                ->where('product_id', (int) $product->id)
                 ->pluck('product_import_batch_id')
-                ->map(static fn($batch_id): int => (int)$batch_id)
-                ->filter(static fn(int $batch_id): bool => $batch_id > 0)
+                ->map(static fn ($batch_id): int => (int) $batch_id)
+                ->filter(static fn (int $batch_id): bool => $batch_id > 0)
                 ->unique()
                 ->sort()
                 ->values()
@@ -600,7 +734,7 @@ class ProductsTable
             return __('admin/products/products.columns.no_batch');
         }
 
-        return implode(', ', array_map(static fn(int $batch_id): string => (string)$batch_id, $batch_ids));
+        return implode(', ', array_map(static fn (int $batch_id): string => (string) $batch_id, $batch_ids));
     }
 
     private static function resolveProcessedState(Product $product): bool
@@ -614,7 +748,7 @@ class ProductsTable
         }
 
         return ProductImportItem::query()
-            ->where('product_id', (int)$product->id)
+            ->where('product_id', (int) $product->id)
             ->whereIn('status', [
                 ProductImportItemsStatusEnum::NORMALIZED->value,
                 ProductImportItemsStatusEnum::SUCCESSED->value,
@@ -627,12 +761,12 @@ class ProductsTable
         $product_shop_items = collect($product->productShops);
         if ($product_shop_items->isNotEmpty()) {
             return $product_shop_items->contains(
-                static fn(ProductShop $product_shop): bool => (int)($product_shop->external_product_id ?? 0) > 0
+                static fn (ProductShop $product_shop): bool => (int) ($product_shop->external_product_id ?? 0) > 0
             );
         }
 
         return ProductShop::query()
-            ->where('product_id', (int)$product->id)
+            ->where('product_id', (int) $product->id)
             ->whereNotNull('external_product_id')
             ->where('external_product_id', '>', 0)
             ->exists();
@@ -645,7 +779,7 @@ class ProductsTable
     {
         $categories = Category::query()
             ->with([
-                'descriptions' => static fn($description_query) => $description_query
+                'descriptions' => static fn ($description_query) => $description_query
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id'),
             ])
@@ -654,16 +788,16 @@ class ProductsTable
 
         $options = [];
         foreach ($categories as $category) {
-            $name = Str::trim((string)($category->descriptions->first()?->name ?? ''));
+            $name = Str::trim((string) ($category->descriptions->first()?->name ?? ''));
             if ($name === '') {
-                $name = Str::trim((string)(CategoryDescription::query()
-                    ->where('category_id', (int)$category->id)
+                $name = Str::trim((string) (CategoryDescription::query()
+                    ->where('category_id', (int) $category->id)
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id')
                     ->value('name') ?? ''));
             }
 
-            $options[(int)$category->id] = $name !== '' ? $name : ('#' . (int)$category->id);
+            $options[(int) $category->id] = $name !== '' ? $name : ('#'.(int) $category->id);
         }
 
         asort($options);
@@ -678,7 +812,7 @@ class ProductsTable
     {
         $attributes = Attribute::query()
             ->with([
-                'descriptions' => static fn($description_query) => $description_query
+                'descriptions' => static fn ($description_query) => $description_query
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id'),
             ])
@@ -687,16 +821,16 @@ class ProductsTable
 
         $options = [];
         foreach ($attributes as $attribute) {
-            $name = Str::trim((string)($attribute->descriptions->first()?->name ?? ''));
+            $name = Str::trim((string) ($attribute->descriptions->first()?->name ?? ''));
             if ($name === '') {
-                $name = Str::trim((string)(AttributeDescription::query()
-                    ->where('attribute_id', (int)$attribute->id)
+                $name = Str::trim((string) (AttributeDescription::query()
+                    ->where('attribute_id', (int) $attribute->id)
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id')
                     ->value('name') ?? ''));
             }
 
-            $options[(int)$attribute->id] = $name !== '' ? $name : ('#' . (int)$attribute->id);
+            $options[(int) $attribute->id] = $name !== '' ? $name : ('#'.(int) $attribute->id);
         }
 
         asort($options);
@@ -705,8 +839,73 @@ class ProductsTable
     }
 
     /**
-     * @param list<int> $shop_ids
-     *
+     * @return array<int, string>
+     */
+    private static function resolveManufacturerFilterOptions(): array
+    {
+        $manufacturers = Manufacturer::query()
+            ->with([
+                'descriptions' => static fn ($description_query) => $description_query
+                    ->orderByRaw('shop_language_id IS NULL DESC')
+                    ->orderBy('id'),
+            ])
+            ->orderBy('id')
+            ->get(['id']);
+
+        $options = [];
+        foreach ($manufacturers as $manufacturer) {
+            $name = Str::trim((string) ($manufacturer->descriptions->first()?->name ?? ''));
+            if ($name === '') {
+                $name = Str::trim((string) (ManufacturerDescription::query()
+                    ->where('manufacturer_id', (int) $manufacturer->id)
+                    ->orderByRaw('shop_language_id IS NULL DESC')
+                    ->orderBy('id')
+                    ->value('name') ?? ''));
+            }
+
+            $options[(int) $manufacturer->id] = $name !== '' ? $name : ('#'.(int) $manufacturer->id);
+        }
+
+        asort($options);
+
+        return $options;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function resolveBrandFilterOptions(): array
+    {
+        $brands = Brand::query()
+            ->with([
+                'descriptions' => static fn ($description_query) => $description_query
+                    ->orderByRaw('shop_language_id IS NULL DESC')
+                    ->orderBy('id'),
+            ])
+            ->orderBy('id')
+            ->get(['id']);
+
+        $options = [];
+        foreach ($brands as $brand) {
+            $name = Str::trim((string) ($brand->descriptions->first()?->name ?? ''));
+            if ($name === '') {
+                $name = Str::trim((string) (BrandDescription::query()
+                    ->where('brand_id', (int) $brand->id)
+                    ->orderByRaw('shop_language_id IS NULL DESC')
+                    ->orderBy('id')
+                    ->value('name') ?? ''));
+            }
+
+            $options[(int) $brand->id] = $name !== '' ? $name : ('#'.(int) $brand->id);
+        }
+
+        asort($options);
+
+        return $options;
+    }
+
+    /**
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function queueUpdateForSelectedProducts(Collection $records, array $shop_ids): array
@@ -724,9 +923,9 @@ class ProductsTable
         ];
 
         $product_ids = $records
-            ->filter(static fn($record): bool => $record instanceof Product)
-            ->map(static fn(Product $record): int => (int) $record->id)
-            ->filter(static fn(int $product_id): bool => $product_id > 0)
+            ->filter(static fn ($record): bool => $record instanceof Product)
+            ->map(static fn (Product $record): int => (int) $record->id)
+            ->filter(static fn (int $product_id): bool => $product_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -748,14 +947,14 @@ class ProductsTable
             'processed_items' => 0,
             'failed_items'    => 0,
             'options'         => [
-                'triggered_from'      => 'catalog_products',
+                'triggered_from'       => 'catalog_products',
                 'requested_by_user_id' => $requested_by_user_id,
-                'update_state'        => 'processing',
-                'update_started_at'   => now()->toDateTimeString(),
-                'update_finished_at'  => null,
+                'update_state'         => 'processing',
+                'update_started_at'    => now()->toDateTimeString(),
+                'update_finished_at'   => null,
             ],
-            'started_at'      => now(),
-            'finished_at'     => null,
+            'started_at'  => now(),
+            'finished_at' => null,
         ]);
 
         foreach ($product_ids as $product_id) {
@@ -956,7 +1155,7 @@ class ProductsTable
             ->groupBy('status')
             ->get();
 
-        $total_update_items = (int) $status_rows->sum(static fn($row): int => (int) ($row->status_total ?? 0));
+        $total_update_items = (int) $status_rows->sum(static fn ($row): int => (int) ($row->status_total ?? 0));
         if ($total_update_items <= 0) {
             return;
         }
@@ -966,10 +1165,10 @@ class ProductsTable
         $updated_count    = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
 
         $final_status = match (true) {
-            $processing_count > 0                            => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-            $failed_count > 0 && $updated_count > 0         => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
-            $failed_count > 0 && $updated_count === 0       => ProductUpdateBatchesStatusEnum::FAILED->value,
-            default                                          => ProductUpdateBatchesStatusEnum::COMPLETED->value,
+            $processing_count > 0                     => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            $failed_count > 0 && $updated_count > 0   => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
+            $failed_count > 0 && $updated_count === 0 => ProductUpdateBatchesStatusEnum::FAILED->value,
+            default                                   => ProductUpdateBatchesStatusEnum::COMPLETED->value,
         };
 
         $batch->update([
@@ -989,29 +1188,136 @@ class ProductsTable
         ]);
     }
 
+    private static function hasValidExternalBackupForAnyBoundShop(Product $record): bool
+    {
+        $product_id = (int) ($record->id ?? 0);
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        /** @var ProductBackupRestoreService $restore_service */
+        $restore_service = app(ProductBackupRestoreService::class);
+
+        $product_shops = ProductShop::query()
+            ->where('product_id', $product_id)
+            ->get(['shop_id', 'external_product_id']);
+
+        foreach ($product_shops as $product_shop) {
+            $shop_id             = (int) ($product_shop->shop_id ?? 0);
+            $external_product_id = (int) ($product_shop->external_product_id ?? 0);
+
+            if ($shop_id <= 0 || $external_product_id <= 0) {
+                continue;
+            }
+
+            $backup = ProductBackups::getLatestExternalSnapshotForProductShop($product_id, $shop_id, $external_product_id);
+            if (
+                $backup instanceof ProductBackups
+                && $restore_service->isExternalBackupPayloadValid($backup->payload)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
-     * @param list<int> $shop_ids
-     *
+     * @param  list<int>  $shop_ids
+     * @return array<string, int>
+     */
+    private static function queueRestoreForSelectedProducts(Collection $records, array $shop_ids): array
+    {
+        $summary = [
+            'products_total'         => 0,
+            'shops_total'            => count($shop_ids),
+            'restore_batches_queued' => 0,
+            'errors'                 => 0,
+        ];
+
+        $product_ids = $records
+            ->filter(static fn ($record): bool => $record instanceof Product)
+            ->map(static fn (Product $record): int => (int) $record->id)
+            ->filter(static fn (int $product_id): bool => $product_id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $summary['products_total'] = count($product_ids);
+
+        if ($product_ids === [] || $shop_ids === []) {
+            return $summary;
+        }
+
+        $requested_by_user_id = is_numeric(auth()->id()) ? (int) auth()->id() : null;
+
+        try {
+            $batch = ProductUpdateBatch::query()->create([
+                'user_id'         => $requested_by_user_id,
+                'source_type'     => ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value,
+                'source_name'     => 'Catalog products restore API',
+                'source_path'     => null,
+                'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+                'total_items'     => 0,
+                'processed_items' => 0,
+                'failed_items'    => 0,
+                'options'         => [
+                    'triggered_from'       => 'catalog_products_restore',
+                    'requested_by_user_id' => $requested_by_user_id,
+                    'restore_state'        => 'processing',
+                    'restore_started_at'   => now()->toDateTimeString(),
+                    'restore_finished_at'  => null,
+                ],
+                'started_at'  => now(),
+                'finished_at' => null,
+            ]);
+
+            ProcessCatalogProductRestoreBatchJob::dispatch(
+                (int) $batch->id,
+                $product_ids,
+                $shop_ids,
+                $requested_by_user_id
+            );
+
+            $summary['restore_batches_queued']++;
+        } catch (Throwable $exception) {
+            Log::channel('stack')->error('Failed to queue catalog products restore batch', [
+                'product_ids'          => $product_ids,
+                'shop_ids'             => $shop_ids,
+                'requested_by_user_id' => $requested_by_user_id,
+                'error_msg'            => $exception->getMessage(),
+                'file'                 => $exception->getFile(),
+                'line'                 => $exception->getLine(),
+            ]);
+
+            $summary['errors']++;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function bindSelectedProductsToShops(Collection $records, array $shop_ids): array
     {
         $summary = [
-            'products_total' => 0,
-            'shops_total'    => count($shop_ids),
-            'jobs_queued'    => 0,
+            'products_total'        => 0,
+            'shops_total'           => count($shop_ids),
+            'jobs_queued'           => 0,
             'skipped_already_bound' => 0,
         ];
 
         foreach ($records as $record) {
-            if (!$record instanceof Product) {
+            if (! $record instanceof Product) {
                 continue;
             }
 
             $summary['products_total']++;
 
             $source_item = ProductImportItem::query()
-                ->where('product_id', (int)$record->id)
+                ->where('product_id', (int) $record->id)
                 ->orderByDesc('id')
                 ->first();
 
@@ -1019,7 +1325,7 @@ class ProductsTable
                 ? $source_item->payload
                 : [];
 
-            $product_import_batch_id = (int)($source_item?->product_import_batch_id ?? 0);
+            $product_import_batch_id = (int) ($source_item?->product_import_batch_id ?? 0);
 
             foreach ($shop_ids as $shop_id) {
                 $already_bound = ProductShop::query()
@@ -1034,8 +1340,8 @@ class ProductsTable
                 }
 
                 ProcessProductShopBindingJob::dispatch(
-                    (int)$record->id,
-                    (int)$shop_id,
+                    (int) $record->id,
+                    (int) $shop_id,
                     $product_import_batch_id,
                     $source_payload,
                     auth()->id()
@@ -1049,8 +1355,7 @@ class ProductsTable
     }
 
     /**
-     * @param list<int> $shop_ids
-     *
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function queueExportForSelectedProducts(Collection $records, array $shop_ids): array
@@ -1065,14 +1370,14 @@ class ProductsTable
         ];
 
         foreach ($records as $record) {
-            if (!$record instanceof Product) {
+            if (! $record instanceof Product) {
                 continue;
             }
 
             $summary['products_total']++;
 
             $source_item = ProductImportItem::query()
-                ->where('product_id', (int)$record->id)
+                ->where('product_id', (int) $record->id)
                 ->orderByDesc('id')
                 ->first();
 
@@ -1109,7 +1414,7 @@ class ProductsTable
                         continue;
                     }
 
-                    $batch_id = self::resolveBatchIdForProductShop($target_product_id, (int)$shop_id, $source_batch_id);
+                    $batch_id = self::resolveBatchIdForProductShop($target_product_id, (int) $shop_id, $source_batch_id);
                     if ($batch_id <= 0) {
                         $summary['errors']++;
 
@@ -1117,7 +1422,7 @@ class ProductsTable
                     }
 
                     $existing_export_item = ProductExportItem::query()
-                        ->forBatchProductShop($batch_id, $target_product_id, (int)$shop_id)
+                        ->forBatchProductShop($batch_id, $target_product_id, (int) $shop_id)
                         ->orderByDesc('id')
                         ->first();
 
@@ -1132,20 +1437,21 @@ class ProductsTable
                     }
 
                     $export_item = ProductExportItem::query()->create([
-                        'product_import_batch_id' => $batch_id,
-                        'product_id'              => $target_product_id,
-                        'payload'                 => [
-                            'shop_id'              => (int)$shop_id,
-                            'requested_product_id' => (int)$record->id,
+                        'batchable_type' => ProductImportBatch::class,
+                        'batchable_id'   => $batch_id,
+                        'product_id'     => $target_product_id,
+                        'payload'        => [
+                            'shop_id'              => (int) $shop_id,
+                            'requested_product_id' => (int) $record->id,
                             'target_product_id'    => $target_product_id,
                             'requested_by_user_id' => auth()->id(),
                         ],
-                        'status'                  => ProductExportItemsStatusEnum::PROCESSING->value,
-                        'error_message'           => null,
-                        'processed_at'            => null,
+                        'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
+                        'error_message' => null,
+                        'processed_at'  => null,
                     ]);
 
-                    ProcessProductExportItemJob::dispatch((int)$export_item->id);
+                    ProcessProductExportItemJob::dispatch((int) $export_item->id);
                     $summary['exports_queued']++;
 
                     $batch = ProductImportBatch::query()->find($batch_id);
@@ -1196,46 +1502,47 @@ class ProductsTable
 
         if ($existing_export_item instanceof ProductExportItem) {
             $existing_export_item->update([
-                'status' => ProductExportItemsStatusEnum::FAILED->value,
+                'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => now(),
-                'payload' => [
+                'processed_at'  => now(),
+                'payload'       => [
                     ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
-                    'shop_id' => $shop_id,
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => null,
-                    'failure_reason' => 'not_bound_to_shop',
+                    'target_product_id'    => null,
+                    'failure_reason'       => 'not_bound_to_shop',
                     'requested_by_user_id' => auth()->id(),
                 ],
             ]);
         } else {
             ProductExportItem::query()->create([
-                'product_import_batch_id' => $resolved_batch_id,
-                'product_id' => $product_id,
-                'payload' => [
-                    'shop_id' => $shop_id,
+                'batchable_type' => ProductImportBatch::class,
+                'batchable_id'   => $resolved_batch_id,
+                'product_id'     => $product_id,
+                'payload'        => [
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => null,
-                    'failure_reason' => 'not_bound_to_shop',
+                    'target_product_id'    => null,
+                    'failure_reason'       => 'not_bound_to_shop',
                     'requested_by_user_id' => auth()->id(),
                 ],
-                'status' => ProductExportItemsStatusEnum::FAILED->value,
+                'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => now(),
+                'processed_at'  => now(),
             ]);
         }
 
         Log::channel('stack')->warning('Products table export skipped: product is not bound to selected shop', [
-            'batch_id' => $resolved_batch_id,
-            'product_id' => $product_id,
-            'shop_id' => $shop_id,
+            'batch_id'             => $resolved_batch_id,
+            'product_id'           => $product_id,
+            'shop_id'              => $shop_id,
             'requested_by_user_id' => auth()->id(),
         ]);
     }
 
     private static function resolveBatchIdForProductShop(int $product_id, int $shop_id, int $fallback_batch_id = 0): int
     {
-        $batch_id = (int)(ProductShop::query()
+        $batch_id = (int) (ProductShop::query()
             ->where('product_id', $product_id)
             ->where('shop_id', $shop_id)
             ->value('product_import_batch_id') ?? 0);
@@ -1248,7 +1555,7 @@ class ProductsTable
             return $fallback_batch_id;
         }
 
-        return (int)(ProductImportItem::query()
+        return (int) (ProductImportItem::query()
             ->where('product_id', $product_id)
             ->orderByDesc('id')
             ->value('product_import_batch_id') ?? 0);

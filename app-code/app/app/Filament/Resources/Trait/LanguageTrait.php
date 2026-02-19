@@ -10,9 +10,6 @@ use Illuminate\Database\Eloquent\Collection;
 
 trait LanguageTrait
 {
-    /**
-     * @return int|null
-     */
     protected static function getCurrentLanguageId(): ?int
     {
         $language = new Language();
@@ -27,12 +24,6 @@ trait LanguageTrait
         return $current_language_id;
     }
 
-    /**
-     * @param int|null    $language_id
-     * @param string|null $returned_value
-     *
-     * @return string|null
-     */
     protected static function validateLanguageIdIsNotNull(?int $language_id, ?string $returned_value = null): ?string
     {
         if ($language_id === null) {
@@ -57,9 +48,7 @@ trait LanguageTrait
     }
 
     /**
-     * @param Collection<Language> $active_languages
-     *
-     * @return int|null
+     * @param  Collection<Language>  $active_languages
      */
     protected static function tryGetCurrentLanguageIdFromActiveLangs(Collection $active_languages): ?int
     {

@@ -36,7 +36,7 @@ class ProductsTableLocalUpdateQueueTest extends TestCase
         $container->instance('config', new Repository([
             'database.db_prefix' => '',
         ]));
-        $container->instance('log', new class
+        $container->instance('log', new class()
         {
             public function channel(string $name = 'stack'): self
             {

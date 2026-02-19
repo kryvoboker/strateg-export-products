@@ -6,8 +6,8 @@ namespace App\Filament\Resources\Catalog\Categories\Pages;
 
 use App\Filament\Resources\Catalog\Categories\CategoryResource;
 use App\Filament\Resources\Catalog\Categories\Schemas\CategoryForm;
-use App\Jobs\ProcessCategoryNameTranslationJob;
 use App\Filament\Resources\Trait\EditPageTrait;
+use App\Jobs\ProcessCategoryNameTranslationJob;
 use App\Models\Categories\Category;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
@@ -21,7 +21,8 @@ class EditCategory extends EditRecord
 
     #[Locked]
     public Model|int|string|null|Category $record;
-    protected static string               $resource = CategoryResource::class;
+
+    protected static string $resource = CategoryResource::class;
 
     protected function getHeaderActions(): array
     {
@@ -45,8 +46,8 @@ class EditCategory extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         if ($this->record instanceof Category) {
-            $data['category_name'] = (string)($this->record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '');
-            $data['shop_ids']      = $this->record->shops()->pluck('shops.id')->map(static fn($shop_id): int => (int)$shop_id)->all();
+            $data['category_name'] = (string) ($this->record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '');
+            $data['shop_ids']      = $this->record->shops()->pluck('shops.id')->map(static fn ($shop_id): int => (int) $shop_id)->all();
         }
 
         return $data;
@@ -56,8 +57,8 @@ class EditCategory extends EditRecord
     {
         $record->update([
             'parent_id'  => Arr::get($data, 'parent_id'),
-            'sort_order' => (int)Arr::get($data, 'sort_order', 0),
-            'is_active'  => (bool)Arr::get($data, 'is_active', true),
+            'sort_order' => (int) Arr::get($data, 'sort_order', 0),
+            'is_active'  => (bool) Arr::get($data, 'is_active', true),
         ]);
 
         CategoryForm::syncCategoryAdditionalData($record, $data);

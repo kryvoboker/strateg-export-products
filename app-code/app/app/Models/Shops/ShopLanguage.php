@@ -32,8 +32,8 @@ class ShopLanguage extends Model
     protected function casts(): array
     {
         return [
-            'shop_id' => 'integer',
-            'is_active' => 'boolean',
+            'shop_id'    => 'integer',
+            'is_active'  => 'boolean',
             'is_default' => 'boolean',
         ];
     }

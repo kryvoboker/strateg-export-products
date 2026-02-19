@@ -12,14 +12,14 @@ trait DescriptionsTrait
     protected function getNameForFilamentPage(): string
     {
         $description_name = collect($this->getRelationValue('descriptions'))
-            ->map(static fn($description): string => Str::trim((string)Arr::get($description, 'name', '')))
-            ->first(static fn(string $name): bool => $name !== '');
+            ->map(static fn ($description): string => Str::trim((string) Arr::get($description, 'name', '')))
+            ->first(static fn (string $name): bool => $name !== '');
 
         if (is_string($description_name) && $description_name !== '') {
             return $description_name;
         }
 
-        $name_from_db = Str::trim((string)($this->descriptions()
+        $name_from_db = Str::trim((string) ($this->descriptions()
             ->whereNotNull('name')
             ->where('name', '!=', '')
             ->orderByRaw('shop_language_id IS NULL DESC')
@@ -30,6 +30,6 @@ trait DescriptionsTrait
             return $name_from_db;
         }
 
-        return '#' . (int)$this->id;
+        return '#'.(int) $this->id;
     }
 }

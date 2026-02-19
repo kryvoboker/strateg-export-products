@@ -26,7 +26,7 @@ class ProcessCategoryNameTranslationJob implements ShouldQueue
     use SerializesModels;
 
     /**
-     * @param list<int> $shop_ids
+     * @param  list<int>  $shop_ids
      */
     public function __construct(
         public int $category_id,
@@ -52,10 +52,10 @@ class ProcessCategoryNameTranslationJob implements ShouldQueue
         }
 
         $source_language_code = $this->resolveLanguageCode((int) ($source_description->shop_language_id ?? 0), 'uk');
-        $target_languages = $this->resolveTargetLanguages($this->shop_ids);
+        $target_languages     = $this->resolveTargetLanguages($this->shop_ids);
 
         foreach ($target_languages as $target_language) {
-            $shop_language_id = (int) ($target_language->id ?? 0);
+            $shop_language_id     = (int) ($target_language->id ?? 0);
             $target_language_code = $this->resolveLanguageCode($shop_language_id, '');
             if ($shop_language_id <= 0 || $target_language_code === '') {
                 continue;
@@ -91,28 +91,28 @@ class ProcessCategoryNameTranslationJob implements ShouldQueue
                     $this->category_id,
                     $shop_language_id,
                     [
-                        'name' => $translated_name,
-                        'description' => $existing_row?->description,
-                        'h1_title' => $existing_row?->h1_title ?: $translated_name,
-                        'meta_title' => $existing_row?->meta_title ?: $translated_name,
+                        'name'             => $translated_name,
+                        'description'      => $existing_row?->description,
+                        'h1_title'         => $existing_row?->h1_title ?: $translated_name,
+                        'meta_title'       => $existing_row?->meta_title ?: $translated_name,
                         'meta_description' => $existing_row?->meta_description,
-                        'meta_keywords' => $existing_row?->meta_keywords,
+                        'meta_keywords'    => $existing_row?->meta_keywords,
                     ]
                 );
             } catch (Throwable $exception) {
                 Log::channel('stack')->warning('Category name translation failed', [
-                    'category_id' => $this->category_id,
-                    'shop_language_id' => $shop_language_id,
+                    'category_id'          => $this->category_id,
+                    'shop_language_id'     => $shop_language_id,
                     'source_language_code' => $source_language_code,
                     'target_language_code' => $target_language_code,
-                    'message' => $exception->getMessage(),
+                    'message'              => $exception->getMessage(),
                 ]);
             }
         }
     }
 
     /**
-     * @param list<int> $shop_ids
+     * @param  list<int>  $shop_ids
      * @return Collection<int, ShopLanguage>
      */
     private function resolveTargetLanguages(array $shop_ids): Collection

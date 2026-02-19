@@ -24,7 +24,7 @@ class AttributeDescription extends Model
     protected function casts(): array
     {
         return [
-            'attribute_id' => 'integer',
+            'attribute_id'     => 'integer',
             'shop_language_id' => 'integer',
         ];
     }
@@ -109,7 +109,7 @@ class AttributeDescription extends Model
     {
         return self::query()->updateOrCreate(
             [
-                'attribute_id' => $attribute_id,
+                'attribute_id'     => $attribute_id,
                 'shop_language_id' => $shop_language_id > 0 ? $shop_language_id : null,
             ],
             [
@@ -119,7 +119,7 @@ class AttributeDescription extends Model
     }
 
     /**
-     * @param list<array{attribute_id:int,shop_language_id:int}> $pairs
+     * @param  list<array{attribute_id:int,shop_language_id:int}>  $pairs
      * @return array<string, string>
      */
     public static function getNameMapByAttributeLanguagePairs(array $pairs): array
@@ -150,14 +150,14 @@ class AttributeDescription extends Model
 
         $name_map = [];
         foreach ($rows as $row) {
-            $attribute_id = (int) ($row->attribute_id ?? 0);
+            $attribute_id     = (int) ($row->attribute_id ?? 0);
             $shop_language_id = (int) ($row->shop_language_id ?? 0);
 
             if ($attribute_id <= 0 || $shop_language_id <= 0) {
                 continue;
             }
 
-            $name_map[$attribute_id . ':' . $shop_language_id] = (string) ($row->name ?? '');
+            $name_map[$attribute_id.':'.$shop_language_id] = (string) ($row->name ?? '');
         }
 
         return $name_map;

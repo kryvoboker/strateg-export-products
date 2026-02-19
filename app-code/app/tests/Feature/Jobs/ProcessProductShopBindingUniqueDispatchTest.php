@@ -31,4 +31,3 @@ class ProcessProductShopBindingUniqueDispatchTest extends TestCase
         Queue::assertPushed(ProcessProductShopBindingJob::class, 3);
     }
 }
-

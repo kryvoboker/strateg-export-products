@@ -6,9 +6,9 @@ namespace Tests\Feature\Catalog;
 
 use App\Models\Attributes\Attribute;
 use App\Models\Categories\Category;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
 
 class CategoryAttributeDeletionCascadeTest extends TestCase
@@ -26,16 +26,16 @@ class CategoryAttributeDeletionCascadeTest extends TestCase
     {
         $attribute_id = (int) Attribute::query()->create([
             'sort_order' => 1,
-            'is_active' => true,
+            'is_active'  => true,
         ])->id;
 
         DB::table('product_to_attributes')->insert([
-            'product_id' => 100,
-            'attribute_id' => $attribute_id,
+            'product_id'       => 100,
+            'attribute_id'     => $attribute_id,
             'shop_language_id' => null,
-            'text' => 'Some value',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'text'             => 'Some value',
+            'created_at'       => now(),
+            'updated_at'       => now(),
         ]);
 
         self::assertSame(1, DB::table('product_to_attributes')->where('attribute_id', $attribute_id)->count());
@@ -48,57 +48,57 @@ class CategoryAttributeDeletionCascadeTest extends TestCase
     public function test_deleting_parent_category_deletes_children_and_related_rows(): void
     {
         $parent_category = Category::query()->create([
-            'parent_id' => null,
+            'parent_id'  => null,
             'sort_order' => 0,
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         $child_category = Category::query()->create([
-            'parent_id' => (int) $parent_category->id,
+            'parent_id'  => (int) $parent_category->id,
             'sort_order' => 0,
-            'is_active' => true,
+            'is_active'  => true,
         ]);
 
         DB::table('category_descriptions')->insert([
             [
-                'category_id' => (int) $parent_category->id,
+                'category_id'      => (int) $parent_category->id,
                 'shop_language_id' => null,
-                'name' => 'Parent',
-                'description' => null,
-                'h1_title' => null,
-                'meta_title' => null,
+                'name'             => 'Parent',
+                'description'      => null,
+                'h1_title'         => null,
+                'meta_title'       => null,
                 'meta_description' => null,
-                'meta_keywords' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'meta_keywords'    => null,
+                'created_at'       => now(),
+                'updated_at'       => now(),
             ],
             [
-                'category_id' => (int) $child_category->id,
+                'category_id'      => (int) $child_category->id,
                 'shop_language_id' => null,
-                'name' => 'Child',
-                'description' => null,
-                'h1_title' => null,
-                'meta_title' => null,
+                'name'             => 'Child',
+                'description'      => null,
+                'h1_title'         => null,
+                'meta_title'       => null,
                 'meta_description' => null,
-                'meta_keywords' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'meta_keywords'    => null,
+                'created_at'       => now(),
+                'updated_at'       => now(),
             ],
         ]);
 
         DB::table('category_product')->insert([
-            'product_id' => 101,
+            'product_id'  => 101,
             'category_id' => (int) $child_category->id,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at'  => now(),
+            'updated_at'  => now(),
         ]);
 
         DB::table('category_shop')->insert([
-            'category_id' => (int) $child_category->id,
-            'shop_id' => 10,
+            'category_id'          => (int) $child_category->id,
+            'shop_id'              => 10,
             'external_category_id' => null,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at'           => now(),
+            'updated_at'           => now(),
         ]);
 
         $parent_category->delete();

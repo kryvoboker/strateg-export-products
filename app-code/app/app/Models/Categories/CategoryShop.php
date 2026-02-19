@@ -24,8 +24,8 @@ class CategoryShop extends Model
     protected function casts(): array
     {
         return [
-            'category_id' => 'integer',
-            'shop_id' => 'integer',
+            'category_id'          => 'integer',
+            'shop_id'              => 'integer',
             'external_category_id' => 'integer',
         ];
     }

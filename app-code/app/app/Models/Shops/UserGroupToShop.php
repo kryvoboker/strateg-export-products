@@ -24,7 +24,7 @@ class UserGroupToShop extends Model
     protected function casts(): array
     {
         return [
-            'shop_id' => 'integer',
+            'shop_id'   => 'integer',
             'is_active' => 'boolean',
         ];
     }

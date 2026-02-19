@@ -39,7 +39,8 @@ return [
     |
     */
 
-    'debug' => (bool)env('APP_DEBUG', false),
+    'debug'                 => (bool) env('APP_DEBUG', false),
+    'enable_xdebug_session' => (bool) env('ENABLE_XDEBUG_SESSION', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -107,7 +108,7 @@ return [
 
     'previous_keys' => [
         ...array_filter(
-            explode(',', (string)env('APP_PREVIOUS_KEYS', ''))
+            explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
         ),
     ],
 
@@ -128,57 +129,57 @@ return [
         'driver'        => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store'         => env('APP_MAINTENANCE_STORE', 'database'),
         'support_email' => env('APP_MAINTENANCE_SUPPORT_EMAIL'),
-        'retry_after'   => (int)env('APP_MAINTENANCE_RETRY_AFTER'),
+        'retry_after'   => (int) env('APP_MAINTENANCE_RETRY_AFTER'),
     ],
 
-    'allowed_projects_types'    => [
+    'allowed_projects_types' => [
         'opencart' => explode(',', env('ALLOWED_OPENCART_PROJECTS_TYPES', '')),
     ],
-    'denied_delete_emails'      => [
-        'fast.kamaz@gmail.com'
+    'denied_delete_emails' => [
+        'fast.kamaz@gmail.com',
     ],
     'regex_validate_conditions' => [
         'email'     => '/^((?!\.)[\w\-_.]*[^.])(@\w+)(\.\w+(\.\w+)?[^.\W])$/',
         'telephone' => '/(^((\+?\d{2,}\s?)|(.*))\(?\d{3,}\)?\s?\d{3,}-?\d{2,}-?\d{2,}$)/',
         'password'  => '/^(?=.*\d)(?=.*[A-Z])(?=.*[a-z])(?=.*[^\w\s:])(\S)+$/',
     ],
-    'images'                    => [
+    'images' => [
         'product' => [
-            'upload'                   => [
-                'max_size_kb' => (int)env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB,
+            'upload' => [
+                'max_size_kb' => (int) env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB,
             ],
             'no_image'                 => env('DEFAULT_PRODUCT_NO_IMAGE_PATH'),
             'preview_in_list_in_admin' => [
-                'width'  => (int)env('PRODUCT_IMAGE_PREVIEW_IN_LIST_IN_ADMIN_WIDTH', 100),
-                'height' => (int)env('PRODUCT_IMAGE_PREVIEW_IN_LIST_IN_ADMIN_HEIGHT', 100),
+                'width'  => (int) env('PRODUCT_IMAGE_PREVIEW_IN_LIST_IN_ADMIN_WIDTH', 100),
+                'height' => (int) env('PRODUCT_IMAGE_PREVIEW_IN_LIST_IN_ADMIN_HEIGHT', 100),
             ],
             'preview_in_page_in_admin' => [
-                'width'  => (int)env('PRODUCT_IMAGE_PREVIEW_IN_PAGE_IN_ADMIN_WIDTH', 500),
-                'height' => (int)env('PRODUCT_IMAGE_PREVIEW_IN_PAGE_IN_ADMIN_HEIGHT', 500),
+                'width'  => (int) env('PRODUCT_IMAGE_PREVIEW_IN_PAGE_IN_ADMIN_WIDTH', 500),
+                'height' => (int) env('PRODUCT_IMAGE_PREVIEW_IN_PAGE_IN_ADMIN_HEIGHT', 500),
             ],
-            'image_path'               => env('PRODUCTS_IMAGES_PATH', 'images/products') . '/' . date('Y/m'),
+            'image_path' => env('PRODUCTS_IMAGES_PATH', 'images/products').'/'.date('Y/m'),
         ],
-        'user'    => [
-            'upload'                   => [
-                'max_size_kb' => (int)env('MAX_UPLOAD_USER_IMAGE_SIZE_KB', 5120), // 5 MB,
+        'user' => [
+            'upload' => [
+                'max_size_kb' => (int) env('MAX_UPLOAD_USER_IMAGE_SIZE_KB', 5120), // 5 MB,
             ],
             'no_image'                 => env('DEFAULT_USER_NO_AVATAR_PATH'),
             'preview_in_list_in_admin' => [
-                'width'  => (int)env('USER_AVATAR_PREVIEW_IN_LIST_IN_ADMIN_WIDTH', 100),
-                'height' => (int)env('USER_AVATAR_PREVIEW_IN_LIST_IN_ADMIN_HEIGHT', 100),
+                'width'  => (int) env('USER_AVATAR_PREVIEW_IN_LIST_IN_ADMIN_WIDTH', 100),
+                'height' => (int) env('USER_AVATAR_PREVIEW_IN_LIST_IN_ADMIN_HEIGHT', 100),
             ],
             'preview_in_page_in_admin' => [
-                'width'  => (int)env('USER_AVATAR_PREVIEW_IN_PAGE_IN_ADMIN_WIDTH', 500),
-                'height' => (int)env('USER_AVATAR_PREVIEW_IN_PAGE_IN_ADMIN_HEIGHT', 500),
+                'width'  => (int) env('USER_AVATAR_PREVIEW_IN_PAGE_IN_ADMIN_WIDTH', 500),
+                'height' => (int) env('USER_AVATAR_PREVIEW_IN_PAGE_IN_ADMIN_HEIGHT', 500),
             ],
-            'image_path'               => env('AVATARS_PATH') . '/' . date('Y/m'),
-        ]
-    ],
-    'sheets'                    => [
-        'upload'     => [
-            'max_size_kb' => (int)env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB,
+            'image_path' => env('AVATARS_PATH').'/'.date('Y/m'),
         ],
-        'sheet_path' => env('SHEETS_PATH') . '/' . date('Y/m'),
+    ],
+    'sheets' => [
+        'upload' => [
+            'max_size_kb' => (int) env('MAX_UPLOAD_PRODUCT_IMAGE_SIZE_KB', 5120), // 5 MB,
+        ],
+        'sheet_path' => env('SHEETS_PATH').'/'.date('Y/m'),
         'defs'       => [
             'products'               => 'Products',
             'product_images'         => 'Product Images',

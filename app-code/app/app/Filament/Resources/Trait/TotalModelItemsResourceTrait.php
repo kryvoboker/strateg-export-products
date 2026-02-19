@@ -6,13 +6,10 @@ namespace App\Filament\Resources\Trait;
 
 trait TotalModelItemsResourceTrait
 {
-    /**
-     * @return string|null
-     */
     public static function getNavigationBadge(): ?string
     {
         $total_items_in_model = self::$model::count();
 
-        return $total_items_in_model > 0 ? (string)$total_items_in_model : '0';
+        return $total_items_in_model > 0 ? (string) $total_items_in_model : '0';
     }
 }

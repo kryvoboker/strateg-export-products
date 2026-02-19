@@ -194,24 +194,24 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         ]);
 
         $category_id = Schema::getConnection()->table('categories')->insertGetId([
-            'parent_id'   => null,
-            'sort_order'  => 0,
-            'is_active'   => true,
-            'created_at'  => now(),
-            'updated_at'  => now(),
+            'parent_id'  => null,
+            'sort_order' => 0,
+            'is_active'  => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Schema::getConnection()->table('category_descriptions')->insert([
-            'category_id'       => $category_id,
-            'shop_language_id'  => 1,
-            'name'              => 'Existing Category',
-            'description'       => null,
-            'h1_title'          => 'Existing Category',
-            'meta_title'        => 'Existing Category',
-            'meta_description'  => null,
-            'meta_keywords'     => null,
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'category_id'      => $category_id,
+            'shop_language_id' => 1,
+            'name'             => 'Existing Category',
+            'description'      => null,
+            'h1_title'         => 'Existing Category',
+            'meta_title'       => 'Existing Category',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+            'created_at'       => now(),
+            'updated_at'       => now(),
         ]);
 
         Schema::getConnection()->table('category_product')->insert([
@@ -229,11 +229,11 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         ]);
 
         Schema::getConnection()->table('attribute_descriptions')->insert([
-            'attribute_id'      => $attribute_id,
-            'shop_language_id'  => 1,
-            'name'              => 'Material',
-            'created_at'        => now(),
-            'updated_at'        => now(),
+            'attribute_id'     => $attribute_id,
+            'shop_language_id' => 1,
+            'name'             => 'Material',
+            'created_at'       => now(),
+            'updated_at'       => now(),
         ]);
 
         Schema::getConnection()->table('product_descriptions')->insert([
@@ -249,11 +249,11 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         ]);
 
         Schema::getConnection()->table('product_images')->insert([
-            'product_id'  => (int) $product->id,
-            'image'       => '/img/original.jpg',
-            'sort_order'  => 1,
-            'created_at'  => now(),
-            'updated_at'  => now(),
+            'product_id' => (int) $product->id,
+            'image'      => '/img/original.jpg',
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Schema::getConnection()->table('product_to_attributes')->insert([
@@ -376,6 +376,71 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         self::assertDatabaseCount('seo_urls', 0);
         self::assertDatabaseCount('product_specials', 0);
         self::assertDatabaseCount('product_discounts', 0);
+    }
+
+    public function test_it_interprets_empty_as_no_change_and_x_as_delete_for_local_updates(): void
+    {
+        $product = Product::query()->create([
+            'product_import_item_id' => 1,
+            'family_ulid'            => '01HFAMILYULID00000000000003',
+            'model'                  => 'MODEL-BASE',
+            'sku'                    => 'SKU-BASE',
+            'ean'                    => 'EAN-BASE',
+            'quantity'               => 9,
+            'minimum'                => 3,
+            'image'                  => '/img/base.jpg',
+            'price'                  => 19.99,
+            'is_active'              => true,
+            'date_available'         => null,
+            'date_added'             => null,
+        ]);
+
+        Schema::getConnection()->table('product_descriptions')->insert([
+            'product_id'       => (int) $product->id,
+            'shop_language_id' => 1,
+            'name'             => 'Initial Name',
+            'description'      => 'Initial Description',
+            'meta_title'       => 'Initial Meta',
+            'meta_description' => 'Initial Meta Description',
+            'meta_keywords'    => 'kw',
+            'created_at'       => now(),
+            'updated_at'       => now(),
+        ]);
+
+        $job = new ProcessProductUpdateBatchJob(1);
+
+        $empty_instruction  = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['']);
+        $delete_instruction = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['x']);
+        $set_instruction    = $this->invokePrivateMethod($job, 'buildFieldInstruction', ['SKU-NEW']);
+
+        $this->invokePrivateMethod($job, 'applyLocalProductUpdates', [
+            (int) $product->id,
+            [
+                'model' => $empty_instruction,
+                'ean'   => $delete_instruction,
+                'sku'   => $set_instruction,
+            ],
+        ]);
+
+        $this->invokePrivateMethod($job, 'applyLocalProductDescriptionUpdates', [
+            (int) $product->id,
+            [
+                'name'        => $empty_instruction,
+                'description' => $delete_instruction,
+            ],
+        ]);
+
+        $product->refresh();
+
+        self::assertSame('MODEL-BASE', (string) $product->model);
+        self::assertNull($product->ean);
+        self::assertSame('SKU-NEW', (string) $product->sku);
+
+        self::assertDatabaseHas('product_descriptions', [
+            'product_id'  => (int) $product->id,
+            'name'        => 'Initial Name',
+            'description' => null,
+        ]);
     }
 
     /**

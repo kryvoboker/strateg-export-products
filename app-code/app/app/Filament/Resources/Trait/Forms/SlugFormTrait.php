@@ -13,9 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 trait SlugFormTrait
 {
     /**
-     * @param Collection<Language> $active_languages
-     *
-     * @return Tabs\Tab
+     * @param  Collection<Language>  $active_languages
      */
     protected static function createSlugsFormTabs(Collection $active_languages): Tabs\Tab
     {

@@ -8,14 +8,19 @@ use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Jobs\ProcessProductExportItemJob;
+use App\Jobs\ProcessProductRestoreBatchJob;
 use App\Jobs\ProcessProductShopBindingJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandShop;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
 use App\Models\Categories\CategoryShop;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
@@ -26,9 +31,13 @@ use App\Models\Products\ProductImage;
 use App\Models\Products\ProductShop;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
+use App\Models\Products\Updates\ProductBackups;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
+use App\Supports\Services\Products\ProductBackupRestoreService;
+use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -50,6 +59,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -84,6 +94,8 @@ class ProductImportItemsRelationManager extends RelationManager
             ->defaultSort('id', 'desc')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'product.descriptions',
+                'product.productToManufacturerBrand.manufacturer.descriptions',
+                'product.productToManufacturerBrand.brand.descriptions',
             ])->where('product_import_batch_id', (int) $this->getOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')
@@ -121,6 +133,14 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->label('EAN')
                     ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->ean ?? ''))
                     ->toggleable(),
+                TextColumn::make('manufacturer_name')
+                    ->label('Manufacturer')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->productToManufacturerBrand?->manufacturer?->manufacturer_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('brand_name')
+                    ->label('Brand')
+                    ->state(static fn (ProductImportItem $record): string => (string) ($record->product?->productToManufacturerBrand?->brand?->brand_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('external_product_id')
                     ->label('External product id')
                     ->state(static function (ProductImportItem $record): string {
@@ -221,6 +241,8 @@ class ProductImportItemsRelationManager extends RelationManager
                         TextInput::make('attribute_name')->label('Attribute name'),
                         TextInput::make('attribute_value')->label('Attribute value'),
                         TextInput::make('category_name')->label('Category name'),
+                        TextInput::make('manufacturer_name')->label('Manufacturer'),
+                        TextInput::make('brand_name')->label('Brand'),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
                         $query,
@@ -313,6 +335,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             'images',
                             'categories.descriptions',
                             'productToAttributes',
+                            'productToManufacturerBrand',
                             'specials',
                             'discounts',
                         ])->find((int) $record->product_id);
@@ -431,6 +454,8 @@ class ProductImportItemsRelationManager extends RelationManager
                             'minimum'               => $product->minimum,
                             'image'                 => $product->image,
                             'price'                 => $product->price,
+                            'manufacturer_id'       => (int) ($product->productToManufacturerBrand?->manufacturer_id ?? 0) ?: null,
+                            'brand_id'              => (int) ($product->productToManufacturerBrand?->brand_id ?? 0) ?: null,
                             'is_active'             => (bool) $product->is_active,
                             'date_available'        => $product->date_available,
                             'date_added'            => $product->date_added,
@@ -538,6 +563,22 @@ class ProductImportItemsRelationManager extends RelationManager
                                         TextInput::make('model')->label(__('admin/product_imports/batches.product_edit.fields.model'))->maxLength(255),
                                         TextInput::make('sku')->label(__('admin/product_imports/batches.product_edit.fields.sku'))->maxLength(255),
                                         TextInput::make('ean')->label(__('admin/product_imports/batches.product_edit.fields.ean'))->maxLength(255),
+                                        Select::make('manufacturer_id')
+                                            ->label('Manufacturer')
+                                            ->options(fn (callable $get): array => $this->getManufacturerOptionsByScope(
+                                                (int) ($get('bind_shop_id') ?? 0),
+                                                (int) ($get('bind_shop_language_id') ?? 0),
+                                            ))
+                                            ->searchable()
+                                            ->preload(),
+                                        Select::make('brand_id')
+                                            ->label('Brand')
+                                            ->options(fn (callable $get): array => $this->getBrandOptionsByScope(
+                                                (int) ($get('bind_shop_id') ?? 0),
+                                                (int) ($get('bind_shop_language_id') ?? 0),
+                                            ))
+                                            ->searchable()
+                                            ->preload(),
                                         TextInput::make('quantity')->label(__('admin/product_imports/batches.product_edit.fields.quantity'))->numeric(),
                                         TextInput::make('minimum')->label(__('admin/product_imports/batches.product_edit.fields.minimum'))->numeric(),
                                         TextInput::make('image')->label(__('admin/product_imports/batches.product_edit.fields.image'))->maxLength(3000),
@@ -642,8 +683,66 @@ class ProductImportItemsRelationManager extends RelationManager
                             ])
                             ->columnSpanFull(),
                     ])
-                    ->action(function (ProductImportItem $record, array $data): void {
+                    ->action(function (ProductImportItem $record, array $data, Action $action): void {
                         $this->saveEditedProduct($record, $data);
+
+                        $action->halt();
+                    }),
+                Action::make('restoreProductFromBackup')
+                    ->label(__('admin/product_imports/batches.actions.restore_product_from_backup'))
+                    ->icon(Heroicon::ArrowUturnLeft)
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading(__('admin/product_imports/batches.actions.restore_product_from_backup'))
+                    ->modalDescription(__('admin/product_imports/batches.messages.restore_product_confirmation'))
+                    ->visible(static fn (ProductImportItem $record): bool => self::canShowRestoreFromBackupAction((int) ($record->product_id ?? 0)))
+                    ->action(function (ProductImportItem $record): void {
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $batch_id   = (int) ($record->product_import_batch_id ?? 0);
+
+                        if ($product_id <= 0) {
+                            Notification::make()
+                                ->title(__('admin/product_imports/batches.messages.restore_product_not_available'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        try {
+                            $this->safeLogInfo('Restore from backup action triggered', [
+                                'product_import_item_id'  => (int) $record->id,
+                                'product_import_batch_id' => $batch_id,
+                                'product_id'              => $product_id,
+                                'user_id'                 => auth()->id(),
+                                'restore_mode'            => 'sync_no_queue',
+                            ]);
+
+                            self::restoreProductFromLatestBackup($record);
+
+                            Notification::make()
+                                ->title(__('admin/product_imports/batches.messages.restore_product_success'))
+                                ->success()
+                                ->send();
+                        } catch (Throwable $exception) {
+                            Log::channel('stack')->error('Restore from backup action failed', [
+                                'product_import_item_id'  => (int) $record->id,
+                                'product_import_batch_id' => $batch_id,
+                                'product_id'              => $product_id,
+                                'user_id'                 => auth()->id(),
+                                'error_msg'               => $exception->getMessage(),
+                                'file'                    => $exception->getFile(),
+                                'line'                    => $exception->getLine(),
+                                'exception'               => $exception,
+                                'restore_mode'            => 'sync_no_queue',
+                            ]);
+
+                            Notification::make()
+                                ->title(__('admin/product_imports/batches.messages.restore_product_failed'))
+                                ->body(Str::limit(Str::trim($exception->getMessage()), 500))
+                                ->danger()
+                                ->send();
+                        }
                     }),
 
                 Action::make('exportProductToShops')
@@ -719,6 +818,43 @@ class ProductImportItemsRelationManager extends RelationManager
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('restoreProductsFromBackups')
+                        ->label(__('admin/product_imports/batches.actions.restore_products_from_backups'))
+                        ->icon(Heroicon::ArrowUturnLeft)
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->modalHeading(__('admin/product_imports/batches.actions.restore_products_from_backups'))
+                        ->modalDescription(__('admin/product_imports/batches.messages.restore_products_bulk_confirmation'))
+                        ->action(function ($records): void {
+                            $record_ids = collect($records)
+                                ->filter(static fn ($record): bool => $record instanceof ProductImportItem)
+                                ->map(static fn (ProductImportItem $record): int => (int) $record->id)
+                                ->filter(static fn (int $id): bool => $id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            if ($record_ids === []) {
+                                Notification::make()
+                                    ->title(__('admin/product_imports/batches.messages.restore_products_bulk_no_items'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            ProcessProductRestoreBatchJob::dispatch($record_ids, auth()->id());
+
+                            Notification::make()
+                                ->title(__('admin/product_imports/batches.messages.restore_products_bulk_queued'))
+                                ->body(__('admin/product_imports/batches.messages.restore_products_bulk_result', [
+                                    'items_selected' => count($record_ids),
+                                ]))
+                                ->success()
+                                ->send();
+                        }),
+
                     BulkAction::make('bindProductsToShops')
                         ->label(__('admin/product_imports/batches.actions.bind_products_to_shops'))
                         ->icon(Heroicon::Link)
@@ -912,7 +1048,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public static function applyBatchSearchFieldsQuery(Builder $query, array $data, int $batch_id): Builder
     {
@@ -920,23 +1056,25 @@ class ProductImportItemsRelationManager extends RelationManager
             $query->where('product_import_batch_id', $batch_id);
         }
 
-        $name                = Str::lower(Str::trim((string)Arr::get($data, 'name', '')));
-        $model               = Str::lower(Str::trim((string)Arr::get($data, 'model', '')));
-        $sku                 = Str::lower(Str::trim((string)Arr::get($data, 'sku', '')));
-        $ean                 = Str::lower(Str::trim((string)Arr::get($data, 'ean', '')));
-        $external_product_id = Str::trim((string)Arr::get($data, 'external_product_id', ''));
-        $quantity            = Str::trim((string)Arr::get($data, 'quantity', ''));
-        $price               = Str::trim((string)Arr::get($data, 'price', ''));
-        $attribute_name      = Str::lower(Str::trim((string)Arr::get($data, 'attribute_name', '')));
-        $attribute_value     = Str::lower(Str::trim((string)Arr::get($data, 'attribute_value', '')));
-        $category_name       = Str::lower(Str::trim((string)Arr::get($data, 'category_name', '')));
+        $name                = Str::lower(Str::trim((string) Arr::get($data, 'name', '')));
+        $model               = Str::lower(Str::trim((string) Arr::get($data, 'model', '')));
+        $sku                 = Str::lower(Str::trim((string) Arr::get($data, 'sku', '')));
+        $ean                 = Str::lower(Str::trim((string) Arr::get($data, 'ean', '')));
+        $external_product_id = Str::trim((string) Arr::get($data, 'external_product_id', ''));
+        $quantity            = Str::trim((string) Arr::get($data, 'quantity', ''));
+        $price               = Str::trim((string) Arr::get($data, 'price', ''));
+        $attribute_name      = Str::lower(Str::trim((string) Arr::get($data, 'attribute_name', '')));
+        $attribute_value     = Str::lower(Str::trim((string) Arr::get($data, 'attribute_value', '')));
+        $category_name       = Str::lower(Str::trim((string) Arr::get($data, 'category_name', '')));
+        $manufacturer_name   = Str::lower(Str::trim((string) Arr::get($data, 'manufacturer_name', '')));
+        $brand_name          = Str::lower(Str::trim((string) Arr::get($data, 'brand_name', '')));
 
         if ($name !== '') {
             $query->whereHas(
                 'product.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $name . '%']
+                    ['%'.$name.'%']
                 )
             );
         }
@@ -946,7 +1084,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(model, \'\')) LIKE ?',
-                    ['%' . $model . '%']
+                    ['%'.$model.'%']
                 )
             );
         }
@@ -956,7 +1094,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(sku, \'\')) LIKE ?',
-                    ['%' . $sku . '%']
+                    ['%'.$sku.'%']
                 )
             );
         }
@@ -966,7 +1104,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(ean, \'\')) LIKE ?',
-                    ['%' . $ean . '%']
+                    ['%'.$ean.'%']
                 )
             );
         }
@@ -984,7 +1122,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 } else {
                     $product_shop_query->whereRaw(
                         'LOWER(COALESCE(CAST(product_shop.external_product_id AS TEXT), \'\')) LIKE ?',
-                        ['%' . Str::lower($external_product_id) . '%']
+                        ['%'.Str::lower($external_product_id).'%']
                     );
                 }
             });
@@ -998,7 +1136,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
                 return $product_query->whereRaw(
                     'LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?',
-                    ['%' . Str::lower($quantity) . '%']
+                    ['%'.Str::lower($quantity).'%']
                 );
             });
         }
@@ -1011,7 +1149,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
                 return $product_query->whereRaw(
                     'LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?',
-                    ['%' . Str::lower($price) . '%']
+                    ['%'.Str::lower($price).'%']
                 );
             });
         }
@@ -1021,7 +1159,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product.attributes.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $attribute_name . '%']
+                    ['%'.$attribute_name.'%']
                 )
             );
         }
@@ -1031,7 +1169,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product.productToAttributes',
                 static fn (Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
                     'LOWER(COALESCE(text, \'\')) LIKE ?',
-                    ['%' . $attribute_value . '%']
+                    ['%'.$attribute_value.'%']
                 )
             );
         }
@@ -1041,12 +1179,57 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product.categories.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $category_name . '%']
+                    ['%'.$category_name.'%']
+                )
+            );
+        }
+
+        if ($manufacturer_name !== '') {
+            $query->whereHas(
+                'product.productToManufacturerBrand.manufacturer.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$manufacturer_name.'%']
+                )
+            );
+        }
+
+        if ($brand_name !== '') {
+            $query->whereHas(
+                'product.productToManufacturerBrand.brand.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$brand_name.'%']
                 )
             );
         }
 
         return $query;
+    }
+
+    public static function canShowRestoreFromBackupAction(int $product_id): bool
+    {
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        return app(ProductBackupRestoreService::class)
+            ->hasValidLatestLocalSnapshotForProduct($product_id);
+    }
+
+    public static function restoreProductFromLatestBackup(ProductImportItem $record): ProductBackups
+    {
+        $product_id = (int) ($record->product_id ?? 0);
+        if ($product_id <= 0) {
+            throw new RuntimeException('Product id is required for restore');
+        }
+
+        if (! self::canShowRestoreFromBackupAction($product_id)) {
+            throw new RuntimeException('Valid local product backup not found');
+        }
+
+        return app(ProductBackupRestoreService::class)
+            ->restoreLatestSnapshotForProduct($product_id);
     }
 
     private function checkIsCanTryingExportProduct(ProductImportItem $record): bool
@@ -1058,7 +1241,7 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         return ProductExportItem::query()
-            ->where('product_import_batch_id', (int) $record->product_import_batch_id)
+            ->forBatchable(ProductImportBatch::class, (int) $record->product_import_batch_id)
             ->where('product_id', $product_id)
             ->where(function (Builder $query) {
                 $query->where('status', ProductExportItemsStatusEnum::FAILED->value)
@@ -1143,9 +1326,10 @@ class ProductImportItemsRelationManager extends RelationManager
                 }
 
                 $export_item = ProductExportItem::query()->create([
-                    'product_import_batch_id' => $resolved_batch_id,
-                    'product_id'              => $product_id,
-                    'payload'                 => [
+                    'batchable_type' => ProductImportBatch::class,
+                    'batchable_id'   => $resolved_batch_id,
+                    'product_id'     => $product_id,
+                    'payload'        => [
                         'shop_id'              => $shop_id,
                         'requested_product_id' => $requested_product_id,
                         'target_product_id'    => $product_id,
@@ -1199,9 +1383,10 @@ class ProductImportItemsRelationManager extends RelationManager
             ]);
         } else {
             ProductExportItem::query()->create([
-                'product_import_batch_id' => $batch_id,
-                'product_id'              => $product_id,
-                'payload'                 => [
+                'batchable_type' => ProductImportBatch::class,
+                'batchable_id'   => $batch_id,
+                'product_id'     => $product_id,
+                'payload'        => [
                     'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
                     'target_product_id'    => null,
@@ -1312,7 +1497,7 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         $failed_export_items = ProductExportItem::query()
-            ->where('product_import_batch_id', $batch_id)
+            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->where('status', ProductExportItemsStatusEnum::FAILED->value)
             ->orderBy('id')
@@ -1348,7 +1533,7 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         $total_export_items = ProductExportItem::query()
-            ->where('product_import_batch_id', $batch_id)
+            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->count();
 
@@ -1357,7 +1542,7 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         $processing_count = ProductExportItem::query()
-            ->where('product_import_batch_id', $batch_id)
+            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->where('status', ProductExportItemsStatusEnum::PROCESSING->value)
             ->count();
@@ -1367,13 +1552,13 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         $failed_count = ProductExportItem::query()
-            ->where('product_import_batch_id', $batch_id)
+            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->where('status', ProductExportItemsStatusEnum::FAILED->value)
             ->count();
 
         $exported_count = ProductExportItem::query()
-            ->where('product_import_batch_id', $batch_id)
+            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->where('status', ProductExportItemsStatusEnum::EXPORTED->value)
             ->count();
@@ -1562,6 +1747,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $bind_shop_id          = (int) Arr::get($data, 'bind_shop_id', 0);
         $bind_shop_language_id = (int) Arr::get($data, 'bind_shop_language_id', 0);
+        $data                  = $this->sanitizeAttributesSelectionBeforeSave($data, $source_product_id);
         $target_product        = $source_product;
 
         DB::transaction(function () use ($record, $source_product, $bind_shop_id, $bind_shop_language_id, $data, &$target_product): void {
@@ -1571,7 +1757,17 @@ class ProductImportItemsRelationManager extends RelationManager
                 $target_product = $this->resolveTargetProductForShopBinding($source_product, $bind_shop_id, $batch_id);
             }
 
-            $this->persistEditedProductData($target_product, $data, $bind_shop_language_id);
+            try {
+                $this->persistEditedProductData($target_product, $data, $bind_shop_language_id);
+            } catch (Exception $e) {
+                Notification::make()
+                    ->title(__('admin/product_imports/batches.errors.update_product'))
+                    ->body($e->getMessage())
+                    ->danger()
+                    ->send();
+
+                throw $e;
+            }
 
             if ($bind_shop_id > 0) {
                 $shop_name = (string) (Shop::query()->whereKey($bind_shop_id)->value('name') ?? $bind_shop_id);
@@ -1583,9 +1779,16 @@ class ProductImportItemsRelationManager extends RelationManager
                     'external_product_id'     => null,
                 ]);
 
-                $target_product->update([
+                $is_updated = $target_product->update([
                     'marked_to_shop' => $shop_name,
                 ]);
+
+                if ($is_updated === true) {
+                    Notification::make()
+                        ->title(__('admin/product_imports/batches.messages.product_update_success'))
+                        ->success()
+                        ->send();
+                }
 
                 $this->ensureShopLinksForProduct($target_product->id, $bind_shop_id);
 
@@ -1602,17 +1805,95 @@ class ProductImportItemsRelationManager extends RelationManager
             }
 
             if ($target_product->id !== (int) $record->product_id) {
-                $record->update([
+                $is_updated = $record->update([
                     'product_id' => $target_product->id,
                 ]);
+
+                if ($is_updated === true) {
+                    Notification::make()
+                        ->title(__('admin/product_imports/batches.messages.product_update_success'))
+                        ->success()
+                        ->send();
+                }
             }
         });
     }
 
+    /**
+     * @param  array<string, mixed>  $form_data
+     * @return array<string, mixed>
+     */
+    private function sanitizeAttributesSelectionBeforeSave(array $form_data, int $product_id = 0): array
+    {
+        $selected_by_language = Arr::get($form_data, 'attributes_selected_by_language', []);
+        $custom_by_language   = Arr::get($form_data, 'attributes_custom_by_language', []);
+
+        if (! is_array($selected_by_language) || ! is_array($custom_by_language)) {
+            return $form_data;
+        }
+
+        foreach ($selected_by_language as $shop_language_id => $selected_attribute_ids) {
+            if (! is_array($selected_attribute_ids)) {
+                continue;
+            }
+
+            $custom_rows = $custom_by_language[$shop_language_id] ?? null;
+            if (! is_array($custom_rows)) {
+                continue;
+            }
+
+            $has_custom_attribute_names = collect($custom_rows)
+                ->filter(static fn ($row): bool => is_array($row))
+                ->contains(static fn (array $row): bool => Str::trim((string) Arr::get($row, 'attribute_name', '')) !== '');
+
+            if (! $has_custom_attribute_names) {
+                continue;
+            }
+
+            Arr::set($form_data, 'attributes_selected_by_language.'.$shop_language_id, []);
+
+            $this->safeLogInfo('[FIX] Cleared selected attributes because custom attribute names are present', [
+                'product_id'       => $product_id > 0 ? $product_id : null,
+                'shop_language_id' => (int) $shop_language_id,
+                'selected_before'  => array_values(array_unique(array_map(static fn ($id): int => (int) $id, $selected_attribute_ids))),
+            ]);
+        }
+
+        return $form_data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function safeLogInfo(string $message, array $context = []): void
+    {
+        try {
+            $container = Container::getInstance();
+            if ($container === null || ! $container->bound('log')) {
+                return;
+            }
+
+            $logger = $container->make('log');
+            if (! is_object($logger)) {
+                return;
+            }
+
+            $channel_logger = method_exists($logger, 'channel')
+                ? $logger->channel('stack')
+                : $logger;
+
+            if (is_object($channel_logger) && method_exists($channel_logger, 'info')) {
+                $channel_logger->info($message, $context);
+            }
+        } catch (Throwable) {
+            // Ignore logging transport/mocking errors to keep business flow stable.
+        }
+    }
+
     private function resolveTargetProductForShopBinding(Product $source_product, int $shop_id, int $batch_id): Product
     {
-        $shop_name = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
-        $family_ulid = $this->ensureProductFamilyUlid($source_product);
+        $shop_name         = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
+        $family_ulid       = $this->ensureProductFamilyUlid($source_product);
         $family_product_id = $this->resolveAlreadyBoundProductIdByFamilyUlid($family_ulid, $shop_id);
 
         if ($family_product_id > 0) {
@@ -1700,7 +1981,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return $family_ulid;
         }
 
-        $source_ulid = '';
+        $source_ulid            = '';
         $product_import_item_id = (int) ($product->product_import_item_id ?? 0);
 
         if ($product_import_item_id > 0 && $this->hasProductImportItemUlidColumn()) {
@@ -2017,6 +2298,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $this->syncProductCategoriesFromFormData($product_id, $data, $default_shop_language_id);
         $this->syncProductAttributesFromFormData($product_id, $data, $default_shop_language_id);
+        $this->syncProductManufacturerBrandFromFormData($product_id, $data);
 
         SeoUrl::query()
             ->where('seoable_type', Product::class)
@@ -2043,6 +2325,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         'seoable_type'     => Product::class,
                         'seoable_id'       => $product_id,
                         'shop_language_id' => $resolved_shop_language_id,
+                        'query_key'        => (string) Arr::get($seo_row, 'query_key', ''),
                         'query_value'      => (string) $product_id,
                         'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
                         'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
@@ -2059,6 +2342,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'seoable_type'     => Product::class,
                     'seoable_id'       => $product_id,
                     'shop_language_id' => null,
+                    'query_key'        => (string) Arr::get($seo_row, 'query_key', ''),
                     'query_value'      => (string) $product_id,
                     'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
                     'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
@@ -2317,6 +2601,33 @@ class ProductImportItemsRelationManager extends RelationManager
                 'text'             => (string) $attribute_row_to_create['text'],
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function syncProductManufacturerBrandFromFormData(int $product_id, array $data): void
+    {
+        $manufacturer_id = (int) Arr::get($data, 'manufacturer_id', 0);
+        $brand_id        = (int) Arr::get($data, 'brand_id', 0);
+
+        if ($manufacturer_id <= 0 && $brand_id <= 0) {
+            ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->delete();
+
+            return;
+        }
+
+        ProductToManufacturerBrand::query()->updateOrCreate(
+            [
+                'product_id' => $product_id,
+            ],
+            [
+                'manufacturer_id' => $manufacturer_id > 0 ? $manufacturer_id : null,
+                'brand_id'        => $brand_id > 0 ? $brand_id : null,
+            ]
+        );
     }
 
     /**
@@ -2595,6 +2906,94 @@ class ProductImportItemsRelationManager extends RelationManager
                 $name = $attribute->descriptions->first()?->name ?? ('#'.$attribute->id);
 
                 return [$attribute->id => $name];
+            })
+            ->toArray();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getManufacturerOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    {
+        $default_language_id = $shop_language_id > 0
+            ? $shop_language_id
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+
+        $query = Manufacturer::query()->with([
+            'descriptions' => static function ($query) use ($default_language_id): void {
+                if ($default_language_id > 0) {
+                    $query->where('shop_language_id', $default_language_id);
+                }
+            },
+        ]);
+
+        if ($shop_id > 0) {
+            $shop_manufacturer_ids = ManufacturerShop::query()
+                ->where('shop_id', $shop_id)
+                ->pluck('manufacturer_id')
+                ->map(static fn ($manufacturer_id): int => (int) $manufacturer_id)
+                ->all();
+
+            if ($shop_manufacturer_ids === []) {
+                return [];
+            }
+
+            $query->whereIn('id', $shop_manufacturer_ids);
+        }
+
+        return $query->orderBy('id')
+            ->get()
+            ->mapWithKeys(static function (Manufacturer $manufacturer): array {
+                $name = Str::trim((string) ($manufacturer->descriptions->first()?->name ?? ''));
+                if ($name === '') {
+                    $name = '#'.(int) $manufacturer->id;
+                }
+
+                return [(int) $manufacturer->id => $name];
+            })
+            ->toArray();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getBrandOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    {
+        $default_language_id = $shop_language_id > 0
+            ? $shop_language_id
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+
+        $query = Brand::query()->with([
+            'descriptions' => static function ($query) use ($default_language_id): void {
+                if ($default_language_id > 0) {
+                    $query->where('shop_language_id', $default_language_id);
+                }
+            },
+        ]);
+
+        if ($shop_id > 0) {
+            $shop_brand_ids = BrandShop::query()
+                ->where('shop_id', $shop_id)
+                ->pluck('brand_id')
+                ->map(static fn ($brand_id): int => (int) $brand_id)
+                ->all();
+
+            if ($shop_brand_ids === []) {
+                return [];
+            }
+
+            $query->whereIn('id', $shop_brand_ids);
+        }
+
+        return $query->orderBy('id')
+            ->get()
+            ->mapWithKeys(static function (Brand $brand): array {
+                $name = Str::trim((string) ($brand->descriptions->first()?->name ?? ''));
+                if ($name === '') {
+                    $name = '#'.(int) $brand->id;
+                }
+
+                return [(int) $brand->id => $name];
             })
             ->toArray();
     }

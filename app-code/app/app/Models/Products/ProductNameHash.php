@@ -24,7 +24,7 @@ class ProductNameHash extends Model
     {
         return [
             'product_id' => 'integer',
-            'hash' => 'string',
+            'hash'       => 'string',
         ];
     }
 

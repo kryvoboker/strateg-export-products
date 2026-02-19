@@ -62,23 +62,23 @@ class ProductImportBatchesTable
                     ->formatStateUsing(function (string $state, ProductImportBatch $record): string {
                         if (
                             $state === ProductImportBatchesStatusEnum::PROCESSING->value
-                            && (string)$record->getOption('export_state', '') === 'processing'
+                            && (string) $record->getOption('export_state', '') === 'processing'
                         ) {
                             return __('admin/product_imports/batches.statuses.exporting_api');
                         }
 
-                        return __('admin/product_imports/batches.statuses.' . $state);
+                        return __('admin/product_imports/batches.statuses.'.$state);
                     })
                     ->colors([
-                        'gray'    => fn($state) => $state === ProductImportBatchesStatusEnum::NEW->value,
-                        'warning' => fn($state) => $state === ProductImportBatchesStatusEnum::PROCESSING->value,
-                        'success' => fn($state) => $state === 'completed',
-                        'danger'  => fn($state) => in_array($state, ['failed', 'partial_failed', 'canceled'], true),
+                        'gray'    => fn ($state) => $state === ProductImportBatchesStatusEnum::NEW->value,
+                        'warning' => fn ($state) => $state === ProductImportBatchesStatusEnum::PROCESSING->value,
+                        'success' => fn ($state) => $state === 'completed',
+                        'danger'  => fn ($state) => in_array($state, ['failed', 'partial_failed', 'canceled'], true),
                     ])
-                    ->icon(fn(string $state): Heroicon => $state === ProductImportBatchesStatusEnum::PROCESSING->value
+                    ->icon(fn (string $state): Heroicon => $state === ProductImportBatchesStatusEnum::PROCESSING->value
                         ? Heroicon::ArrowPath
                         : Heroicon::InformationCircle)
-                    ->extraAttributes(fn(ProductImportBatch $record): array => $record->isProcessing()
+                    ->extraAttributes(fn (ProductImportBatch $record): array => $record->isProcessing()
                         ? ['class' => 'animate-pulse']
                         : [])
                     ->sortable(),
@@ -89,15 +89,15 @@ class ProductImportBatchesTable
                     ->label(__('admin/product_imports/batches.columns.last_error'))
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->formatStateUsing(fn(mixed $state): string => Str::limit(Str::trim((string)$state), 120)),
+                    ->formatStateUsing(fn (mixed $state): string => Str::limit(Str::trim((string) $state), 120)),
                 TextColumn::make('options.error_log_path')
                     ->label(__('admin/product_imports/batches.columns.error_log'))
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->url(fn(ProductImportBatch $record): ?string => $record->hasErrorLog()
-                        ? Storage::url((string)$record->getErrorLogPath())
+                    ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
+                        ? Storage::url((string) $record->getErrorLogPath())
                         : null)
                     ->openUrlInNewTab()
-                    ->formatStateUsing(fn(mixed $state): string => Str::trim((string)$state) !== ''
+                    ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
                         ? __('admin/product_imports/batches.actions.download_error_log')
                         : __('admin/product_imports/batches.columns.empty_value')),
                 TextColumn::make('created_at')
@@ -132,19 +132,19 @@ class ProductImportBatchesTable
                     ->label(__('admin/product_imports/batches.actions.open_result'))
                     ->icon(Heroicon::ArrowTopRightOnSquare)
                     ->color('gray')
-                    ->disabled(fn(ProductImportBatch $record): bool => $record->isProcessing())
-                    ->tooltip(fn(ProductImportBatch $record): ?string => $record->isProcessing()
+                    ->disabled(fn (ProductImportBatch $record): bool => $record->isProcessing())
+                    ->tooltip(fn (ProductImportBatch $record): ?string => $record->isProcessing()
                         ? __('admin/product_imports/batches.messages.processing_row_locked')
                         : null)
-                    ->url(fn(ProductImportBatch $record): ?string => $record->isProcessing()
+                    ->url(fn (ProductImportBatch $record): ?string => $record->isProcessing()
                         ? null
                         : ProductImportBatchResource::getUrl('view', ['record' => $record])),
                 Action::make('downloadErrorLog')
                     ->label(__('admin/product_imports/batches.actions.download_error_log'))
                     ->icon(Heroicon::DocumentArrowDown)
-                    ->visible(fn(ProductImportBatch $record): bool => $record->hasErrorLog())
-                    ->url(fn(ProductImportBatch $record): ?string => $record->hasErrorLog()
-                        ? Storage::url((string)$record->getErrorLogPath())
+                    ->visible(fn (ProductImportBatch $record): bool => $record->hasErrorLog())
+                    ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
+                        ? Storage::url((string) $record->getErrorLogPath())
                         : null)
                     ->openUrlInNewTab(),
                 Action::make('deleteErrorLog')
@@ -153,10 +153,10 @@ class ProductImportBatchesTable
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalDescription(__('admin/product_imports/batches.messages.delete_error_log_confirmation'))
-                    ->visible(fn(ProductImportBatch $record): bool => $record->hasErrorLog())
-                    ->disabled(fn(ProductImportBatch $record): bool => (int)$record->user_id !== (int)auth()->id())
+                    ->visible(fn (ProductImportBatch $record): bool => $record->hasErrorLog())
+                    ->disabled(fn (ProductImportBatch $record): bool => (int) $record->user_id !== (int) auth()->id())
                     ->action(function (ProductImportBatch $record): void {
-                        if ((int)$record->user_id !== (int)auth()->id()) {
+                        if ((int) $record->user_id !== (int) auth()->id()) {
                             Notification::make()
                                 ->title(__('admin/product_imports/batches.messages.only_owner_can_delete_log'))
                                 ->danger()
@@ -180,7 +180,7 @@ class ProductImportBatchesTable
                             ->send();
                     }),
             ])
-            ->recordUrl(function(ProductImportBatch $record): ?string {
+            ->recordUrl(function (ProductImportBatch $record): ?string {
                 return ProductImportBatchResource::getUrl('view', ['record' => $record]);
             })
             ->toolbarActions([
@@ -194,7 +194,7 @@ class ProductImportBatchesTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -207,8 +207,8 @@ class ProductImportBatchesTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -240,7 +240,7 @@ class ProductImportBatchesTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn(): array => Shop::query()
+                                ->options(fn (): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -253,8 +253,8 @@ class ProductImportBatchesTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn($shop_id): int => (int)$shop_id)
-                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -299,9 +299,8 @@ class ProductImportBatchesTable
     }
 
     /**
-     * @param Collection<int, ProductImportBatch> $records
-     * @param list<int>                           $shop_ids
-     *
+     * @param  Collection<int, ProductImportBatch>  $records
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function bindSelectedBatchesToShops(Collection $records, array $shop_ids): array
@@ -324,8 +323,8 @@ class ProductImportBatchesTable
             $batch_product_ids = $batch->items()
                 ->whereNotNull('product_id')
                 ->pluck('product_id')
-                ->map(static fn($product_id): int => (int)$product_id)
-                ->filter(static fn(int $product_id): bool => $product_id > 0)
+                ->map(static fn ($product_id): int => (int) $product_id)
+                ->filter(static fn (int $product_id): bool => $product_id > 0)
                 ->unique()
                 ->values()
                 ->all();
@@ -371,9 +370,8 @@ class ProductImportBatchesTable
     }
 
     /**
-     * @param Collection<int, ProductImportBatch> $records
-     * @param list<int>                           $shop_ids
-     *
+     * @param  Collection<int, ProductImportBatch>  $records
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     private static function queueExportForSelectedBatches(Collection $records, array $shop_ids): array
@@ -403,8 +401,8 @@ class ProductImportBatchesTable
                     ProductImportItemsStatusEnum::NORMALIZED->value,
                 ])
                 ->pluck('product_id')
-                ->map(static fn($product_id): int => (int)$product_id)
-                ->filter(static fn(int $product_id): bool => $product_id > 0)
+                ->map(static fn ($product_id): int => (int) $product_id)
+                ->filter(static fn (int $product_id): bool => $product_id > 0)
                 ->unique()
                 ->values()
                 ->all();
@@ -464,20 +462,21 @@ class ProductImportBatchesTable
                         }
 
                         $export_item = ProductExportItem::query()->create([
-                            'product_import_batch_id' => $resolved_batch_id,
-                            'product_id'              => $target_product_id,
-                            'payload'                 => [
+                            'batchable_type' => ProductImportBatch::class,
+                            'batchable_id'   => $resolved_batch_id,
+                            'product_id'     => $target_product_id,
+                            'payload'        => [
                                 'shop_id'              => $shop_id,
                                 'requested_product_id' => $product_id,
                                 'target_product_id'    => $target_product_id,
                                 'requested_by_user_id' => auth()->id(),
                             ],
-                            'status'                  => ProductExportItemsStatusEnum::PROCESSING->value,
-                            'error_message'           => null,
-                            'processed_at'            => null,
+                            'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
+                            'error_message' => null,
+                            'processed_at'  => null,
                         ]);
 
-                        ProcessProductExportItemJob::dispatch((int)$export_item->id);
+                        ProcessProductExportItemJob::dispatch((int) $export_item->id);
                         $summary['exports_queued']++;
 
                         $batch->update([
@@ -516,53 +515,53 @@ class ProductImportBatchesTable
 
         if ($existing_export_item instanceof ProductExportItem) {
             $existing_export_item->update([
-                'status' => ProductExportItemsStatusEnum::FAILED->value,
+                'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => now(),
-                'payload' => [
+                'processed_at'  => now(),
+                'payload'       => [
                     ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
-                    'shop_id' => $shop_id,
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => null,
-                    'failure_reason' => 'not_bound_to_shop',
+                    'target_product_id'    => null,
+                    'failure_reason'       => 'not_bound_to_shop',
                     'requested_by_user_id' => auth()->id(),
                 ],
             ]);
         } else {
             ProductExportItem::query()->create([
-                'product_import_batch_id' => $batch_id,
-                'product_id' => $product_id,
-                'payload' => [
-                    'shop_id' => $shop_id,
+                'batchable_type' => ProductImportBatch::class,
+                'batchable_id'   => $batch_id,
+                'product_id'     => $product_id,
+                'payload'        => [
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => null,
-                    'failure_reason' => 'not_bound_to_shop',
+                    'target_product_id'    => null,
+                    'failure_reason'       => 'not_bound_to_shop',
                     'requested_by_user_id' => auth()->id(),
                 ],
-                'status' => ProductExportItemsStatusEnum::FAILED->value,
+                'status'        => ProductExportItemsStatusEnum::FAILED->value,
                 'error_message' => $error_message,
-                'processed_at' => now(),
+                'processed_at'  => now(),
             ]);
         }
 
         Log::channel('stack')->warning('Batch export skipped: product is not bound to selected shop', [
-            'batch_id' => $batch_id,
-            'product_id' => $product_id,
-            'shop_id' => $shop_id,
+            'batch_id'             => $batch_id,
+            'product_id'           => $product_id,
+            'shop_id'              => $shop_id,
             'requested_by_user_id' => auth()->id(),
         ]);
     }
 
     /**
-     * @param Collection<int, ProductImportBatch> $records
-     *
+     * @param  Collection<int, ProductImportBatch>  $records
      * @return array<string, int>
      */
     private static function retryFailedExportsForBatches(Collection $records): array
     {
         $batch_ids = $records
-            ->map(static fn(ProductImportBatch $batch): int => (int)$batch->id)
-            ->filter(static fn(int $batch_id): bool => $batch_id > 0)
+            ->map(static fn (ProductImportBatch $batch): int => (int) $batch->id)
+            ->filter(static fn (int $batch_id): bool => $batch_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -575,7 +574,8 @@ class ProductImportBatchesTable
         }
 
         $failed_export_items = ProductExportItem::query()
-            ->whereIn('product_import_batch_id', $batch_ids)
+            ->where('batchable_type', ProductImportBatch::class)
+            ->whereIn('batchable_id', $batch_ids)
             ->where('status', ProductExportItemsStatusEnum::FAILED->value)
             ->orderBy('id')
             ->get();
@@ -588,7 +588,7 @@ class ProductImportBatchesTable
                 'processed_at'  => null,
             ]);
 
-            ProcessProductExportItemJob::dispatch((int)$failed_export_item->id);
+            ProcessProductExportItemJob::dispatch((int) $failed_export_item->id);
             $queued++;
         }
 

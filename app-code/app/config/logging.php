@@ -62,7 +62,7 @@ return [
 
         'stack' => [
             'driver'            => 'stack',
-            'channels'          => explode(',', (string)env('LOG_STACK', 'single')),
+            'channels'          => explode(',', (string) env('LOG_STACK', 'single')),
             'ignore_exceptions' => false,
         ],
 
@@ -97,9 +97,9 @@ return [
             'handler_with' => [
                 'host'             => env('PAPERTRAIL_URL'),
                 'port'             => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://' . env('PAPERTRAIL_URL') . ':' . env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
             ],
-            'processors'   => [PsrLogMessageProcessor::class],
+            'processors' => [PsrLogMessageProcessor::class],
         ],
 
         'stderr' => [
@@ -109,8 +109,8 @@ return [
             'handler_with' => [
                 'stream' => 'php://stderr',
             ],
-            'formatter'    => env('LOG_STDERR_FORMATTER'),
-            'processors'   => [PsrLogMessageProcessor::class],
+            'formatter'  => env('LOG_STDERR_FORMATTER'),
+            'processors' => [PsrLogMessageProcessor::class],
         ],
 
         'syslog' => [
@@ -143,13 +143,13 @@ return [
             'formatter_with' => [
                 'dateFormat' => 'Y-m-d H:i:s',
             ],
-            'processors'     => [
+            'processors' => [
                 UidProcessor::class,
                 WebProcessor::class,
                 MemoryPeakUsageProcessor::class,
                 MemoryUsageProcessor::class,
             ],
-            'handler_with'   => [
+            'handler_with' => [
                 'connectionString' => env('LOG_SOCKET_URL', '127.0.0.1:9913'),
             ],
         ],
@@ -160,19 +160,19 @@ return [
             'handler'        => TelegramBotHandler::class,
             'formatter'      => LineFormatter::class,
             'formatter_with' => [
-                'format'                     => "[%datetime%] " . config('app.name') . " - %channel%.%level_name%: %message% %context% %extra%\n",
+                'format'                     => '[%datetime%] '.config('app.name')." - %channel%.%level_name%: %message% %context% %extra%\n",
                 'dateFormat'                 => 'Y-m-d H:i:s',
                 'allowInlineLineBreaks'      => true,
                 'ignoreEmptyContextAndExtra' => true,
             ],
-            'processors'     => [
+            'processors' => [
                 UidProcessor::class,
                 WebProcessor::class,
                 PsrLogMessageProcessor::class,
                 MemoryPeakUsageProcessor::class,
                 MemoryUsageProcessor::class,
             ],
-            'handler_with'   => [
+            'handler_with' => [
                 'apiKey'               => config('buggregator.telegram_token'),
                 'channel'              => config('buggregator.kamaz_id'),
                 'splitLongMessages'    => true,

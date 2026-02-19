@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums\Product\Import;
 
-enum ProductImportBatchesStatusEnum:string
+enum ProductImportBatchesStatusEnum: string
 {
     case NEW            = 'new';
     case PROCESSING     = 'processing';

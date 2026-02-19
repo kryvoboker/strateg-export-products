@@ -15,7 +15,7 @@ use Filament\Tables\Table;
 
 class ShopLanguagesTable
 {
-    use CommonTextTableTrait, BooleanTableTrait, DateTableTrait, BooleanFilterTrait;
+    use BooleanFilterTrait, BooleanTableTrait, CommonTextTableTrait, DateTableTrait;
 
     public static function configure(Table $table): Table
     {

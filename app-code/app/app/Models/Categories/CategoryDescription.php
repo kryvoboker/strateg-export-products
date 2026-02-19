@@ -28,7 +28,7 @@ class CategoryDescription extends Model
     protected function casts(): array
     {
         return [
-            'category_id' => 'integer',
+            'category_id'      => 'integer',
             'shop_language_id' => 'integer',
         ];
     }
@@ -83,22 +83,22 @@ class CategoryDescription extends Model
     }
 
     /**
-     * @param array<string, mixed> $values
+     * @param  array<string, mixed>  $values
      */
     public static function upsertByCategoryAndLanguage(int $category_id, int $shop_language_id, array $values): self
     {
         return self::query()->updateOrCreate(
             [
-                'category_id' => $category_id,
+                'category_id'      => $category_id,
                 'shop_language_id' => $shop_language_id > 0 ? $shop_language_id : null,
             ],
             [
-                'name' => Str::trim((string) ($values['name'] ?? '')),
-                'description' => $values['description'] ?? null,
-                'h1_title' => $values['h1_title'] ?? null,
-                'meta_title' => $values['meta_title'] ?? null,
+                'name'             => Str::trim((string) ($values['name'] ?? '')),
+                'description'      => $values['description'] ?? null,
+                'h1_title'         => $values['h1_title'] ?? null,
+                'meta_title'       => $values['meta_title'] ?? null,
                 'meta_description' => $values['meta_description'] ?? null,
-                'meta_keywords' => $values['meta_keywords'] ?? null,
+                'meta_keywords'    => $values['meta_keywords'] ?? null,
             ]
         );
     }
@@ -113,14 +113,14 @@ class CategoryDescription extends Model
         $query = Category::query()
             ->select('categories.id')
             ->join('category_descriptions', 'category_descriptions.category_id', '=', 'categories.id')
-            ->whereRaw('LOWER(' . config('database.db_prefix') . 'category_descriptions.name) = ?', [$normalized_category_name])
+            ->whereRaw('LOWER('.config('database.db_prefix').'category_descriptions.name) = ?', [$normalized_category_name])
             ->when(
                 $parent_category_id === null,
                 static fn ($builder) => $builder->whereNull('categories.parent_id'),
                 static fn ($builder) => $builder->where('categories.parent_id', $parent_category_id),
             )
             ->orderByRaw(
-                'CASE WHEN ' . config('database.db_prefix') . 'category_descriptions.shop_language_id IS NULL THEN 0 ELSE 1 END'
+                'CASE WHEN '.config('database.db_prefix').'category_descriptions.shop_language_id IS NULL THEN 0 ELSE 1 END'
             )
             ->orderBy('categories.id');
 
@@ -138,16 +138,16 @@ class CategoryDescription extends Model
 
         self::query()->firstOrCreate(
             [
-                'category_id' => $category_id,
+                'category_id'      => $category_id,
                 'shop_language_id' => $shop_language_id,
             ],
             [
-                'name' => $clean_category_name,
-                'description' => null,
-                'h1_title' => $clean_category_name,
-                'meta_title' => $clean_category_name,
+                'name'             => $clean_category_name,
+                'description'      => null,
+                'h1_title'         => $clean_category_name,
+                'meta_title'       => $clean_category_name,
                 'meta_description' => null,
-                'meta_keywords' => null,
+                'meta_keywords'    => null,
             ]
         );
     }

@@ -35,7 +35,7 @@ class Attribute extends Model
     {
         return [
             'sort_order' => 'integer',
-            'is_active' => 'boolean',
+            'is_active'  => 'boolean',
         ];
     }
 

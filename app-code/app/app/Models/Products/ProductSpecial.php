@@ -24,12 +24,12 @@ class ProductSpecial extends Model
     protected function casts(): array
     {
         return [
-            'product_id' => 'integer',
+            'product_id'    => 'integer',
             'user_group_id' => 'integer',
-            'price' => 'decimal:4',
-            'priority' => 'integer',
-            'date_start' => 'datetime',
-            'date_end' => 'datetime',
+            'price'         => 'decimal:4',
+            'priority'      => 'integer',
+            'date_start'    => 'datetime',
+            'date_end'      => 'datetime',
         ];
     }
 

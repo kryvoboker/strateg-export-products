@@ -24,8 +24,8 @@ class AttributeShop extends Model
     protected function casts(): array
     {
         return [
-            'attribute_id' => 'integer',
-            'shop_id' => 'integer',
+            'attribute_id'          => 'integer',
+            'shop_id'               => 'integer',
             'external_attribute_id' => 'integer',
         ];
     }

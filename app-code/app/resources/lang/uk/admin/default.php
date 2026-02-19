@@ -2,14 +2,14 @@
 
 return [
     // Menu items
-    'menu'         => [
+    'menu' => [
         'item_shops'   => 'Магазини',
         'item_catalog' => 'Каталог',
         'item_users'   => 'Користувачі',
     ],
 
     // Labels
-    'labels'       => [
+    'labels' => [
         'name'                  => 'Ім\'я',
         'email'                 => 'Електронна пошта',
         'telephone'             => 'Телефон',
@@ -25,7 +25,7 @@ return [
     ],
 
     // Columns
-    'columns'      => [
+    'columns' => [
         'name'              => 'Ім\'я',
         'lastname'          => 'Прізвище',
         'email'             => 'Електронна пошта',
@@ -37,7 +37,7 @@ return [
     ],
 
     // Filters
-    'filters'      => [
+    'filters' => [
         'active'                  => 'Активні',
         'default'                 => 'За замовчуванням',
         'default_only'            => 'Тільки за замовчуванням',
@@ -85,7 +85,7 @@ return [
     ],
 
     // Errors
-    'errors'       => [
+    'errors' => [
         'title' => 'Помилка',
     ],
 ];

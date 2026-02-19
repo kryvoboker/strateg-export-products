@@ -24,7 +24,7 @@ class AttributeNameHash extends Model
     {
         return [
             'attribute_id' => 'integer',
-            'hash' => 'string',
+            'hash'         => 'string',
         ];
     }
 

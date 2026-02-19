@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums\Telegram;
 
-enum TelegramChatMessageActionEnum:string
+enum TelegramChatMessageActionEnum: string
 {
     case TYPING            = 'typing';
     case UPLOAD_PHOTO      = 'upload_photo';

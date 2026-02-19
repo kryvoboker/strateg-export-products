@@ -37,7 +37,7 @@ class CategoryNameAiTranslatorService extends AiDbCachedTranslatorAbstract
     {
         $category_name_hash = CategoryNameHash::query()->firstOrCreate([
             'category_id' => (int) ($this->category_id ?? 0),
-            'hash' => $hash,
+            'hash'        => $hash,
         ]);
 
         return $category_name_hash

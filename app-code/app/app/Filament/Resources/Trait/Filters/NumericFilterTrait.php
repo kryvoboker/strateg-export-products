@@ -10,16 +10,11 @@ use Illuminate\Database\Eloquent\Builder;
 
 trait NumericFilterTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Filter
-     */
     protected static function getNumericFilterField(array $params = []): Filter
     {
         if (isset($params['min_length']) && is_numeric($params['min_length'])) {
             $min_length = $params['min_length'];
-        } else if (isset($params['min_length']) === false) {
+        } elseif (isset($params['min_length']) === false) {
             $min_length = null;
         } else {
             $min_length = 0;
@@ -41,7 +36,7 @@ trait NumericFilterTrait
                         if (num_more_or_equal_num($state, $min_length) === false) {
                             $set($field_name, null);
                         }
-                    })
+                    }),
             ])
             ->query($params['query_cb'] ?? function (Builder $query, array $data) use ($field_name, $min_length): Builder {
                 $search = $data[$field_name] ?? null;
@@ -60,7 +55,7 @@ trait NumericFilterTrait
                     return null;
                 }
 
-                return $filter_label . ': ' . $search;
+                return $filter_label.': '.$search;
             });
     }
 }

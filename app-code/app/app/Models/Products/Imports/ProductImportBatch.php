@@ -10,6 +10,7 @@ use App\Models\Users\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -36,8 +37,8 @@ class ProductImportBatch extends Model
     protected function casts(): array
     {
         return [
-            'options' => 'array',
-            'started_at' => 'datetime',
+            'options'     => 'array',
+            'started_at'  => 'datetime',
             'finished_at' => 'datetime',
         ];
     }
@@ -47,9 +48,9 @@ class ProductImportBatch extends Model
         return $this->hasMany(ProductImportItem::class, 'product_import_batch_id');
     }
 
-    public function exportItems(): HasMany
+    public function exportItems(): MorphMany
     {
-        return $this->hasMany(ProductExportItem::class, 'product_import_batch_id');
+        return $this->morphMany(ProductExportItem::class, 'batchable');
     }
 
     /**

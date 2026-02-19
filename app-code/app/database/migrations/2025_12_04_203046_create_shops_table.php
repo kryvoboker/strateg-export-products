@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class() extends Migration
 {
     /**
      * Run the migrations.
@@ -21,6 +21,8 @@ return new class extends Migration
             $table->string('api_token', 500)->nullable();
             $table->string('part_api_url_login')->nullable();
             $table->string('part_api_url_export_prods')->nullable();
+            $table->string('part_api_url_update_prods')->nullable();
+            $table->string('part_api_url_restore_prods')->nullable();
             $table->boolean('is_active')->default(true);
             $table->json('options')->nullable();
 

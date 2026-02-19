@@ -8,11 +8,6 @@ use Filament\Tables\Filters\TernaryFilter;
 
 trait BooleanFilterTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return TernaryFilter
-     */
     protected static function getIsActiveFilterField(array $params = []): TernaryFilter
     {
         return TernaryFilter::make($params['filter_field_name'] ?? 'is_active')
@@ -22,11 +17,6 @@ trait BooleanFilterTrait
             ->falseLabel($params['filter_false_label'] ?? __('admin/default.filters.inactive_only'));
     }
 
-    /**
-     * @param array $params
-     *
-     * @return TernaryFilter
-     */
     protected static function getIsDefaultFilterField(array $params = []): TernaryFilter
     {
         return TernaryFilter::make($params['filter_field_name'] ?? 'is_default')

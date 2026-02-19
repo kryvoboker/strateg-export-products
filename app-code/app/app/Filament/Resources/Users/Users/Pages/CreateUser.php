@@ -13,8 +13,6 @@ class CreateUser extends CreateRecord
 
     /**
      * Get page title
-     *
-     * @return string
      */
     public function getTitle(): string
     {
@@ -23,8 +21,6 @@ class CreateUser extends CreateRecord
 
     /**
      * Get page heading
-     *
-     * @return string|null
      */
     public function getHeading(): ?string
     {

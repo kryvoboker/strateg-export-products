@@ -50,7 +50,7 @@ class AttributesTable
                             'descriptions',
                             static fn (Builder $description_query): Builder => $description_query->whereRaw(
                                 'LOWER(name) LIKE ?',
-                                ['%' . mb_strtolower(trim($search)) . '%']
+                                ['%'.mb_strtolower(trim($search)).'%']
                             )
                         )
                     )
@@ -156,14 +156,14 @@ class AttributesTable
                                 ->title(__('admin/attributes/attributes.messages.bulk_bind_completed'))
                                 ->body(__('admin/attributes/attributes.messages.bulk_bind_result', [
                                     'attributes_total' => $attributes_total,
-                                    'shops_total' => count($shop_ids),
+                                    'shops_total'      => count($shop_ids),
                                 ]))
                                 ->success()
                                 ->send();
                         }),
                     DeleteBulkAction::make(),
                 ])
-                ->dropdownWidth(Width::Large),
+                    ->dropdownWidth(Width::Large),
             ]);
     }
 
@@ -188,7 +188,7 @@ class AttributesTable
             return $name_from_db;
         }
 
-        return '#' . (int) $attribute->id;
+        return '#'.(int) $attribute->id;
     }
 
     private static function resolveAttributeShopsText(Attribute $attribute): string

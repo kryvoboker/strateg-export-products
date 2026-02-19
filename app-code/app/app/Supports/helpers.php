@@ -29,7 +29,7 @@ if (! function_exists('parse_telephone')) {
     {
         $telephone = clear_telephone($telephone, true);
 
-        $mask = '+38 (___) ___-__-__';
+        $mask         = '+38 (___) ___-__-__';
         $phone_length = \Illuminate\Support\Str::length($telephone);
 
         for ($index_number = 0; $index_number < $phone_length; $index_number++) {
@@ -109,14 +109,9 @@ if (! function_exists('validate_url')) {
     }
 }
 
-if (!function_exists('decode_html_entities')) {
-    /**
-     * @param string|null $string
-     *
-     * @return string
-     */
+if (! function_exists('decode_html_entities')) {
     function decode_html_entities(?string $string): string
     {
-        return html_entity_decode((string)$string, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return html_entity_decode((string) $string, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

@@ -16,14 +16,14 @@ class CreateAttribute extends CreateRecord
     protected static string $resource = AttributeResource::class;
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     protected function handleRecordCreation(array $data): Attribute
     {
         /** @var Attribute $attribute */
         $attribute = Attribute::query()->create([
             'sort_order' => (int) Arr::get($data, 'sort_order', 1),
-            'is_active' => (bool) Arr::get($data, 'is_active', true),
+            'is_active'  => (bool) Arr::get($data, 'is_active', true),
         ]);
 
         AttributeForm::syncAttributeAdditionalData($attribute, $data);

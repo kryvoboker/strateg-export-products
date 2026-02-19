@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ProductUpdates\Tables;
 
-use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
+use App\Filament\Resources\ProductUpdates\Pages\ListProductUpdateBatches;
 use App\Filament\Resources\ProductUpdates\ProductUpdateBatchResource;
 use App\Jobs\ProcessProductUpdateItemJob;
 use App\Models\Products\ProductShop;
@@ -175,12 +176,12 @@ class ProductUpdateBatchesTable
     private static function resolveSourceTypeLabel(string $state): string
     {
         return match ($state) {
-            ProductUpdateBatchesSourceTypeEnum::CSV_FILE->value => __('admin/product_updates/batches.source_types.csv_file'),
-            ProductUpdateBatchesSourceTypeEnum::EXCEL_FILE->value => __('admin/product_updates/batches.source_types.excel_file'),
-            ProductUpdateBatchesSourceTypeEnum::GOOGLE_SHEET->value => __('admin/product_updates/batches.source_types.google_sheet'),
-            ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value => __('admin/product_updates/batches.source_types.local_products'),
+            ProductUpdateBatchesSourceTypeEnum::CSV_FILE->value         => __('admin/product_updates/batches.source_types.csv_file'),
+            ProductUpdateBatchesSourceTypeEnum::EXCEL_FILE->value       => __('admin/product_updates/batches.source_types.excel_file'),
+            ProductUpdateBatchesSourceTypeEnum::GOOGLE_SHEET->value     => __('admin/product_updates/batches.source_types.google_sheet'),
+            ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value   => __('admin/product_updates/batches.source_types.local_products'),
             ProductUpdateBatchesSourceTypeEnum::EDIT_PRODUCT_API->value => __('admin/product_updates/batches.source_types.edit_product_api'),
-            default => $state,
+            default                                                     => $state,
         };
     }
 
@@ -346,7 +347,11 @@ class ProductUpdateBatchesTable
         $prepared_payload    = is_array($prepared_item->payload) ? $prepared_item->payload : [];
         $update_instructions = Arr::get($prepared_payload, 'update_instructions', []);
 
-        return is_array($update_instructions) ? $update_instructions : [];
+        if (! is_array($update_instructions)) {
+            return [];
+        }
+
+        return ListProductUpdateBatches::sanitizeImmutableProductFieldsFromUpdateInstructions($update_instructions);
     }
 
     /**

@@ -12,9 +12,6 @@ use Illuminate\Validation\Rule;
 trait CommonTrait
 {
     /**
-     * @param array $data
-     *
-     * @return void
      * @throws Halt
      */
     private function validateShopLanguageBefore(array $data): void
@@ -41,17 +38,11 @@ trait CommonTrait
         }
     }
 
-    /**
-     * @return string
-     */
     public function getTitle(): string
     {
         return __('admin/shops/languages.navigation_label');
     }
 
-    /**
-     * @return string|null
-     */
     public function getHeading(): ?string
     {
         return __('admin/shops/languages.navigation_label');

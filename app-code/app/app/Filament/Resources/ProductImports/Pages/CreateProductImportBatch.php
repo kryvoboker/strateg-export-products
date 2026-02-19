@@ -48,6 +48,8 @@ class CreateProductImportBatch extends CreateRecord
             'Minimum',
             'Image',
             'Price',
+            'Manufacturer',
+            'Brand',
             'Is Active',
             'Date Available',
             'Date Added',
@@ -119,7 +121,7 @@ class CreateProductImportBatch extends CreateRecord
         $mode = $this->resolveImportMode($data);
 
         return match ($mode) {
-            'excel' => $this->createBatchFromExcel($data),
+            'excel'  => $this->createBatchFromExcel($data),
             'google' => $this->createBatchFromGoogleSheets($data),
             'manual' => $this->createBatchFromManualForm($data),
         };
@@ -141,16 +143,16 @@ class CreateProductImportBatch extends CreateRecord
         $this->validateExcelStructure($excel_path);
 
         $batch = ProductImportBatch::query()->create([
-            'user_id' => $this->resolveUserId(),
-            'source_type' => ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value,
-            'source_name' => basename($excel_path),
-            'source_path' => $excel_path,
-            'status' => ProductImportBatchesStatusEnum::NEW->value,
-            'total_items' => 0,
+            'user_id'         => $this->resolveUserId(),
+            'source_type'     => ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value,
+            'source_name'     => basename($excel_path),
+            'source_path'     => $excel_path,
+            'status'          => ProductImportBatchesStatusEnum::NEW->value,
+            'total_items'     => 0,
             'processed_items' => 0,
-            'failed_items' => 0,
-            'options' => [
-                'input_mode' => 'excel',
+            'failed_items'    => 0,
+            'options'         => [
+                'input_mode'    => 'excel',
                 'uploaded_file' => $excel_path,
             ],
         ]);
@@ -168,8 +170,8 @@ class CreateProductImportBatch extends CreateRecord
     private function createBatchFromGoogleSheets(array $data): ProductImportBatch
     {
         $exported_files = [];
-        $source_path = '';
-        $sheets_url = Str::trim((string) ($data['sheets_url'] ?? ''));
+        $source_path    = '';
+        $sheets_url     = Str::trim((string) ($data['sheets_url'] ?? ''));
 
         if ($sheets_url === '' || validate_url($sheets_url) === false) {
             $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.google_sheet_url_required'));
@@ -209,9 +211,9 @@ class CreateProductImportBatch extends CreateRecord
             throw $e;
         } catch (Throwable $e) {
             Log::channel('stack')->error($e->getMessage(), [
-                'current_file' => __FILE__,
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'current_file'   => __FILE__,
+                'file'           => $e->getFile(),
+                'line'           => $e->getLine(),
                 'spreadsheet_id' => $extract_spreadsheet_id ?? null,
             ]);
 
@@ -219,19 +221,19 @@ class CreateProductImportBatch extends CreateRecord
         }
 
         $batch = ProductImportBatch::query()->create([
-            'user_id' => $this->resolveUserId(),
-            'source_type' => ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value,
-            'source_name' => __('admin/product_imports/batches.source_names.google_sheets', ['id' => $extract_spreadsheet_id]),
-            'source_path' => $source_path,
-            'status' => ProductImportBatchesStatusEnum::NEW->value,
-            'total_items' => 0,
+            'user_id'         => $this->resolveUserId(),
+            'source_type'     => ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value,
+            'source_name'     => __('admin/product_imports/batches.source_names.google_sheets', ['id' => $extract_spreadsheet_id]),
+            'source_path'     => $source_path,
+            'status'          => ProductImportBatchesStatusEnum::NEW->value,
+            'total_items'     => 0,
             'processed_items' => 0,
-            'failed_items' => 0,
-            'options' => [
-                'input_mode' => 'google_sheets',
+            'failed_items'    => 0,
+            'options'         => [
+                'input_mode'       => 'google_sheets',
                 'google_sheet_url' => $sheets_url,
-                'spreadsheet_id' => $extract_spreadsheet_id,
-                'exported_files' => $exported_files,
+                'spreadsheet_id'   => $extract_spreadsheet_id,
+                'exported_files'   => $exported_files,
             ],
         ]);
 
@@ -254,17 +256,17 @@ class CreateProductImportBatch extends CreateRecord
         }
 
         $batch = ProductImportBatch::query()->create([
-            'user_id' => $this->resolveUserId(),
-            'source_type' => ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value,
-            'source_name' => __('admin/product_imports/batches.source_names.manual_import', ['datetime' => now()->format('Y-m-d H:i:s')]),
-            'source_path' => null,
-            'status' => ProductImportBatchesStatusEnum::NEW->value,
-            'total_items' => 1,
+            'user_id'         => $this->resolveUserId(),
+            'source_type'     => ProductImportBatchesSourceTypeEnum::ADMIN_PANEL->value,
+            'source_name'     => __('admin/product_imports/batches.source_names.manual_import', ['datetime' => now()->format('Y-m-d H:i:s')]),
+            'source_path'     => null,
+            'status'          => ProductImportBatchesStatusEnum::NEW->value,
+            'total_items'     => 1,
             'processed_items' => 0,
-            'failed_items' => 0,
-            'options' => [
+            'failed_items'    => 0,
+            'options'         => [
                 'input_mode' => 'manual',
-                'raw_data' => $payload,
+                'raw_data'   => $payload,
             ],
         ]);
 
@@ -355,7 +357,7 @@ class CreateProductImportBatch extends CreateRecord
                 $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.sheet_is_empty', ['sheet' => $sheet_name]));
             }
 
-            $header = $rows[0] ?? [];
+            $header            = $rows[0] ?? [];
             $normalized_header = array_map(fn ($cell) => $this->normalizeHeaderKey((string) $cell), $header);
 
             $missing_headers = [];
@@ -368,7 +370,7 @@ class CreateProductImportBatch extends CreateRecord
 
             if ($missing_headers !== []) {
                 $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.sheet_missing_columns', [
-                    'sheet' => $sheet_name,
+                    'sheet'   => $sheet_name,
                     'columns' => implode(', ', $missing_headers),
                 ]));
             }
@@ -384,9 +386,9 @@ class CreateProductImportBatch extends CreateRecord
             $spreadsheet = IOFactory::load(Storage::path($excelPath));
         } catch (Throwable $e) {
             Log::channel('stack')->error($e->getMessage(), [
-                'current_file' => __FILE__,
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'current_file'   => __FILE__,
+                'file'           => $e->getFile(),
+                'line'           => $e->getLine(),
                 'spreadsheet_id' => $extract_spreadsheet_id ?? null,
             ]);
 
@@ -431,13 +433,13 @@ class CreateProductImportBatch extends CreateRecord
 
         foreach ($allSheetsRows as $rows) {
             $data_row_count = max(count($rows) - 1, 0);
-            $chunk_count = max($chunk_count, (int) ceil($data_row_count / self::MAX_ROWS_PER_FILE));
+            $chunk_count    = max($chunk_count, (int) ceil($data_row_count / self::MAX_ROWS_PER_FILE));
         }
 
-        $now = now();
+        $now             = now();
         $year_month_path = sprintf('upload/excel/%s/%s', $now->format('Y'), $now->format('m'));
-        $timestamp = $now->format('Ymd_His');
-        $suffix = Str::replaceMatches('/[^a-zA-Z0-9_-]/', '', $spreadsheetId) ?: 'sheet';
+        $timestamp       = $now->format('Ymd_His');
+        $suffix          = Str::replaceMatches('/[^a-zA-Z0-9_-]/', '', $spreadsheetId) ?: 'sheet';
 
         $base_folder_path = sprintf('%s/google_sheet_%s_%s', $year_month_path, $timestamp, $suffix);
         $single_file_path = sprintf('%s/google_sheet_%s_%s.xlsx', $year_month_path, $timestamp, $suffix);
@@ -470,7 +472,7 @@ class CreateProductImportBatch extends CreateRecord
      */
     private function writeChunkToExcelFile(string $file_path, array $all_sheets_rows, int $chunk_index): void
     {
-        $spreadsheet = new Spreadsheet;
+        $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
 
         $start_offset = ($chunk_index - 1) * self::MAX_ROWS_PER_FILE;
@@ -479,8 +481,8 @@ class CreateProductImportBatch extends CreateRecord
             $worksheet = new Worksheet($spreadsheet, $this->sanitizeSheetTitle($sheet_name));
             $spreadsheet->addSheet($worksheet);
 
-            $header = $rows[0] ?? [];
-            $dataRows = array_slice($rows, 1);
+            $header     = $rows[0] ?? [];
+            $dataRows   = array_slice($rows, 1);
             $data_chunk = array_slice($dataRows, $start_offset, self::MAX_ROWS_PER_FILE);
 
             $rows_to_write = [];

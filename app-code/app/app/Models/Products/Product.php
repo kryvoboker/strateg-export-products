@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Models\Products;
 
 use App\Models\Attributes\Attribute;
+use App\Models\Brands\Brand;
 use App\Models\Categories\Category;
+use App\Models\Manufacturers\Manufacturer;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Updates\ProductUpdateItem;
@@ -15,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -93,6 +96,14 @@ class Product extends Model
     public function productToAttributes(): HasMany
     {
         return $this->hasMany(ProductToAttribute::class);
+    }
+
+    /**
+     * @return HasOne<ProductToManufacturerBrand>
+     */
+    public function productToManufacturerBrand(): HasOne
+    {
+        return $this->hasOne(ProductToManufacturerBrand::class, 'product_id');
     }
 
     /**
@@ -177,6 +188,26 @@ class Product extends Model
     {
         return $this->belongsToMany(Attribute::class, 'product_to_attributes', 'product_id', 'attribute_id')
             ->withPivot('shop_language_id', 'text')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return BelongsToMany<Manufacturer, $this>
+     */
+    public function manufacturers(): BelongsToMany
+    {
+        return $this->belongsToMany(Manufacturer::class, 'product_to_manufacturer_brand', 'product_id', 'manufacturer_id')
+            ->withPivot('brand_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return BelongsToMany<Brand, $this>
+     */
+    public function brands(): BelongsToMany
+    {
+        return $this->belongsToMany(Brand::class, 'product_to_manufacturer_brand', 'product_id', 'brand_id')
+            ->withPivot('manufacturer_id')
             ->withTimestamps();
     }
 

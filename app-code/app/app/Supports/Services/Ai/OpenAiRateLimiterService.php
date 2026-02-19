@@ -11,7 +11,7 @@ final class OpenAiRateLimiterService
     public function throttle(): void
     {
         $maxCalls = (int) config('open-ai.api_max_calls', 1);
-        $waitSec = (int) config('open-ai.api_wait_time_seconds', 1);
+        $waitSec  = (int) config('open-ai.api_wait_time_seconds', 1);
 
         if ($maxCalls < 1) {
             $maxCalls = 1;

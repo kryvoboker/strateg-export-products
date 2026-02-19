@@ -9,11 +9,6 @@ use Filament\Forms\Components\Toggle;
 
 trait ToggleCheckboxFormTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getIsActiveFormField(array $params = []): Field
     {
         $toggle_input = Toggle::make('is_active')
@@ -29,11 +24,6 @@ trait ToggleCheckboxFormTrait
         return $toggle_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getIsNoIndexFormField(array $params = []): Field
     {
         $toggle_input = Toggle::make('is_noindex')
@@ -49,11 +39,6 @@ trait ToggleCheckboxFormTrait
         return $toggle_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getIsDefaultFormField(array $params = []): Field
     {
         $toggle_input = Toggle::make('is_default')

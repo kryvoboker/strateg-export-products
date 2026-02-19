@@ -24,7 +24,7 @@ class CategoryNameHash extends Model
     {
         return [
             'category_id' => 'integer',
-            'hash' => 'string',
+            'hash'        => 'string',
         ];
     }
 

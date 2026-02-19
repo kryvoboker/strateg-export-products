@@ -43,8 +43,8 @@ class ProcessProductExportItemJob implements ShouldQueue
         }
 
         $payload    = is_array($product_export_item->payload) ? $product_export_item->payload : [];
-        $shop_id    = (int)Arr::get($payload, 'shop_id', 0);
-        $product_id = (int)($product_export_item->product_id ?? 0);
+        $shop_id    = (int) Arr::get($payload, 'shop_id', 0);
+        $product_id = (int) ($product_export_item->product_id ?? 0);
 
         $product_export_item->update([
             'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
@@ -69,15 +69,15 @@ class ProcessProductExportItemJob implements ShouldQueue
 
             $is_bound_to_shop = ProductShop::isProductBoundToShop($product_id, $shop_id);
 
-            if (!$is_bound_to_shop) {
+            if (! $is_bound_to_shop) {
                 throw new RuntimeException('Product is not bound to selected shop');
             }
 
             $request_payload = $this->buildRequestPayload($product, $shop_id);
             $response        = $this->sendExportRequest($shop, $request_payload);
 
-            if (!$response->successful()) {
-                throw new RuntimeException('Export API failed with status ' . $response->status() . ': ' . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException('Export API failed with status '.$response->status().': '.$response->body());
             }
 
             $response_data       = $response->json();
@@ -102,7 +102,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                 ],
             ]);
         } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to export product with id ' . $product_id . ' for shop with id ' . $shop_id, [
+            Log::channel('stack')->error('Failed to export product with id '.$product_id.' for shop with id '.$shop_id, [
                 'error_msg'  => $exception->getMessage(),
                 'file'       => $exception->getFile(),
                 'line'       => $exception->getLine(),
@@ -117,7 +117,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                 'processed_at'  => now(),
             ]);
         } finally {
-            $this->syncBatchStatusByExportItems((int)$product_export_item->product_import_batch_id);
+            $this->syncBatchStatusByExportItems($product_export_item);
         }
     }
 
@@ -139,16 +139,16 @@ class ProcessProductExportItemJob implements ShouldQueue
 
         $shop_language_ids = $shop_languages
             ->pluck('id')
-            ->map(static fn($shop_language_id): int => (int)$shop_language_id)
-            ->filter(static fn(int $shop_language_id): bool => $shop_language_id > 0)
+            ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
             ->values()
             ->all();
 
         $shop_language_map_by_id = $shop_languages
-            ->mapWithKeys(static fn(ShopLanguage $shop_language): array => [
-                (int)$shop_language->id => [
-                    'id'   => (int)$shop_language->id,
-                    'code' => Str::lower(Str::trim((string)$shop_language->code)),
+            ->mapWithKeys(static fn (ShopLanguage $shop_language): array => [
+                (int) $shop_language->id => [
+                    'id'   => (int) $shop_language->id,
+                    'code' => Str::lower(Str::trim((string) $shop_language->code)),
                     'name' => $shop_language->name,
                 ],
             ])
@@ -156,16 +156,16 @@ class ProcessProductExportItemJob implements ShouldQueue
 
         $seo_urls = SeoUrl::getForSeoableAndLanguageIds(Product::class, (int) $product->id, $shop_language_ids)
             ->map(static function (SeoUrl $seo_url) use ($shop_language_map_by_id): array {
-                $shop_language_id = $seo_url->shop_language_id !== null ? (int)$seo_url->shop_language_id : null;
+                $shop_language_id = $seo_url->shop_language_id !== null ? (int) $seo_url->shop_language_id : null;
 
                 return [
                     'shop_language_id'   => $seo_url->shop_language_id,
                     'shop_language_code' => $shop_language_id !== null
-                        ? Arr::get($shop_language_map_by_id, $shop_language_id . '.code')
+                        ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
                         : null,
-                    'query_value'        => $seo_url->query_value,
-                    'keyword'            => $seo_url->keyword,
-                    'sort_order'         => $seo_url->sort_order,
+                    'query_value' => $seo_url->query_value,
+                    'keyword'     => $seo_url->keyword,
+                    'sort_order'  => $seo_url->sort_order,
                 ];
             })
             ->values()
@@ -173,14 +173,14 @@ class ProcessProductExportItemJob implements ShouldQueue
 
         $attribute_pairs = [];
         foreach ($product->productToAttributes as $product_to_attribute) {
-            $attribute_id = (int) ($product_to_attribute->attribute_id ?? 0);
+            $attribute_id     = (int) ($product_to_attribute->attribute_id ?? 0);
             $shop_language_id = (int) ($product_to_attribute->shop_language_id ?? 0);
             if ($attribute_id <= 0 || $shop_language_id <= 0) {
                 continue;
             }
 
             $attribute_pairs[] = [
-                'attribute_id' => $attribute_id,
+                'attribute_id'     => $attribute_id,
                 'shop_language_id' => $shop_language_id,
             ];
         }
@@ -199,19 +199,19 @@ class ProcessProductExportItemJob implements ShouldQueue
                 'minimum'        => $product->minimum,
                 'image'          => $product->image,
                 'price'          => $product->price,
-                'is_active'      => (bool)$product->is_active,
+                'is_active'      => (bool) $product->is_active,
                 'date_available' => $product->date_available?->toDateTimeString(),
                 'date_added'     => $product->date_added?->toDateTimeString(),
             ],
-            'descriptions'   => $product->descriptions
-                ->filter(static fn($description): bool => $shop_language_ids === []
-                    || in_array((int)$description->shop_language_id, $shop_language_ids, true))
+            'descriptions' => $product->descriptions
+                ->filter(static fn ($description): bool => $shop_language_ids === []
+                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
                 ->map(static function ($description) use ($shop_language_map_by_id): array {
-                    $shop_language_id = (int)$description->shop_language_id;
+                    $shop_language_id = (int) $description->shop_language_id;
 
                     return [
                         'shop_language_id'   => $shop_language_id,
-                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id . '.code'),
+                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
                         'name'               => $description->name,
                         'description'        => $description->description,
                         'meta_title'         => $description->meta_title,
@@ -219,22 +219,22 @@ class ProcessProductExportItemJob implements ShouldQueue
                         'meta_keywords'      => $description->meta_keywords,
                     ];
                 })->values()->all(),
-            'images'         => $product->images
-                ->map(static fn($image): array => [
+            'images' => $product->images
+                ->map(static fn ($image): array => [
                     'image'      => $image->image,
                     'sort_order' => $image->sort_order,
                 ])->values()->all(),
-            'categories'     => $product->categories
+            'categories' => $product->categories
                 ->map(static function ($category) use ($shop_language_ids, $shop_language_map_by_id): array {
                     $descriptions = $category->descriptions
-                        ->filter(static fn($description): bool => $shop_language_ids === []
-                            || in_array((int)$description->shop_language_id, $shop_language_ids, true))
+                        ->filter(static fn ($description): bool => $shop_language_ids === []
+                            || in_array((int) $description->shop_language_id, $shop_language_ids, true))
                         ->map(static function ($description) use ($shop_language_map_by_id): array {
-                            $shop_language_id = (int)$description->shop_language_id;
+                            $shop_language_id = (int) $description->shop_language_id;
 
                             return [
                                 'shop_language_id'   => $shop_language_id,
-                                'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id . '.code'),
+                                'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
                                 'name'               => $description->name,
                                 'description'        => $description->description,
                                 'h1_title'           => $description->h1_title,
@@ -253,32 +253,32 @@ class ProcessProductExportItemJob implements ShouldQueue
                         'descriptions' => $descriptions,
                     ];
                 })->values()->all(),
-            'attributes'     => $product->productToAttributes
-                ->filter(static fn($attribute): bool => $shop_language_ids === []
-                    || in_array((int)$attribute->shop_language_id, $shop_language_ids, true))
+            'attributes' => $product->productToAttributes
+                ->filter(static fn ($attribute): bool => $shop_language_ids === []
+                    || in_array((int) $attribute->shop_language_id, $shop_language_ids, true))
                 ->map(static function ($attribute) use ($attribute_description_map, $shop_language_map_by_id): array {
-                    $shop_language_id = (int)$attribute->shop_language_id;
-                    $attribute_id     = (int)$attribute->attribute_id;
+                    $shop_language_id = (int) $attribute->shop_language_id;
+                    $attribute_id     = (int) $attribute->attribute_id;
 
                     return [
                         'attribute_id'       => $attribute_id,
-                        'attribute_name'     => $attribute_description_map[$attribute_id . ':' . $shop_language_id] ?? null,
+                        'attribute_name'     => $attribute_description_map[$attribute_id.':'.$shop_language_id] ?? null,
                         'shop_language_id'   => $shop_language_id,
-                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id . '.code'),
+                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
                         'text'               => $attribute->text,
                     ];
                 })->values()->all(),
-            'seo_urls'       => $seo_urls,
-            'specials'       => $product->specials
-                ->map(static fn($special): array => [
+            'seo_urls' => $seo_urls,
+            'specials' => $product->specials
+                ->map(static fn ($special): array => [
                     'user_group_id' => $special->user_group_id,
                     'price'         => $special->price,
                     'priority'      => $special->priority,
                     'date_start'    => $special->date_start,
                     'date_end'      => $special->date_end,
                 ])->values()->all(),
-            'discounts'      => $product->discounts
-                ->map(static fn($discount): array => [
+            'discounts' => $product->discounts
+                ->map(static fn ($discount): array => [
                     'user_group_id' => $discount->user_group_id,
                     'quantity'      => $discount->quantity,
                     'price'         => $discount->price,
@@ -290,7 +290,7 @@ class ProcessProductExportItemJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $request_payload
+     * @param  array<string, mixed>  $request_payload
      *
      * @throws ConnectionException
      */
@@ -304,7 +304,7 @@ class ProcessProductExportItemJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $request_payload
+     * @param  array<string, mixed>  $request_payload
      *
      * @throws ConnectionException
      */
@@ -312,37 +312,37 @@ class ProcessProductExportItemJob implements ShouldQueue
     {
         $options = is_array($shop->options) ? $shop->options : [];
 
-        $endpoint = Str::trim((string)Arr::get($options, 'product_export_endpoint'));
+        $endpoint = Str::trim((string) Arr::get($options, 'product_export_endpoint'));
         if ($endpoint === '') {
-            $endpoint = Str::trim((string)($shop->part_api_url_export_prods ?? ''));
+            $endpoint = Str::trim((string) ($shop->part_api_url_export_prods ?? ''));
         }
 
         if ($endpoint === '') {
             throw new RuntimeException('Missing product export endpoint!');
         }
 
-        $api_url  = Str::trim((string)($shop->api_url ?? ''));
+        $api_url  = Str::trim((string) ($shop->api_url ?? ''));
         $base_url = $api_url !== ''
             ? $api_url
-            : Str::trim((string)$shop->base_url);
+            : Str::trim((string) $shop->base_url);
 
-        $timeout = max((int)Arr::get($options, 'api_timeout', 30), 5);
+        $timeout = max((int) Arr::get($options, 'api_timeout', 30), 5);
         $url     = Str::startsWith($endpoint, ['http://', 'https://'])
             ? $endpoint
-            : Str::rtrim($base_url, '/') . '/' . Str::ltrim($endpoint, '/');
+            : Str::rtrim($base_url, '/').'/'.Str::ltrim($endpoint, '/');
 
         $request = Http::timeout($timeout)
             ->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
 
-        $api_token = Str::trim((string)Arr::get($options, 'api_token', ''));
+        $api_token = Str::trim((string) Arr::get($options, 'api_token', ''));
 
         if ($api_token !== '') {
             $request = $request->withToken($api_token);
         }
 
-        $header_name  = Str::trim((string)Arr::get($options, 'api_header_name', ''));
-        $header_value = Str::trim((string)Arr::get($options, 'api_header_value', ''));
+        $header_name  = Str::trim((string) Arr::get($options, 'api_header_name', ''));
+        $header_value = Str::trim((string) Arr::get($options, 'api_header_value', ''));
 
         if ($header_name !== '' && $header_value !== '') {
             $request = $request->withHeaders([
@@ -354,7 +354,7 @@ class ProcessProductExportItemJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $request_payload
+     * @param  array<string, mixed>  $request_payload
      *
      * @throws ConnectionException
      */
@@ -362,7 +362,7 @@ class ProcessProductExportItemJob implements ShouldQueue
     {
         $options = is_array($shop->options) ? $shop->options : [];
 
-        $timeout      = max((int)Arr::get($options, 'api_timeout', 30), 5);
+        $timeout      = max((int) Arr::get($options, 'api_timeout', 30), 5);
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $export_url   = $this->resolveExportUrl($shop, $api_base_url);
 
@@ -373,7 +373,7 @@ class ProcessProductExportItemJob implements ShouldQueue
         }
 
         $response = $this->sendOpenCartRequestWithAuthApiToken($export_url, $auth_api_token, $request_payload, $timeout);
-        if (!$this->isInvalidOpenCartAuthTokenResponse($response)) {
+        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
             return $response;
         }
 
@@ -385,16 +385,16 @@ class ProcessProductExportItemJob implements ShouldQueue
 
     private function isOpenCartShop(Shop $shop): bool
     {
-        $shop_type = Str::lower(Str::trim((string)($shop->type ?? '')));
+        $shop_type = Str::lower(Str::trim((string) ($shop->type ?? '')));
 
         $allowed_types = config('app.allowed_projects_types.opencart', []);
 
-        if (!is_array($allowed_types)) {
+        if (! is_array($allowed_types)) {
             return false;
         }
 
         foreach ($allowed_types as $allowed_type) {
-            if (Str::lower(Str::trim((string)$allowed_type)) === $shop_type) {
+            if (Str::lower(Str::trim((string) $allowed_type)) === $shop_type) {
                 return true;
             }
         }
@@ -404,8 +404,8 @@ class ProcessProductExportItemJob implements ShouldQueue
 
     private function resolveApiBaseUrl(Shop $shop): string
     {
-        $api_url      = Str::trim((string)($shop->api_url ?? ''));
-        $base_url     = Str::trim((string)($shop->base_url ?? ''));
+        $api_url      = Str::trim((string) ($shop->api_url ?? ''));
+        $base_url     = Str::trim((string) ($shop->base_url ?? ''));
         $api_base_url = $api_url !== '' ? $api_url : $base_url;
 
         if ($api_base_url === '') {
@@ -421,7 +421,7 @@ class ProcessProductExportItemJob implements ShouldQueue
 
     private function resolveExportUrl(Shop $shop, string $api_base_url): string
     {
-        $part_api_url_export_prods = Str::trim((string)($shop->part_api_url_export_prods ?? ''));
+        $part_api_url_export_prods = Str::trim((string) ($shop->part_api_url_export_prods ?? ''));
         if ($part_api_url_export_prods === '') {
             throw new RuntimeException('Missing part_api_url_export_prods for export API');
         }
@@ -430,7 +430,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             return $part_api_url_export_prods;
         }
 
-        return Str::rtrim($api_base_url, '/') . '/' . Str::ltrim($part_api_url_export_prods, '/');
+        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($part_api_url_export_prods, '/');
     }
 
     private function resolveOpenCartLoginUrl(Shop $shop, string $api_base_url): string
@@ -439,14 +439,14 @@ class ProcessProductExportItemJob implements ShouldQueue
 
         $part_api_url_login = $shop->part_api_url_login ?? '';
 
-        return Str::rtrim($api_base_url, '/') . '/' . Str::ltrim($part_api_url_login, '/');
+        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($part_api_url_login, '/');
     }
 
     private function resolveStoredAuthApiToken(Shop $shop): string
     {
         $options = is_array($shop->options) ? $shop->options : [];
 
-        return Str::trim((string)Arr::get($options, 'auth_api_token', ''));
+        return Str::trim((string) Arr::get($options, 'auth_api_token', ''));
     }
 
     private function persistOpenCartAuthApiToken(Shop $shop, string $auth_api_token): void
@@ -472,8 +472,8 @@ class ProcessProductExportItemJob implements ShouldQueue
         $login_url = $this->resolveOpenCartLoginUrl($shop, $api_base_url);
         $options   = is_array($shop->options) ? $shop->options : [];
 
-        $api_username = Str::trim((string)Arr::get($options, 'api_username', ''));
-        $api_token    = Str::trim((string)($shop->api_token ?? ''));
+        $api_username = Str::trim((string) Arr::get($options, 'api_username', ''));
+        $api_token    = Str::trim((string) ($shop->api_token ?? ''));
 
         if ($api_token === '') {
             throw new RuntimeException('Missing api_token for OpenCart login API request');
@@ -488,12 +488,12 @@ class ProcessProductExportItemJob implements ShouldQueue
                 'key'      => $api_token,
             ]);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('OpenCart login API failed with status ' . $response->status() . ': ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException('OpenCart login API failed with status '.$response->status().': '.$response->body());
         }
 
         $response_data  = $response->json();
-        $auth_api_token = Str::trim((string)Arr::get($response_data, 'api_token', ''));
+        $auth_api_token = Str::trim((string) Arr::get($response_data, 'api_token', ''));
 
         if ($auth_api_token === '') {
             throw new RuntimeException('OpenCart login API did not return api_token');
@@ -503,19 +503,19 @@ class ProcessProductExportItemJob implements ShouldQueue
     }
 
     /**
-     * @param array<string, mixed> $request_payload
+     * @param  array<string, mixed>  $request_payload
      *
      * @throws ConnectionException
      */
     private function sendOpenCartRequestWithAuthApiToken(
         string $export_url,
         string $auth_api_token,
-        array  $request_payload,
-        int    $timeout
+        array $request_payload,
+        int $timeout
     ): Response {
         $url = $export_url;
         $url .= Str::contains($export_url, '?') ? '&' : '?';
-        $url .= 'api_token=' . urlencode($auth_api_token);
+        $url .= 'api_token='.urlencode($auth_api_token);
 
         $request = Http::timeout($timeout)
             ->asForm();
@@ -527,14 +527,12 @@ class ProcessProductExportItemJob implements ShouldQueue
 
     private function applyDebugCookieForDevelopment(PendingRequest $request): PendingRequest
     {
-        $is_debug_mode              = (bool)config('app.debug', false);
+        $is_debug_mode              = config('app.debug', false) && config('app.enable_xdebug_session', false);
         $is_development_environment = app()->isLocal();
 
         if ($is_debug_mode === false || $is_development_environment === false) {
             return $request;
         }
-
-//        return $request;
 
         return $request->withHeaders([
             'Cookie' => 'XDEBUG_SESSION=PHPSTORM',
@@ -567,7 +565,7 @@ class ProcessProductExportItemJob implements ShouldQueue
         }
 
         $response_data = $response->json();
-        if (!is_array($response_data)) {
+        if (! is_array($response_data)) {
             return false;
         }
 
@@ -575,17 +573,17 @@ class ProcessProductExportItemJob implements ShouldQueue
             return true;
         }
 
-        $error_text = Str::lower(Str::trim((string)Arr::get($response_data, 'error', '')));
+        $error_text = Str::lower(Str::trim((string) Arr::get($response_data, 'error', '')));
 
         return $error_text !== '' && Str::contains($error_text, 'token');
     }
 
     /**
-     * @param array<string, mixed>|null $response_data
+     * @param  array<string, mixed>|null  $response_data
      */
-    private function resolveExternalProductIdFromResponse(array|null $response_data): int
+    private function resolveExternalProductIdFromResponse(?array $response_data): int
     {
-        if (!is_array($response_data)) {
+        if (! is_array($response_data)) {
             return 0;
         }
 
@@ -603,8 +601,8 @@ class ProcessProductExportItemJob implements ShouldQueue
 
         foreach ($candidate_paths as $candidate_path) {
             $candidate_id = Arr::get($response_data, $candidate_path);
-            if (is_numeric($candidate_id) && (int)$candidate_id > 0) {
-                return (int)$candidate_id;
+            if (is_numeric($candidate_id) && (int) $candidate_id > 0) {
+                return (int) $candidate_id;
             }
         }
 
@@ -616,25 +614,28 @@ class ProcessProductExportItemJob implements ShouldQueue
         return Str::limit(Str::trim($response_body), 20000);
     }
 
-    private function syncBatchStatusByExportItems(int $batch_id): void
+    private function syncBatchStatusByExportItems(ProductExportItem $product_export_item): void
     {
-        if ($batch_id <= 0) {
+        $batchable_type = Str::trim((string) ($product_export_item->batchable_type ?? ''));
+        $batchable_id   = (int) ($product_export_item->batchable_id ?? 0);
+
+        if ($batchable_type !== ProductImportBatch::class || $batchable_id <= 0) {
             return;
         }
 
-        $batch = ProductImportBatch::query()->find($batch_id);
+        $batch = ProductImportBatch::query()->find($batchable_id);
         if ($batch === null) {
             return;
         }
 
-        $status_counters = ProductExportItem::getBatchStatusCounters($batch_id);
+        $status_counters    = ProductExportItem::getBatchableStatusCounters(ProductImportBatch::class, $batchable_id);
         $total_export_items = (int) ($status_counters['total'] ?? 0);
         if ($total_export_items <= 0) {
             return;
         }
         $processing_count = (int) ($status_counters['processing'] ?? 0);
-        $failed_count = (int) ($status_counters['failed'] ?? 0);
-        $exported_count = (int) ($status_counters['exported'] ?? 0);
+        $failed_count     = (int) ($status_counters['failed'] ?? 0);
+        $exported_count   = (int) ($status_counters['exported'] ?? 0);
 
         if ($processing_count > 0) {
             $batch->update([

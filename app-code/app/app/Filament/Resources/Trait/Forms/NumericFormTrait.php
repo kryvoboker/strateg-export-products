@@ -9,11 +9,6 @@ use Filament\Forms\Components\TextInput;
 
 trait NumericFormTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getNumericFormField(array $params = []): Field
     {
         $numeric_params = $params['numeric_params'] ?? [];
@@ -29,11 +24,6 @@ trait NumericFormTrait
             ->required($params['required'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getPriceFormField(array $params = []): Field
     {
         $numeric_params = $params['numeric_params'] ?? [];

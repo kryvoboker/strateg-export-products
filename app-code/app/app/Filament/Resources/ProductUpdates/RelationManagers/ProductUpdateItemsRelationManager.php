@@ -6,6 +6,7 @@ namespace App\Filament\Resources\ProductUpdates\RelationManagers;
 
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
+use App\Filament\Resources\ProductUpdates\Pages\ListProductUpdateBatches;
 use App\Jobs\ProcessProductUpdateItemJob;
 use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductUpdateBatch;
@@ -53,6 +54,8 @@ class ProductUpdateItemsRelationManager extends RelationManager
             ->defaultSort('id', 'desc')
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
                 'product.descriptions',
+                'product.productToManufacturerBrand.manufacturer.descriptions',
+                'product.productToManufacturerBrand.brand.descriptions',
             ])->where('product_update_batch_id', (int) $this->getOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')->label('ID')->sortable(),
@@ -79,6 +82,14 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ->label('EAN')
                     ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->ean ?? ''))
                     ->toggleable(),
+                TextColumn::make('manufacturer_name')
+                    ->label('Manufacturer')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->productToManufacturerBrand?->manufacturer?->manufacturer_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('brand_name')
+                    ->label('Brand')
+                    ->state(static fn (ProductUpdateItem $record): string => (string) ($record->product?->productToManufacturerBrand?->brand?->brand_name ?? ''))
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('external_product_id')
                     ->label('External product id')
                     ->state(static function (ProductUpdateItem $record): string {
@@ -149,6 +160,8 @@ class ProductUpdateItemsRelationManager extends RelationManager
                         TextInput::make('attribute_name')->label('Attribute name'),
                         TextInput::make('attribute_value')->label('Attribute value'),
                         TextInput::make('category_name')->label('Category name'),
+                        TextInput::make('manufacturer_name')->label('Manufacturer'),
+                        TextInput::make('brand_name')->label('Brand'),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
                         $query,
@@ -343,11 +356,12 @@ class ProductUpdateItemsRelationManager extends RelationManager
                                 ->send();
                         }),
                 ])->dropdownWidth(Width::Large),
-            ]);
+            ])
+            ->recordUrl(null);
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public static function applyBatchSearchFieldsQuery(Builder $query, array $data, int $batch_id): Builder
     {
@@ -365,13 +379,15 @@ class ProductUpdateItemsRelationManager extends RelationManager
         $attribute_name      = Str::lower(Str::trim((string) Arr::get($data, 'attribute_name', '')));
         $attribute_value     = Str::lower(Str::trim((string) Arr::get($data, 'attribute_value', '')));
         $category_name       = Str::lower(Str::trim((string) Arr::get($data, 'category_name', '')));
+        $manufacturer_name   = Str::lower(Str::trim((string) Arr::get($data, 'manufacturer_name', '')));
+        $brand_name          = Str::lower(Str::trim((string) Arr::get($data, 'brand_name', '')));
 
         if ($name !== '') {
             $query->whereHas(
                 'product.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $name . '%']
+                    ['%'.$name.'%']
                 )
             );
         }
@@ -381,7 +397,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(model, \'\')) LIKE ?',
-                    ['%' . $model . '%']
+                    ['%'.$model.'%']
                 )
             );
         }
@@ -391,7 +407,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(sku, \'\')) LIKE ?',
-                    ['%' . $sku . '%']
+                    ['%'.$sku.'%']
                 )
             );
         }
@@ -401,7 +417,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product',
                 static fn (Builder $product_query): Builder => $product_query->whereRaw(
                     'LOWER(COALESCE(ean, \'\')) LIKE ?',
-                    ['%' . $ean . '%']
+                    ['%'.$ean.'%']
                 )
             );
         }
@@ -418,7 +434,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 } else {
                     $product_shop_query->whereRaw(
                         'LOWER(COALESCE(CAST(product_shop.external_product_id AS TEXT), \'\')) LIKE ?',
-                        ['%' . Str::lower($external_product_id) . '%']
+                        ['%'.Str::lower($external_product_id).'%']
                     );
                 }
             });
@@ -432,7 +448,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
 
                 return $product_query->whereRaw(
                     'LOWER(COALESCE(CAST(quantity AS TEXT), \'\')) LIKE ?',
-                    ['%' . Str::lower($quantity) . '%']
+                    ['%'.Str::lower($quantity).'%']
                 );
             });
         }
@@ -445,7 +461,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
 
                 return $product_query->whereRaw(
                     'LOWER(COALESCE(CAST(price AS TEXT), \'\')) LIKE ?',
-                    ['%' . Str::lower($price) . '%']
+                    ['%'.Str::lower($price).'%']
                 );
             });
         }
@@ -455,7 +471,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product.attributes.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $attribute_name . '%']
+                    ['%'.$attribute_name.'%']
                 )
             );
         }
@@ -465,7 +481,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product.productToAttributes',
                 static fn (Builder $product_to_attribute_query): Builder => $product_to_attribute_query->whereRaw(
                     'LOWER(COALESCE(text, \'\')) LIKE ?',
-                    ['%' . $attribute_value . '%']
+                    ['%'.$attribute_value.'%']
                 )
             );
         }
@@ -475,7 +491,27 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product.categories.descriptions',
                 static fn (Builder $description_query): Builder => $description_query->whereRaw(
                     'LOWER(name) LIKE ?',
-                    ['%' . $category_name . '%']
+                    ['%'.$category_name.'%']
+                )
+            );
+        }
+
+        if ($manufacturer_name !== '') {
+            $query->whereHas(
+                'product.productToManufacturerBrand.manufacturer.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$manufacturer_name.'%']
+                )
+            );
+        }
+
+        if ($brand_name !== '') {
+            $query->whereHas(
+                'product.productToManufacturerBrand.brand.descriptions',
+                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                    'LOWER(name) LIKE ?',
+                    ['%'.$brand_name.'%']
                 )
             );
         }
@@ -696,7 +732,11 @@ class ProductUpdateItemsRelationManager extends RelationManager
         $prepared_payload    = is_array($prepared_item->payload) ? $prepared_item->payload : [];
         $update_instructions = Arr::get($prepared_payload, 'update_instructions', []);
 
-        return is_array($update_instructions) ? $update_instructions : [];
+        if (! is_array($update_instructions)) {
+            return [];
+        }
+
+        return ListProductUpdateBatches::sanitizeImmutableProductFieldsFromUpdateInstructions($update_instructions);
     }
 
     private function markBatchAsUpdating(int $batch_id): void

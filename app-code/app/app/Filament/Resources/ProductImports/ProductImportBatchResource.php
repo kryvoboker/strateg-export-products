@@ -33,7 +33,7 @@ class ProductImportBatchResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'source_name';
 
-//    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Catalog;
+    //    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Catalog;
 
     public static function form(Schema $schema): Schema
     {
@@ -53,45 +53,45 @@ class ProductImportBatchResource extends Resource
                     ->columnSpanFull()
                     ->schema([
                         Grid::make()
-                        ->columns(6)
-                        ->schema([
-                            TextEntry::make('id'),
-                            TextEntry::make('source_type')
-                                ->label(__('admin/product_imports/batches.columns.source_type')),
-                            TextEntry::make('source_name')
-                                ->label(__('admin/product_imports/batches.columns.source_name')),
-                            TextEntry::make('status')
-                                ->label(__('admin/product_imports/batches.columns.status'))
-                                ->formatStateUsing(fn (string $state): string => __('admin/product_imports/batches.statuses.'.$state))
-                                ->badge(),
-                            TextEntry::make('total_items')
-                                ->label(__('admin/product_imports/batches.columns.total_items')),
-                            TextEntry::make('processed_items')
-                                ->label(__('admin/product_imports/batches.columns.processed_items')),
-                            TextEntry::make('failed_items')
-                                ->label(__('admin/product_imports/batches.columns.failed_items')),
-                            TextEntry::make('options.last_error')
-                                ->label(__('admin/product_imports/batches.columns.last_error'))
-                                ->placeholder(__('admin/product_imports/batches.columns.empty_value')),
-                            TextEntry::make('options.error_log_path')
-                                ->label(__('admin/product_imports/batches.columns.error_log'))
-                                ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
-                                    ? Storage::url((string) $record->getErrorLogPath())
-                                    : null)
-                                ->openUrlInNewTab()
-                                ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
-                                    ? __('admin/product_imports/batches.actions.download_error_log')
-                                    : __('admin/product_imports/batches.columns.empty_value')),
-                            TextEntry::make('created_at')
-                                ->label(__('admin/default.columns.created_at'))
-                                ->dateTime(config('app.datetime_format'), config('app.timezone')),
-                            TextEntry::make('started_at')
-                                ->label(__('admin/product_imports/batches.columns.started_at'))
-                                ->dateTime(config('app.datetime_format'), config('app.timezone')),
-                            TextEntry::make('finished_at')
-                                ->label(__('admin/product_imports/batches.columns.finished_at'))
-                                ->dateTime(config('app.datetime_format'), config('app.timezone')),
-                        ])
+                            ->columns(6)
+                            ->schema([
+                                TextEntry::make('id'),
+                                TextEntry::make('source_type')
+                                    ->label(__('admin/product_imports/batches.columns.source_type')),
+                                TextEntry::make('source_name')
+                                    ->label(__('admin/product_imports/batches.columns.source_name')),
+                                TextEntry::make('status')
+                                    ->label(__('admin/product_imports/batches.columns.status'))
+                                    ->formatStateUsing(fn (string $state): string => __('admin/product_imports/batches.statuses.'.$state))
+                                    ->badge(),
+                                TextEntry::make('total_items')
+                                    ->label(__('admin/product_imports/batches.columns.total_items')),
+                                TextEntry::make('processed_items')
+                                    ->label(__('admin/product_imports/batches.columns.processed_items')),
+                                TextEntry::make('failed_items')
+                                    ->label(__('admin/product_imports/batches.columns.failed_items')),
+                                TextEntry::make('options.last_error')
+                                    ->label(__('admin/product_imports/batches.columns.last_error'))
+                                    ->placeholder(__('admin/product_imports/batches.columns.empty_value')),
+                                TextEntry::make('options.error_log_path')
+                                    ->label(__('admin/product_imports/batches.columns.error_log'))
+                                    ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
+                                        ? Storage::url((string) $record->getErrorLogPath())
+                                        : null)
+                                    ->openUrlInNewTab()
+                                    ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
+                                        ? __('admin/product_imports/batches.actions.download_error_log')
+                                        : __('admin/product_imports/batches.columns.empty_value')),
+                                TextEntry::make('created_at')
+                                    ->label(__('admin/default.columns.created_at'))
+                                    ->dateTime(config('app.datetime_format'), config('app.timezone')),
+                                TextEntry::make('started_at')
+                                    ->label(__('admin/product_imports/batches.columns.started_at'))
+                                    ->dateTime(config('app.datetime_format'), config('app.timezone')),
+                                TextEntry::make('finished_at')
+                                    ->label(__('admin/product_imports/batches.columns.finished_at'))
+                                    ->dateTime(config('app.datetime_format'), config('app.timezone')),
+                            ]),
                     ]),
             ]);
     }
@@ -106,9 +106,9 @@ class ProductImportBatchResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListProductImportBatches::route('/'),
+            'index'  => ListProductImportBatches::route('/'),
             'create' => CreateProductImportBatch::route('/create'),
-            'view' => ViewProductImportBatch::route('/{record}'),
+            'view'   => ViewProductImportBatch::route('/{record}'),
         ];
     }
 

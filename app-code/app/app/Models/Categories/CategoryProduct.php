@@ -23,7 +23,7 @@ class CategoryProduct extends Model
     protected function casts(): array
     {
         return [
-            'product_id' => 'integer',
+            'product_id'  => 'integer',
             'category_id' => 'integer',
         ];
     }

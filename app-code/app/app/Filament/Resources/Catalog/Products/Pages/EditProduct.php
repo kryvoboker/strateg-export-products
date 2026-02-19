@@ -21,6 +21,7 @@ use App\Models\Products\ProductImage;
 use App\Models\Products\ProductShop;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Seo\SeoUrl;
@@ -49,35 +50,35 @@ class EditProduct extends EditRecord
      */
     private const array API_UPDATE_FIELD_MAP = [
         'product' => [
-            'sheet' => 'Product',
-            'fields' => ['model', 'sku', 'ean', 'quantity', 'minimum', 'image', 'price', 'is_active', 'date_available', 'date_added'],
+            'sheet'  => 'Product',
+            'fields' => ['sku', 'quantity', 'minimum', 'image', 'price', 'manufacturer', 'brand', 'is_active', 'date_available', 'date_added'],
         ],
         'description' => [
-            'sheet' => 'Description',
+            'sheet'  => 'Description',
             'fields' => ['name', 'description', 'meta_title', 'meta_description', 'meta_keywords'],
         ],
         'image' => [
-            'sheet' => 'Image',
+            'sheet'  => 'Image',
             'fields' => ['image', 'sort_order'],
         ],
         'product_category' => [
-            'sheet' => 'Product Category',
+            'sheet'  => 'Product Category',
             'fields' => ['category_name'],
         ],
         'product_attribute' => [
-            'sheet' => 'Product Attribute',
+            'sheet'  => 'Product Attribute',
             'fields' => ['attribute_name', 'attribute_text'],
         ],
         'seo_url' => [
-            'sheet' => 'Seo Url',
+            'sheet'  => 'Seo Url',
             'fields' => ['query_key', 'query_value', 'keyword', 'sort_order'],
         ],
         'special' => [
-            'sheet' => 'Special',
+            'sheet'  => 'Special',
             'fields' => ['user_group_id', 'price', 'priority', 'date_start', 'date_end'],
         ],
         'discount' => [
-            'sheet' => 'Discount',
+            'sheet'  => 'Discount',
             'fields' => ['user_group_id', 'quantity', 'price', 'priority', 'date_start', 'date_end'],
         ],
     ];
@@ -103,7 +104,6 @@ class EditProduct extends EditRecord
     }
 
     /**
-     * @return void
      * @throws Throwable
      */
     public function saveAndQueueProductUpdateViaApi(): void
@@ -151,7 +151,7 @@ class EditProduct extends EditRecord
     private function sanitizeAttributesSelectionBeforeSave(array $form_data): array
     {
         $selected_by_language = Arr::get($form_data, 'attributes_selected_by_language', []);
-        $custom_by_language = Arr::get($form_data, 'attributes_custom_by_language', []);
+        $custom_by_language   = Arr::get($form_data, 'attributes_custom_by_language', []);
 
         if (! is_array($selected_by_language) || ! is_array($custom_by_language)) {
             return $form_data;
@@ -175,7 +175,7 @@ class EditProduct extends EditRecord
                 continue;
             }
 
-            Arr::set($form_data, 'attributes_selected_by_language.' . $shop_language_id, []);
+            Arr::set($form_data, 'attributes_selected_by_language.'.$shop_language_id, []);
         }
 
         return $form_data;
@@ -183,7 +183,7 @@ class EditProduct extends EditRecord
 
     public function renderingHasRelationManagers(): void
     {
-        $managers = $this->getRelationManagers();
+        $managers                = $this->getRelationManagers();
         $active_relation_manager = (string) ($this->activeRelationManager ?? '');
 
         if (array_key_exists($active_relation_manager, $managers)) {
@@ -218,6 +218,7 @@ class EditProduct extends EditRecord
             'productToAttributes',
             'specials',
             'discounts',
+            'productToManufacturerBrand',
         ])->find((int) $this->record->id);
 
         if (! $product instanceof Product) {
@@ -256,11 +257,11 @@ class EditProduct extends EditRecord
         $descriptions_by_language = $product->descriptions
             ->mapWithKeys(static fn (ProductDescription $description): array => [
                 (int) $description->shop_language_id => [
-                    'name' => $description->name,
-                    'description' => $description->description,
-                    'meta_title' => $description->meta_title,
+                    'name'             => $description->name,
+                    'description'      => $description->description,
+                    'meta_title'       => $description->meta_title,
                     'meta_description' => $description->meta_description,
-                    'meta_keywords' => $description->meta_keywords,
+                    'meta_keywords'    => $description->meta_keywords,
                 ],
             ])
             ->toArray();
@@ -270,7 +271,7 @@ class EditProduct extends EditRecord
             ->map(static fn ($rows): array => $rows
                 ->map(static fn (ProductToAttribute $attribute): array => [
                     'attribute_id' => $attribute->attribute_id,
-                    'text' => $attribute->text,
+                    'text'         => $attribute->text,
                 ])->values()->all())
             ->toArray();
 
@@ -290,7 +291,7 @@ class EditProduct extends EditRecord
             ->whereIn('shop_language_id', $product->productToAttributes->pluck('shop_language_id')->filter()->all())
             ->get()
             ->mapWithKeys(static fn (AttributeDescription $description): array => [
-                $description->attribute_id . ':' . $description->shop_language_id => (string) $description->name,
+                $description->attribute_id.':'.$description->shop_language_id => (string) $description->name,
             ])
             ->toArray();
 
@@ -298,11 +299,11 @@ class EditProduct extends EditRecord
             ->groupBy('shop_language_id')
             ->map(static fn ($rows) => $rows
                 ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
-                    $attribute_key = $attribute->attribute_id . ':' . $attribute->shop_language_id;
+                    $attribute_key = $attribute->attribute_id.':'.$attribute->shop_language_id;
 
                     return [
                         'attribute_name' => $attribute_name_map[$attribute_key] ?? '',
-                        'text' => $attribute->text,
+                        'text'           => $attribute->text,
                     ];
                 })
                 ->values()
@@ -325,45 +326,47 @@ class EditProduct extends EditRecord
             }
 
             $seo_urls_by_language[$shop_language_id][] = [
-                'query_key' => $seo_url->query_key,
+                'query_key'   => $seo_url->query_key,
                 'query_value' => $seo_url->query_value,
-                'keyword' => $seo_url->keyword,
-                'sort_order' => $seo_url->sort_order,
+                'keyword'     => $seo_url->keyword,
+                'sort_order'  => $seo_url->sort_order,
             ];
         }
 
         return [
             ...$data,
-            'bind_shop_id' => $current_shop_id !== null ? (int) $current_shop_id : null,
+            'bind_shop_id'          => $current_shop_id !== null ? (int) $current_shop_id : null,
             'bind_shop_language_id' => $current_shop_language_id !== null ? (int) $current_shop_language_id : null,
-            'product_id' => (int) $product->id,
-            'model' => $product->model,
-            'sku' => $product->sku,
-            'ean' => $product->ean,
-            'external_product_id' => is_numeric($current_external_product_id) ? (int) $current_external_product_id : null,
-            'quantity' => $product->quantity,
-            'minimum' => $product->minimum,
-            'image' => $product->image,
-            'price' => $product->price,
-            'is_active' => (bool) $product->is_active,
-            'date_available' => $product->date_available,
-            'date_added' => $product->date_added,
-            'descriptions' => $product->descriptions
+            'product_id'            => (int) $product->id,
+            'model'                 => $product->model,
+            'sku'                   => $product->sku,
+            'ean'                   => $product->ean,
+            'external_product_id'   => is_numeric($current_external_product_id) ? (int) $current_external_product_id : null,
+            'quantity'              => $product->quantity,
+            'minimum'               => $product->minimum,
+            'image'                 => $product->image,
+            'price'                 => $product->price,
+            'is_active'             => (bool) $product->is_active,
+            'date_available'        => $product->date_available,
+            'date_added'            => $product->date_added,
+            'manufacturer_id'       => (int) ($product->productToManufacturerBrand?->manufacturer_id ?? 0) ?: null,
+            'brand_id'              => (int) ($product->productToManufacturerBrand?->brand_id ?? 0) ?: null,
+            'descriptions'          => $product->descriptions
                 ->map(static fn (ProductDescription $description): array => [
                     'shop_language_id' => $description->shop_language_id,
-                    'name' => $description->name,
-                    'description' => $description->description,
-                    'meta_title' => $description->meta_title,
+                    'name'             => $description->name,
+                    'description'      => $description->description,
+                    'meta_title'       => $description->meta_title,
                     'meta_description' => $description->meta_description,
-                    'meta_keywords' => $description->meta_keywords,
+                    'meta_keywords'    => $description->meta_keywords,
                 ])->values()->all(),
             'descriptions_by_language' => $descriptions_by_language,
-            'images' => $product->images
+            'images'                   => $product->images
                 ->map(static fn (ProductImage $image): array => [
-                    'image' => $image->image,
+                    'image'      => $image->image,
                     'sort_order' => $image->sort_order,
                 ])->values()->all(),
-            'category_source_scope' => $current_shop_id !== null ? 'shop' : 'all',
+            'category_source_scope'   => $current_shop_id !== null ? 'shop' : 'all',
             'categories_existing_ids' => $product->categories
                 ->pluck('id')
                 ->filter()
@@ -372,40 +375,40 @@ class EditProduct extends EditRecord
                 ->values()
                 ->all(),
             'categories_custom_paths' => '',
-            'attributes' => $product->productToAttributes
+            'attributes'              => $product->productToAttributes
                 ->map(static fn (ProductToAttribute $attribute): array => [
-                    'attribute_id' => $attribute->attribute_id,
+                    'attribute_id'     => $attribute->attribute_id,
                     'shop_language_id' => $attribute->shop_language_id,
-                    'text' => $attribute->text,
+                    'text'             => $attribute->text,
                 ])->values()->all(),
-            'attribute_source_scope' => $current_shop_id !== null ? 'shop' : 'all',
+            'attribute_source_scope'          => $current_shop_id !== null ? 'shop' : 'all',
             'attributes_selected_by_language' => $attributes_selected_by_language,
-            'attributes_custom_by_language' => $attributes_custom_by_language,
-            'attributes_by_language' => $attributes_by_language,
-            'seo_urls' => $seo_urls
+            'attributes_custom_by_language'   => $attributes_custom_by_language,
+            'attributes_by_language'          => $attributes_by_language,
+            'seo_urls'                        => $seo_urls
                 ->map(static fn (SeoUrl $seo_url): array => [
-                    'query_key' => $seo_url->query_key,
+                    'query_key'   => $seo_url->query_key,
                     'query_value' => $seo_url->query_value,
-                    'keyword' => $seo_url->keyword,
-                    'sort_order' => $seo_url->sort_order,
+                    'keyword'     => $seo_url->keyword,
+                    'sort_order'  => $seo_url->sort_order,
                 ])->values()->all(),
             'seo_urls_by_language' => $seo_urls_by_language,
-            'specials' => $product->specials
+            'specials'             => $product->specials
                 ->map(static fn (ProductSpecial $special): array => [
                     'user_group_id' => $special->user_group_id,
-                    'price' => $special->price,
-                    'priority' => $special->priority,
-                    'date_start' => $special->date_start,
-                    'date_end' => $special->date_end,
+                    'price'         => $special->price,
+                    'priority'      => $special->priority,
+                    'date_start'    => $special->date_start,
+                    'date_end'      => $special->date_end,
                 ])->values()->all(),
             'discounts' => $product->discounts
                 ->map(static fn (ProductDiscount $discount): array => [
                     'user_group_id' => $discount->user_group_id,
-                    'quantity' => $discount->quantity,
-                    'price' => $discount->price,
-                    'priority' => $discount->priority,
-                    'date_start' => $discount->date_start,
-                    'date_end' => $discount->date_end,
+                    'quantity'      => $discount->quantity,
+                    'price'         => $discount->price,
+                    'priority'      => $discount->priority,
+                    'date_start'    => $discount->date_start,
+                    'date_end'      => $discount->date_end,
                 ])->values()->all(),
         ];
     }
@@ -416,7 +419,8 @@ class EditProduct extends EditRecord
             return $record;
         }
 
-        $data = $this->sanitizeAttributesSelectionBeforeSave($data);
+        $data                  = $this->sanitizeAttributesSelectionBeforeSave($data);
+        $data                  = $this->enforceImmutableProductFields($record, $data);
         $bind_shop_language_id = (int) Arr::get($data, 'bind_shop_language_id', 0);
 
         DB::transaction(function () use ($record, $data, $bind_shop_language_id): void {
@@ -437,23 +441,35 @@ class EditProduct extends EditRecord
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
+     */
+    private function enforceImmutableProductFields(Product $record, array $data): array
+    {
+        $data['product_id'] = (int) $record->id;
+        $data['model']      = (string) ($record->model ?? '');
+        $data['ean']        = (string) ($record->ean ?? '');
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
      */
     private function persistEditedProductData(Product $product, array $data, int $default_shop_language_id = 0): void
     {
         $product_id = (int) $product->id;
 
         $product->update([
-            'model' => Arr::get($data, 'model'),
-            'sku' => Arr::get($data, 'sku'),
-            'ean' => Arr::get($data, 'ean'),
-            'quantity' => (int) Arr::get($data, 'quantity', 0),
-            'minimum' => max((int) Arr::get($data, 'minimum', 1), 1),
-            'image' => Arr::get($data, 'image'),
-            'price' => (float) Arr::get($data, 'price', 0),
-            'is_active' => (bool) Arr::get($data, 'is_active', false),
+            'model'          => Arr::get($data, 'model'),
+            'sku'            => Arr::get($data, 'sku'),
+            'ean'            => Arr::get($data, 'ean'),
+            'quantity'       => (int) Arr::get($data, 'quantity', 0),
+            'minimum'        => max((int) Arr::get($data, 'minimum', 1), 1),
+            'image'          => Arr::get($data, 'image'),
+            'price'          => (float) Arr::get($data, 'price', 0),
+            'is_active'      => (bool) Arr::get($data, 'is_active', false),
             'date_available' => Arr::get($data, 'date_available'),
-            'date_added' => Arr::get($data, 'date_added'),
+            'date_added'     => Arr::get($data, 'date_added'),
         ]);
 
         $this->syncExternalProductIdForSelectedShop($product_id, $data);
@@ -476,13 +492,13 @@ class EditProduct extends EditRecord
                 }
 
                 ProductDescription::query()->create([
-                    'product_id' => $product_id,
+                    'product_id'       => $product_id,
                     'shop_language_id' => $resolved_shop_language_id,
-                    'name' => Arr::get($description_row, 'name'),
-                    'description' => Arr::get($description_row, 'description'),
-                    'meta_title' => Arr::get($description_row, 'meta_title'),
+                    'name'             => Arr::get($description_row, 'name'),
+                    'description'      => Arr::get($description_row, 'description'),
+                    'meta_title'       => Arr::get($description_row, 'meta_title'),
                     'meta_description' => Arr::get($description_row, 'meta_description'),
-                    'meta_keywords' => Arr::get($description_row, 'meta_keywords'),
+                    'meta_keywords'    => Arr::get($description_row, 'meta_keywords'),
                 ]);
             }
         }
@@ -500,13 +516,14 @@ class EditProduct extends EditRecord
 
             ProductImage::query()->create([
                 'product_id' => $product_id,
-                'image' => $image,
+                'image'      => $image,
                 'sort_order' => (int) Arr::get($image_row, 'sort_order', 1),
             ]);
         }
 
         $this->syncProductCategoriesFromFormData($product_id, $data, $default_shop_language_id);
         $this->syncProductAttributesFromFormData($product_id, $data, $default_shop_language_id);
+        $this->syncProductManufacturerBrandFromFormData($product_id, $data);
 
         SeoUrl::query()
             ->where('seoable_type', Product::class)
@@ -531,12 +548,12 @@ class EditProduct extends EditRecord
                     }
 
                     SeoUrl::query()->create([
-                        'seoable_type' => Product::class,
-                        'seoable_id' => $product_id,
+                        'seoable_type'     => Product::class,
+                        'seoable_id'       => $product_id,
                         'shop_language_id' => $resolved_shop_language_id,
-                        'query_value' => (string) $product_id,
-                        'keyword' => (string) Arr::get($seo_row, 'keyword', ''),
-                        'sort_order' => (int) Arr::get($seo_row, 'sort_order', 1),
+                        'query_value'      => (string) $product_id,
+                        'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
+                        'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
                     ]);
                 }
             }
@@ -549,13 +566,13 @@ class EditProduct extends EditRecord
             }
 
             ProductDiscount::query()->create([
-                'product_id' => $product_id,
+                'product_id'    => $product_id,
                 'user_group_id' => (int) Arr::get($discount_row, 'user_group_id', 1),
-                'quantity' => max((int) Arr::get($discount_row, 'quantity', 1), 1),
-                'price' => (float) Arr::get($discount_row, 'price', 0),
-                'priority' => (int) Arr::get($discount_row, 'priority', 1),
-                'date_start' => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end' => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
+                'quantity'      => max((int) Arr::get($discount_row, 'quantity', 1), 1),
+                'price'         => (float) Arr::get($discount_row, 'price', 0),
+                'priority'      => (int) Arr::get($discount_row, 'priority', 1),
+                'date_start'    => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
+                'date_end'      => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
             ]);
         }
 
@@ -566,18 +583,18 @@ class EditProduct extends EditRecord
             }
 
             ProductSpecial::query()->create([
-                'product_id' => $product_id,
+                'product_id'    => $product_id,
                 'user_group_id' => (int) Arr::get($special_row, 'user_group_id', 1),
-                'price' => (float) Arr::get($special_row, 'price', 0),
-                'priority' => (int) Arr::get($special_row, 'priority', 1),
-                'date_start' => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end' => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
+                'price'         => (float) Arr::get($special_row, 'price', 0),
+                'priority'      => (int) Arr::get($special_row, 'priority', 1),
+                'date_start'    => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
+                'date_end'      => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
             ]);
         }
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function syncExternalProductIdForSelectedShop(int $product_id, array $data): void
     {
@@ -595,14 +612,14 @@ class EditProduct extends EditRecord
         if (! $product_shop instanceof ProductShop) {
             Log::channel('stack')->warning('Product shop binding not found while updating external_product_id', [
                 'product_id' => $product_id,
-                'shop_id' => $shop_id,
+                'shop_id'    => $shop_id,
             ]);
 
             return;
         }
 
         $raw_external_product_id = Arr::get($data, 'external_product_id');
-        $external_product_id = (is_numeric($raw_external_product_id) && (int) $raw_external_product_id > 0)
+        $external_product_id     = (is_numeric($raw_external_product_id) && (int) $raw_external_product_id > 0)
             ? (int) $raw_external_product_id
             : null;
 
@@ -612,12 +629,12 @@ class EditProduct extends EditRecord
             ]);
         } catch (Throwable $exception) {
             Log::channel('stack')->error('Failed to update external_product_id for product shop binding', [
-                'product_id' => $product_id,
-                'shop_id' => $shop_id,
+                'product_id'          => $product_id,
+                'shop_id'             => $shop_id,
                 'external_product_id' => $external_product_id,
-                'error_msg' => $exception->getMessage(),
-                'file' => $exception->getFile(),
-                'line' => $exception->getLine(),
+                'error_msg'           => $exception->getMessage(),
+                'file'                => $exception->getFile(),
+                'line'                => $exception->getLine(),
             ]);
 
             throw $exception;
@@ -625,14 +642,14 @@ class EditProduct extends EditRecord
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function syncProductCategoriesFromFormData(int $product_id, array $data, int $default_shop_language_id): void
     {
         CategoryProduct::query()->where('product_id', $product_id)->delete();
 
         $resolved_category_ids = [];
-        $seen_category_ids = [];
+        $seen_category_ids     = [];
 
         foreach (Arr::get($data, 'categories_existing_ids', []) as $category_id) {
             $resolved_category_id = (int) $category_id;
@@ -647,7 +664,7 @@ class EditProduct extends EditRecord
             }
 
             $seen_category_ids[$resolved_category_id] = true;
-            $resolved_category_ids[] = $resolved_category_id;
+            $resolved_category_ids[]                  = $resolved_category_id;
         }
 
         [$category_paths, $duplicate_category_paths] = $this->parseHierarchyPathsWithDuplicates(
@@ -673,26 +690,26 @@ class EditProduct extends EditRecord
             }
 
             $seen_category_ids[$category_id] = true;
-            $resolved_category_ids[] = $category_id;
+            $resolved_category_ids[]         = $category_id;
         }
 
         foreach ($resolved_category_ids as $category_id) {
             CategoryProduct::query()->create([
-                'product_id' => $product_id,
+                'product_id'  => $product_id,
                 'category_id' => $category_id,
             ]);
         }
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function syncProductAttributesFromFormData(int $product_id, array $data, int $default_shop_language_id): void
     {
         ProductToAttribute::query()->where('product_id', $product_id)->delete();
 
         $attribute_rows_to_create = [];
-        $seen_attribute_pairs = [];
+        $seen_attribute_pairs     = [];
 
         $attributes_selected_by_language = Arr::get($data, 'attributes_selected_by_language', []);
         if (is_array($attributes_selected_by_language)) {
@@ -712,7 +729,7 @@ class EditProduct extends EditRecord
                         continue;
                     }
 
-                    $pair_key = $resolved_shop_language_id . ':' . $resolved_attribute_id;
+                    $pair_key = $resolved_shop_language_id.':'.$resolved_attribute_id;
                     if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                         throw ValidationException::withMessages([
                             "attributes_selected_by_language.$shop_language_id" => __('admin/product_imports/batches.product_edit.errors.duplicate_attribute'),
@@ -720,10 +737,10 @@ class EditProduct extends EditRecord
                     }
 
                     $seen_attribute_pairs[$pair_key] = true;
-                    $attribute_rows_to_create[] = [
-                        'attribute_id' => $resolved_attribute_id,
+                    $attribute_rows_to_create[]      = [
+                        'attribute_id'     => $resolved_attribute_id,
                         'shop_language_id' => $resolved_shop_language_id,
-                        'text' => '',
+                        'text'             => '',
                     ];
                 }
             }
@@ -746,7 +763,7 @@ class EditProduct extends EditRecord
                         continue;
                     }
 
-                    $attribute_text = (string) Arr::get($attribute_row, 'text', '');
+                    $attribute_text                                = (string) Arr::get($attribute_row, 'text', '');
                     [$attribute_paths, $duplicate_attribute_paths] = $this->parseHierarchyPathsWithDuplicates(
                         (string) Arr::get($attribute_row, 'attribute_name', ''),
                         false
@@ -760,7 +777,7 @@ class EditProduct extends EditRecord
 
                     foreach ($attribute_paths as $attribute_path) {
                         $attribute_id = $this->resolveOrCreateAttributeIdByPath($attribute_path, $resolved_shop_language_id);
-                        $pair_key = $resolved_shop_language_id . ':' . $attribute_id;
+                        $pair_key     = $resolved_shop_language_id.':'.$attribute_id;
 
                         if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                             throw ValidationException::withMessages([
@@ -769,10 +786,10 @@ class EditProduct extends EditRecord
                         }
 
                         $seen_attribute_pairs[$pair_key] = true;
-                        $attribute_rows_to_create[] = [
-                            'attribute_id' => $attribute_id,
+                        $attribute_rows_to_create[]      = [
+                            'attribute_id'     => $attribute_id,
                             'shop_language_id' => $resolved_shop_language_id,
-                            'text' => $attribute_text,
+                            'text'             => $attribute_text,
                         ];
                     }
                 }
@@ -781,12 +798,39 @@ class EditProduct extends EditRecord
 
         foreach ($attribute_rows_to_create as $attribute_row_to_create) {
             ProductToAttribute::query()->create([
-                'product_id' => $product_id,
-                'attribute_id' => (int) $attribute_row_to_create['attribute_id'],
+                'product_id'       => $product_id,
+                'attribute_id'     => (int) $attribute_row_to_create['attribute_id'],
                 'shop_language_id' => (int) $attribute_row_to_create['shop_language_id'],
-                'text' => (string) $attribute_row_to_create['text'],
+                'text'             => (string) $attribute_row_to_create['text'],
             ]);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function syncProductManufacturerBrandFromFormData(int $product_id, array $data): void
+    {
+        $manufacturer_id = (int) Arr::get($data, 'manufacturer_id', 0);
+        $brand_id        = (int) Arr::get($data, 'brand_id', 0);
+
+        if ($manufacturer_id <= 0 && $brand_id <= 0) {
+            ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->delete();
+
+            return;
+        }
+
+        ProductToManufacturerBrand::query()->updateOrCreate(
+            [
+                'product_id' => $product_id,
+            ],
+            [
+                'manufacturer_id' => $manufacturer_id > 0 ? $manufacturer_id : null,
+                'brand_id'        => $brand_id > 0 ? $brand_id : null,
+            ]
+        );
     }
 
     /**
@@ -799,9 +843,9 @@ class EditProduct extends EditRecord
             return [[], []];
         }
 
-        $path_chunks = preg_split('/\s*\|\s*/u', $normalized_input) ?: [];
-        $paths = [];
-        $seen_paths = [];
+        $path_chunks     = preg_split('/\s*\|\s*/u', $normalized_input) ?: [];
+        $paths           = [];
+        $seen_paths      = [];
         $duplicate_paths = [];
 
         foreach ($path_chunks as $path_chunk) {
@@ -830,14 +874,14 @@ class EditProduct extends EditRecord
             }
 
             $seen_paths[$path_key] = true;
-            $paths[] = $path_segments;
+            $paths[]               = $path_segments;
         }
 
         return [$paths, array_values(array_unique($duplicate_paths))];
     }
 
     /**
-     * @param list<string> $category_path
+     * @param  list<string>  $category_path
      */
     private function resolveOrCreateCategoryIdByPath(array $category_path, int $shop_language_id): ?int
     {
@@ -857,9 +901,9 @@ class EditProduct extends EditRecord
 
             if ($existing_category_id === null) {
                 $category = Category::query()->create([
-                    'parent_id' => $parent_category_id,
+                    'parent_id'  => $parent_category_id,
                     'sort_order' => 0,
-                    'is_active' => true,
+                    'is_active'  => true,
                 ]);
 
                 $existing_category_id = (int) $category->id;
@@ -908,22 +952,22 @@ class EditProduct extends EditRecord
 
         CategoryDescription::query()->firstOrCreate(
             [
-                'category_id' => $category_id,
+                'category_id'      => $category_id,
                 'shop_language_id' => $shop_language_id,
             ],
             [
-                'name' => $clean_category_name,
-                'description' => null,
-                'h1_title' => $clean_category_name,
-                'meta_title' => $clean_category_name,
+                'name'             => $clean_category_name,
+                'description'      => null,
+                'h1_title'         => $clean_category_name,
+                'meta_title'       => $clean_category_name,
                 'meta_description' => null,
-                'meta_keywords' => null,
+                'meta_keywords'    => null,
             ]
         );
     }
 
     /**
-     * @param list<string> $attribute_path
+     * @param  list<string>  $attribute_path
      */
     private function resolveOrCreateAttributeIdByPath(array $attribute_path, int $shop_language_id): int
     {
@@ -954,13 +998,13 @@ class EditProduct extends EditRecord
 
             $attribute = Attribute::query()->create([
                 'sort_order' => 1,
-                'is_active' => true,
+                'is_active'  => true,
             ]);
 
             $resolved_attribute_id = (int) $attribute->id;
 
             AttributeDescription::query()->firstOrCreate([
-                'attribute_id' => $resolved_attribute_id,
+                'attribute_id'     => $resolved_attribute_id,
                 'shop_language_id' => $shop_language_id,
             ], [
                 'name' => $attribute_name,
@@ -993,7 +1037,7 @@ class EditProduct extends EditRecord
             'errors'                      => 0,
         ];
 
-        $form_data = $this->form->getState();
+        $form_data           = $this->form->getState();
         $update_instructions = $this->buildUpdateInstructionsFromModes($product, $form_data);
 
         if ($update_instructions === []) {
@@ -1016,12 +1060,12 @@ class EditProduct extends EditRecord
         }
 
         $summary['shops_total'] = count($shop_ids);
-        $requested_by_user_id = is_numeric(auth()->id()) ? (int) auth()->id() : null;
+        $requested_by_user_id   = is_numeric(auth()->id()) ? (int) auth()->id() : null;
 
         $batch = ProductUpdateBatch::query()->create([
             'user_id'         => $requested_by_user_id,
             'source_type'     => ProductUpdateBatchesSourceTypeEnum::EDIT_PRODUCT_API->value,
-            'source_name'     => 'Edit product API update #' . (int) $product->id,
+            'source_name'     => 'Edit product API update #'.(int) $product->id,
             'source_path'     => null,
             'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
             'total_items'     => 0,
@@ -1035,8 +1079,8 @@ class EditProduct extends EditRecord
                 'update_started_at'    => now()->toDateTimeString(),
                 'update_finished_at'   => null,
             ],
-            'started_at'      => now(),
-            'finished_at'     => null,
+            'started_at'  => now(),
+            'finished_at' => null,
         ]);
 
         foreach ($shop_ids as $shop_id) {
@@ -1073,12 +1117,12 @@ class EditProduct extends EditRecord
             return [];
         }
 
-        $value_map = $this->resolveUpdateInstructionValueMap($product);
+        $value_map    = $this->resolveUpdateInstructionValueMap($product);
         $instructions = [];
 
         foreach (self::API_UPDATE_FIELD_MAP as $group_key => $group_config) {
             $sheet_name = (string) Arr::get($group_config, 'sheet', '');
-            $fields = Arr::get($group_config, 'fields', []);
+            $fields     = Arr::get($group_config, 'fields', []);
 
             if ($sheet_name === '' || ! is_array($fields) || $fields === []) {
                 continue;
@@ -1087,7 +1131,7 @@ class EditProduct extends EditRecord
             $sheet_fields = [];
 
             foreach ($fields as $field_key) {
-                $mode = Str::lower(Str::trim((string) Arr::get($mode_state, $group_key . '.' . $field_key, 'skip')));
+                $mode   = Str::lower(Str::trim((string) Arr::get($mode_state, $group_key.'.'.$field_key, 'skip')));
                 $action = $this->resolveUpdateInstructionActionByMode($mode);
                 if ($action === 'skip') {
                     continue;
@@ -1095,7 +1139,7 @@ class EditProduct extends EditRecord
 
                 $sheet_fields[$field_key] = [
                     'action' => $action,
-                    'value' => $action === 'delete' ? null : Arr::get($value_map, $group_key . '.' . $field_key),
+                    'value'  => $action === 'delete' ? null : Arr::get($value_map, $group_key.'.'.$field_key),
                 ];
             }
 
@@ -1116,7 +1160,7 @@ class EditProduct extends EditRecord
         return match ($mode) {
             'delete' => 'delete',
             'update' => 'set',
-            default => 'skip',
+            default  => 'skip',
         };
     }
 
@@ -1132,6 +1176,8 @@ class EditProduct extends EditRecord
             'productToAttributes',
             'specials',
             'discounts',
+            'productToManufacturerBrand.manufacturer.descriptions',
+            'productToManufacturerBrand.brand.descriptions',
         ]);
 
         $category_names = $product->categories
@@ -1142,7 +1188,7 @@ class EditProduct extends EditRecord
 
         $attribute_pairs = $product->productToAttributes
             ->map(static fn (ProductToAttribute $attribute): array => [
-                'attribute_id' => (int) ($attribute->attribute_id ?? 0),
+                'attribute_id'     => (int) ($attribute->attribute_id ?? 0),
                 'shop_language_id' => (int) ($attribute->shop_language_id ?? 0),
             ])
             ->filter(static fn (array $pair): bool => $pair['attribute_id'] > 0 && $pair['shop_language_id'] > 0)
@@ -1154,13 +1200,13 @@ class EditProduct extends EditRecord
         $attribute_names = [];
         $attribute_texts = [];
         foreach ($product->productToAttributes as $product_to_attribute) {
-            $attribute_id = (int) ($product_to_attribute->attribute_id ?? 0);
+            $attribute_id     = (int) ($product_to_attribute->attribute_id ?? 0);
             $shop_language_id = (int) ($product_to_attribute->shop_language_id ?? 0);
             if ($attribute_id <= 0 || $shop_language_id <= 0) {
                 continue;
             }
 
-            $attribute_name = (string) ($attribute_name_map[$attribute_id . ':' . $shop_language_id] ?? '');
+            $attribute_name = (string) ($attribute_name_map[$attribute_id.':'.$shop_language_id] ?? '');
             if (Str::trim($attribute_name) !== '') {
                 $attribute_names[] = $attribute_name;
             }
@@ -1180,37 +1226,39 @@ class EditProduct extends EditRecord
         $product_descriptions = $product->descriptions
             ->mapWithKeys(static fn (ProductDescription $description): array => [
                 (int) $description->shop_language_id => [
-                    'name' => $description->name,
-                    'description' => $description->description,
-                    'meta_title' => $description->meta_title,
+                    'name'             => $description->name,
+                    'description'      => $description->description,
+                    'meta_title'       => $description->meta_title,
                     'meta_description' => $description->meta_description,
-                    'meta_keywords' => $description->meta_keywords,
+                    'meta_keywords'    => $description->meta_keywords,
                 ],
             ])
             ->toArray();
 
         return [
             'product' => [
-                'model' => $product->model,
-                'sku' => $product->sku,
-                'ean' => $product->ean,
-                'quantity' => $product->quantity,
-                'minimum' => $product->minimum,
-                'image' => $product->image,
-                'price' => $product->price,
-                'is_active' => (bool) $product->is_active,
+                'model'          => $product->model,
+                'sku'            => $product->sku,
+                'ean'            => $product->ean,
+                'quantity'       => $product->quantity,
+                'minimum'        => $product->minimum,
+                'image'          => $product->image,
+                'price'          => $product->price,
+                'manufacturer'   => (string) ($product->productToManufacturerBrand?->manufacturer?->descriptions->sortBy('id')->first()?->name ?? ''),
+                'brand'          => (string) ($product->productToManufacturerBrand?->brand?->descriptions->sortBy('id')->first()?->name ?? ''),
+                'is_active'      => (bool) $product->is_active,
                 'date_available' => $product->date_available?->toDateTimeString(),
-                'date_added' => $product->date_added?->toDateTimeString(),
+                'date_added'     => $product->date_added?->toDateTimeString(),
             ],
             'description' => [
-                'name' => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'name'))->toArray(),
-                'description' => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'description'))->toArray(),
-                'meta_title' => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'meta_title'))->toArray(),
+                'name'             => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'name'))->toArray(),
+                'description'      => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'description'))->toArray(),
+                'meta_title'       => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'meta_title'))->toArray(),
                 'meta_description' => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'meta_description'))->toArray(),
-                'meta_keywords' => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'meta_keywords'))->toArray(),
+                'meta_keywords'    => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'meta_keywords'))->toArray(),
             ],
             'image' => [
-                'image' => $product->images->pluck('image')->values()->all(),
+                'image'      => $product->images->pluck('image')->values()->all(),
                 'sort_order' => $product->images->pluck('sort_order')->values()->all(),
             ],
             'product_category' => [
@@ -1221,25 +1269,25 @@ class EditProduct extends EditRecord
                 'attribute_text' => array_values($attribute_texts),
             ],
             'seo_url' => [
-                'query_key' => $seo_urls->pluck('query_key')->values()->all(),
+                'query_key'   => $seo_urls->pluck('query_key')->values()->all(),
                 'query_value' => $seo_urls->pluck('query_value')->values()->all(),
-                'keyword' => $seo_urls->pluck('keyword')->values()->all(),
-                'sort_order' => $seo_urls->pluck('sort_order')->values()->all(),
+                'keyword'     => $seo_urls->pluck('keyword')->values()->all(),
+                'sort_order'  => $seo_urls->pluck('sort_order')->values()->all(),
             ],
             'special' => [
                 'user_group_id' => $product->specials->pluck('user_group_id')->values()->all(),
-                'price' => $product->specials->pluck('price')->values()->all(),
-                'priority' => $product->specials->pluck('priority')->values()->all(),
-                'date_start' => $product->specials->pluck('date_start')->values()->all(),
-                'date_end' => $product->specials->pluck('date_end')->values()->all(),
+                'price'         => $product->specials->pluck('price')->values()->all(),
+                'priority'      => $product->specials->pluck('priority')->values()->all(),
+                'date_start'    => $product->specials->pluck('date_start')->values()->all(),
+                'date_end'      => $product->specials->pluck('date_end')->values()->all(),
             ],
             'discount' => [
                 'user_group_id' => $product->discounts->pluck('user_group_id')->values()->all(),
-                'quantity' => $product->discounts->pluck('quantity')->values()->all(),
-                'price' => $product->discounts->pluck('price')->values()->all(),
-                'priority' => $product->discounts->pluck('priority')->values()->all(),
-                'date_start' => $product->discounts->pluck('date_start')->values()->all(),
-                'date_end' => $product->discounts->pluck('date_end')->values()->all(),
+                'quantity'      => $product->discounts->pluck('quantity')->values()->all(),
+                'price'         => $product->discounts->pluck('price')->values()->all(),
+                'priority'      => $product->discounts->pluck('priority')->values()->all(),
+                'date_start'    => $product->discounts->pluck('date_start')->values()->all(),
+                'date_end'      => $product->discounts->pluck('date_end')->values()->all(),
             ],
         ];
     }
@@ -1256,13 +1304,13 @@ class EditProduct extends EditRecord
         ?int $requested_by_user_id = null
     ): array {
         $summary = [
-            'updates_queued' => 0,
-            'already_failed' => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound' => 0,
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
-            'failed_created' => 0,
-            'errors' => 0,
+            'failed_created'              => 0,
+            'errors'                      => 0,
         ];
 
         try {
@@ -1323,20 +1371,20 @@ class EditProduct extends EditRecord
 
             $update_item = ProductUpdateItem::query()->create([
                 'product_update_batch_id' => $batch_id,
-                'product_id' => $product_id,
-                'payload' => [
-                    'operation' => 'update',
-                    'shop_id' => $shop_id,
+                'product_id'              => $product_id,
+                'payload'                 => [
+                    'operation'            => 'update',
+                    'shop_id'              => $shop_id,
                     'requested_product_id' => $product_id,
-                    'target_product_id' => $product_id,
-                    'external_product_id' => $external_product_id,
+                    'target_product_id'    => $product_id,
+                    'external_product_id'  => $external_product_id,
                     'requested_by_user_id' => $requested_by_user_id,
-                    'triggered_from' => 'edit_product_page',
-                    'update_instructions' => $update_instructions,
+                    'triggered_from'       => 'edit_product_page',
+                    'update_instructions'  => $update_instructions,
                 ],
-                'status' => ProductUpdateItemsStatusEnum::PROCESSING->value,
+                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                 'error_message' => null,
-                'processed_at' => null,
+                'processed_at'  => null,
             ]);
 
             ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
@@ -1351,19 +1399,19 @@ class EditProduct extends EditRecord
             }
 
             Log::channel('stack')->error('Failed to create edit product API update item', [
-                'batch_id' => $batch_id,
+                'batch_id'   => $batch_id,
                 'product_id' => $product_id,
-                'shop_id' => $shop_id,
-                'message' => $exception->getMessage(),
+                'shop_id'    => $shop_id,
+                'message'    => $exception->getMessage(),
             ]);
 
             $summary['errors']++;
         } catch (Throwable $exception) {
             Log::channel('stack')->error('Failed to queue edit product API update', [
-                'batch_id' => $batch_id,
+                'batch_id'   => $batch_id,
                 'product_id' => $product_id,
-                'shop_id' => $shop_id,
-                'message' => $exception->getMessage(),
+                'shop_id'    => $shop_id,
+                'message'    => $exception->getMessage(),
             ]);
 
             $summary['errors']++;
@@ -1384,27 +1432,27 @@ class EditProduct extends EditRecord
         array $update_instructions = []
     ): void {
         Log::channel('stack')->error('Edit product API update skipped', [
-            'batch_id' => $batch_id,
+            'batch_id'   => $batch_id,
             'product_id' => $product_id,
-            'shop_id' => $shop_id,
-            'message' => $error_message,
+            'shop_id'    => $shop_id,
+            'message'    => $error_message,
         ]);
 
         ProductUpdateItem::query()->create([
             'product_update_batch_id' => $batch_id,
-            'product_id' => $product_id,
-            'payload' => [
-                'operation' => 'update',
-                'shop_id' => $shop_id,
+            'product_id'              => $product_id,
+            'payload'                 => [
+                'operation'            => 'update',
+                'shop_id'              => $shop_id,
                 'requested_product_id' => $product_id,
-                'target_product_id' => $product_id,
+                'target_product_id'    => $product_id,
                 'requested_by_user_id' => $requested_by_user_id,
-                'triggered_from' => 'edit_product_page',
-                'update_instructions' => $update_instructions,
+                'triggered_from'       => 'edit_product_page',
+                'update_instructions'  => $update_instructions,
             ],
-            'status' => ProductUpdateItemsStatusEnum::FAILED->value,
+            'status'        => ProductUpdateItemsStatusEnum::FAILED->value,
             'error_message' => Str::limit(Str::trim($error_message), 10000),
-            'processed_at' => now(),
+            'processed_at'  => now(),
         ]);
     }
 
@@ -1432,29 +1480,29 @@ class EditProduct extends EditRecord
         }
 
         $processing_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::PROCESSING->value)->status_total ?? 0);
-        $failed_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0);
-        $updated_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
+        $failed_count     = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0);
+        $updated_count    = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
 
         $final_status = match (true) {
-            $processing_count > 0 => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-            $failed_count > 0 && $updated_count > 0 => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
+            $processing_count > 0                     => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            $failed_count > 0 && $updated_count > 0   => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
             $failed_count > 0 && $updated_count === 0 => ProductUpdateBatchesStatusEnum::FAILED->value,
-            default => ProductUpdateBatchesStatusEnum::COMPLETED->value,
+            default                                   => ProductUpdateBatchesStatusEnum::COMPLETED->value,
         };
 
         $batch->update([
-            'status' => $final_status,
-            'total_items' => $total_update_items,
+            'status'          => $final_status,
+            'total_items'     => $total_update_items,
             'processed_items' => max($updated_count + $failed_count, 0),
-            'failed_items' => max($failed_count, 0),
-            'finished_at' => $processing_count > 0 ? null : now(),
-            'options' => [
+            'failed_items'    => max($failed_count, 0),
+            'finished_at'     => $processing_count > 0 ? null : now(),
+            'options'         => [
                 ...($batch->options ?? []),
-                'update_state' => $processing_count > 0 ? 'processing' : 'finished',
-                'update_total_items' => $total_update_items,
+                'update_state'         => $processing_count > 0 ? 'processing' : 'finished',
+                'update_total_items'   => $total_update_items,
                 'update_success_items' => $updated_count,
-                'update_failed_items' => $failed_count,
-                'update_finished_at' => $processing_count > 0 ? null : now()->toDateTimeString(),
+                'update_failed_items'  => $failed_count,
+                'update_finished_at'   => $processing_count > 0 ? null : now()->toDateTimeString(),
             ],
         ]);
     }

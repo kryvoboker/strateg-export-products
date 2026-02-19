@@ -23,10 +23,13 @@ class UserResource extends Resource
 {
     use TotalModelItemsResourceTrait;
 
-    protected static ?string                $model                = User::class;
-    protected static string|BackedEnum|null $navigationIcon       = Heroicon::User;
-    protected static ?string                $recordTitleAttribute = 'full_name';
-    protected static string|null|UnitEnum   $navigationGroup      = AdminNavigationGroupEnum::Users;
+    protected static ?string $model = User::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::User;
+
+    protected static ?string $recordTitleAttribute = 'full_name';
+
+    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Users;
 
     public static function form(Schema $schema): Schema
     {
@@ -56,8 +59,6 @@ class UserResource extends Resource
 
     /**
      * Signature in the navigation menu (left panel)
-     *
-     * @return string
      */
     public static function getNavigationLabel(): string
     {
@@ -66,8 +67,6 @@ class UserResource extends Resource
 
     /**
      * A single model name (e.g. in headings, "Create X" button)
-     *
-     * @return string
      */
     public static function getModelLabel(): string
     {
@@ -76,8 +75,6 @@ class UserResource extends Resource
 
     /**
      * Plural model name (e.g. in lists, section headings)
-     *
-     * @return string
      */
     public static function getPluralModelLabel(): string
     {

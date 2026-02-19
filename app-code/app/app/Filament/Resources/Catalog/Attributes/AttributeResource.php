@@ -24,8 +24,11 @@ class AttributeResource extends Resource
     use TotalModelItemsResourceTrait;
 
     protected static ?string $model = Attribute::class;
+
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBookmark;
+
     protected static ?string $recordTitleAttribute = 'attribute_name';
+
     protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Catalog;
 
     public static function form(Schema $schema): Schema

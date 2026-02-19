@@ -16,9 +16,12 @@ use Throwable;
 
 abstract class AiDbCachedTranslatorAbstract
 {
-    protected ?int           $product_id   = null;
-    protected ?int           $attribute_id = null;
-    protected ?int           $category_id = null;
+    protected ?int $product_id = null;
+
+    protected ?int $attribute_id = null;
+
+    protected ?int $category_id = null;
+
     private ?ProductNameHash $product_name_hash;
 
     private ?ProductDescriptionHash $product_description_hash;
@@ -76,25 +79,10 @@ abstract class AiDbCachedTranslatorAbstract
         return sprintf('translated-to-%s-%s', $target_language_code, $source_text);
     }
 
-    /**
-     * @param string $hash
-     *
-     * @return string|null
-     */
     abstract protected function findCached(string $hash): ?string;
 
-    /**
-     * @param string $hash
-     * @param string $prompt
-     * @param string $translated_text
-     *
-     * @return Model
-     */
     abstract protected function storeTranslation(string $hash, string $prompt, string $translated_text): Model;
 
-    /**
-     * @return ProductNameHash|null
-     */
     public function getProductNameHash(): ?ProductNameHash
     {
         return $this->product_name_hash;
@@ -110,9 +98,6 @@ abstract class AiDbCachedTranslatorAbstract
         return $this;
     }
 
-    /**
-     * @return ProductDescriptionHash|null
-     */
     public function getProductDescriptionHash(): ?ProductDescriptionHash
     {
         return $this->product_description_hash;
@@ -144,8 +129,6 @@ abstract class AiDbCachedTranslatorAbstract
     }
 
     /**
-     * @param int|null $product_id
-     *
      * @return AiDbCachedTranslatorAbstract
      */
     public function setProductId(?int $product_id): static
@@ -156,8 +139,6 @@ abstract class AiDbCachedTranslatorAbstract
     }
 
     /**
-     * @param int|null $attribute_id
-     *
      * @return $this
      */
     public function setAttributeId(?int $attribute_id): static
@@ -168,8 +149,6 @@ abstract class AiDbCachedTranslatorAbstract
     }
 
     /**
-     * @param int|null $category_id
-     *
      * @return $this
      */
     public function setCategoryId(?int $category_id): static

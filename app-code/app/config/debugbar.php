@@ -37,7 +37,7 @@ return [
      | Specify a callback if you want to limit based on IP or authentication.
      | Leaving it to null will allow localhost only.
      */
-    'storage'         => [
+    'storage' => [
         'enabled'    => env('DEBUGBAR_STORAGE_ENABLED', true),
         'open'       => env('DEBUGBAR_OPEN_STORAGE'), // bool/callback.
         'driver'     => env('DEBUGBAR_STORAGE_DRIVER', 'file'), // redis, file, pdo, socket, custom
@@ -139,7 +139,7 @@ return [
      | in the Messages tab.
      |
      */
-    'error_handler'           => env('DEBUGBAR_ERROR_HANDLER', false),
+    'error_handler' => env('DEBUGBAR_ERROR_HANDLER', false),
 
     /*
      |--------------------------------------------------------------------------
@@ -150,7 +150,7 @@ return [
      | Extension, without the server-side code. It uses Debugbar collectors instead.
      |
      */
-    'clockwork'               => env('DEBUGBAR_CLOCKWORK', false),
+    'clockwork' => env('DEBUGBAR_CLOCKWORK', false),
 
     /*
      |--------------------------------------------------------------------------
@@ -199,29 +199,29 @@ return [
      */
 
     'options' => [
-        'time'            => [
+        'time' => [
             'memory_usage' => env('DEBUGBAR_OPTIONS_TIME_MEMORY_USAGE', false), // Calculated by subtracting memory start and end, it may be inaccurate
         ],
-        'messages'        => [
+        'messages' => [
             'trace'         => env('DEBUGBAR_OPTIONS_MESSAGES_TRACE', true),                  // Trace the origin of the debug message
             'capture_dumps' => env('DEBUGBAR_OPTIONS_MESSAGES_CAPTURE_DUMPS', false), // Capture laravel `dump();` as message
         ],
-        'memory'          => [
+        'memory' => [
             'reset_peak'    => env('DEBUGBAR_OPTIONS_MEMORY_RESET_PEAK', false),       // run memory_reset_peak_usage before collecting
             'with_baseline' => env('DEBUGBAR_OPTIONS_MEMORY_WITH_BASELINE', false), // Set boot memory usage as memory peak baseline
-            'precision'     => (int)env('DEBUGBAR_OPTIONS_MEMORY_PRECISION', 0),       // Memory rounding precision
+            'precision'     => (int) env('DEBUGBAR_OPTIONS_MEMORY_PRECISION', 0),       // Memory rounding precision
         ],
-        'auth'            => [
+        'auth' => [
             'show_name'   => env('DEBUGBAR_OPTIONS_AUTH_SHOW_NAME', true),     // Also show the users name/email in the debugbar
             'show_guards' => env('DEBUGBAR_OPTIONS_AUTH_SHOW_GUARDS', true), // Show the guards that are used
         ],
-        'gate'            => [
+        'gate' => [
             'trace' => false,      // Trace the origin of the Gate checks
         ],
-        'db'              => [
-            'with_params'             => env('DEBUGBAR_OPTIONS_WITH_PARAMS', true),   // Render SQL with the parameters substituted
-            'exclude_paths'           => [       // Paths to exclude entirely from the collector
-                                                 //'vendor/laravel/framework/src/Illuminate/Session', // Exclude sessions queries
+        'db' => [
+            'with_params'   => env('DEBUGBAR_OPTIONS_WITH_PARAMS', true),   // Render SQL with the parameters substituted
+            'exclude_paths' => [       // Paths to exclude entirely from the collector
+                                                 // 'vendor/laravel/framework/src/Illuminate/Session', // Exclude sessions queries
             ],
             'backtrace'               => env('DEBUGBAR_OPTIONS_DB_BACKTRACE', true),   // Use a backtrace to find the origin of the query in your files.
             'backtrace_exclude_paths' => [],   // Paths to exclude from backtrace. (in addition to defaults)
@@ -230,44 +230,44 @@ return [
             'explain'                 => [                 // Show EXPLAIN output on queries
                                                            'enabled' => env('DEBUGBAR_OPTIONS_DB_EXPLAIN_ENABLED', false),
             ],
-            'hints'                   => env('DEBUGBAR_OPTIONS_DB_HINTS', false),          // Show hints for common mistakes
-            'show_copy'               => env('DEBUGBAR_OPTIONS_DB_SHOW_COPY', true),       // Show copy button next to the query,
-            'slow_threshold'          => env('DEBUGBAR_OPTIONS_DB_SLOW_THRESHOLD', false), // Only track queries that last longer than this time in ms
-            'memory_usage'            => env('DEBUGBAR_OPTIONS_DB_MEMORY_USAGE', false),   // Show queries memory usage
-            'soft_limit'              => (int)env('DEBUGBAR_OPTIONS_DB_SOFT_LIMIT', 100),  // After the soft limit, no parameters/backtrace are captured
-            'hard_limit'              => (int)env('DEBUGBAR_OPTIONS_DB_HARD_LIMIT', 500),  // After the hard limit, queries are ignored
+            'hints'          => env('DEBUGBAR_OPTIONS_DB_HINTS', false),          // Show hints for common mistakes
+            'show_copy'      => env('DEBUGBAR_OPTIONS_DB_SHOW_COPY', true),       // Show copy button next to the query,
+            'slow_threshold' => env('DEBUGBAR_OPTIONS_DB_SLOW_THRESHOLD', false), // Only track queries that last longer than this time in ms
+            'memory_usage'   => env('DEBUGBAR_OPTIONS_DB_MEMORY_USAGE', false),   // Show queries memory usage
+            'soft_limit'     => (int) env('DEBUGBAR_OPTIONS_DB_SOFT_LIMIT', 100),  // After the soft limit, no parameters/backtrace are captured
+            'hard_limit'     => (int) env('DEBUGBAR_OPTIONS_DB_HARD_LIMIT', 500),  // After the hard limit, queries are ignored
         ],
-        'mail'            => [
+        'mail' => [
             'timeline'  => env('DEBUGBAR_OPTIONS_MAIL_TIMELINE', true),  // Add mails to the timeline
             'show_body' => env('DEBUGBAR_OPTIONS_MAIL_SHOW_BODY', true),
         ],
-        'views'           => [
+        'views' => [
             'timeline'      => env('DEBUGBAR_OPTIONS_VIEWS_TIMELINE', true),                  // Add the views to the timeline
             'data'          => env('DEBUGBAR_OPTIONS_VIEWS_DATA', false),                         // True for all data, 'keys' for only names, false for no parameters.
-            'group'         => (int)env('DEBUGBAR_OPTIONS_VIEWS_GROUP', 50),                    // Group duplicate views. Pass value to auto-group, or true/false to force
+            'group'         => (int) env('DEBUGBAR_OPTIONS_VIEWS_GROUP', 50),                    // Group duplicate views. Pass value to auto-group, or true/false to force
             'inertia_pages' => env('DEBUGBAR_OPTIONS_VIEWS_INERTIA_PAGES', 'js/Pages'),  // Path for Inertia views
             'exclude_paths' => [    // Add the paths which you don't want to appear in the views
-                                    'vendor/filament'   // Exclude Filament components by default
+                                    'vendor/filament',   // Exclude Filament components by default
             ],
         ],
-        'route'           => [
+        'route' => [
             'label' => env('DEBUGBAR_OPTIONS_ROUTE_LABEL', true),  // Show complete route on bar
         ],
-        'session'         => [
+        'session' => [
             'hiddens' => [], // Hides sensitive values using array paths
         ],
         'symfony_request' => [
             'label'   => env('DEBUGBAR_OPTIONS_SYMFONY_REQUEST_LABEL', true),  // Show route on bar
             'hiddens' => [], // Hides sensitive values using array paths, example: request_request.password
         ],
-        'events'          => [
+        'events' => [
             'data'     => env('DEBUGBAR_OPTIONS_EVENTS_DATA', false), // Collect events data, listeners
             'excluded' => [], // Example: ['eloquent.*', 'composing', Illuminate\Cache\Events\CacheHit::class]
         ],
-        'logs'            => [
+        'logs' => [
             'file' => env('DEBUGBAR_OPTIONS_LOGS_FILE', null),
         ],
-        'cache'           => [
+        'cache' => [
             'values' => env('DEBUGBAR_OPTIONS_CACHE_VALUES', true), // Collect cache values
         ],
     ],
@@ -283,7 +283,7 @@ return [
      |
      */
 
-    'inject'                => env('DEBUGBAR_INJECT', true),
+    'inject' => env('DEBUGBAR_INJECT', true),
 
     /*
      |--------------------------------------------------------------------------
@@ -295,7 +295,7 @@ return [
      | from trying to overcome bugs like this: http://trac.nginx.org/nginx/ticket/97
      |
      */
-    'route_prefix'          => env('DEBUGBAR_ROUTE_PREFIX', '_debugbar'),
+    'route_prefix' => env('DEBUGBAR_ROUTE_PREFIX', '_debugbar'),
 
     /*
      |--------------------------------------------------------------------------
@@ -304,7 +304,7 @@ return [
      |
      | Additional middleware to run on the Debugbar routes
      */
-    'route_middleware'      => [],
+    'route_middleware' => [],
 
     /*
      |--------------------------------------------------------------------------
@@ -314,7 +314,7 @@ return [
      | By default Debugbar route served from the same domain that request served.
      | To override default domain, specify it as a non-empty value.
      */
-    'route_domain'          => env('DEBUGBAR_ROUTE_DOMAIN', null),
+    'route_domain' => env('DEBUGBAR_ROUTE_DOMAIN', null),
 
     /*
      |--------------------------------------------------------------------------
@@ -324,7 +324,7 @@ return [
      | Switches between light and dark theme. If set to auto it will respect system preferences
      | Possible values: auto, light, dark
      */
-    'theme'                 => env('DEBUGBAR_THEME', 'auto'),
+    'theme' => env('DEBUGBAR_THEME', 'auto'),
 
     /*
      |--------------------------------------------------------------------------
@@ -334,5 +334,5 @@ return [
      | By default, the Debugbar limits the number of frames returned by the 'debug_backtrace()' function.
      | If you need larger stacktraces, you can increase this number. Setting it to 0 will result in no limit.
      */
-    'debug_backtrace_limit' => (int)env('DEBUGBAR_DEBUG_BACKTRACE_LIMIT', 50),
+    'debug_backtrace_limit' => (int) env('DEBUGBAR_DEBUG_BACKTRACE_LIMIT', 50),
 ];

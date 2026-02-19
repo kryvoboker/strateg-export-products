@@ -9,9 +9,13 @@ use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandDescription;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
@@ -20,6 +24,7 @@ use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductImage;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
@@ -75,6 +80,16 @@ class ProcessProductImportBatchJob implements ShouldQueue
      * @var array<string, int>
      */
     private array $attribute_id_cache_by_path = [];
+
+    /**
+     * @var array<string, int>
+     */
+    private array $manufacturer_id_cache_by_name = [];
+
+    /**
+     * @var array<string, int>
+     */
+    private array $brand_id_cache_by_name = [];
 
     public function __construct(public int $batch_id) {}
 
@@ -215,6 +230,8 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 'minimum'        => Arr::get($raw_data, 'admin_minimum'),
                 'image'          => null,
                 'price'          => Arr::get($raw_data, 'admin_price'),
+                'manufacturer'   => Arr::get($raw_data, 'admin_manufacturer'),
+                'brand'          => Arr::get($raw_data, 'admin_brand'),
                 'is_active'      => $this->normalizeBooleanValue(Arr::get($raw_data, 'admin_is_active')),
                 'date_available' => null,
                 'date_added'     => null,
@@ -332,6 +349,8 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     'minimum'        => Arr::get($product_assoc, $this->normalizeHeaderKey('Minimum')),
                     'image'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Image')),
                     'price'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Price')),
+                    'manufacturer'   => Arr::get($product_assoc, $this->normalizeHeaderKey('Manufacturer')),
+                    'brand'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Brand')),
                     'is_active'      => $this->normalizeBooleanValue(Arr::get($product_assoc, $this->normalizeHeaderKey('Is Active'))),
                     'date_available' => Arr::get($product_assoc, $this->normalizeHeaderKey('Date Available')),
                     'date_added'     => Arr::get($product_assoc, $this->normalizeHeaderKey('Date Added')),
@@ -748,7 +767,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
     private function createProductForImportPayload(ProductImportItem $product_import_item, array $payload): int
     {
         $product_attributes = $this->buildProductAttributesForInsert($payload);
-        $source_ulid = Str::trim((string) ($product_import_item->getAttribute('ulid') ?? ''));
+        $source_ulid        = Str::trim((string) ($product_import_item->getAttribute('ulid') ?? ''));
 
         if ($source_ulid !== '') {
             $product_attributes['family_ulid'] = $source_ulid;
@@ -824,6 +843,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         $this->replaceProductImages($product_id, Arr::get($payload, 'images', []));
         $this->syncProductCategories($product_id, Arr::get($payload, 'categories', []));
         $this->upsertProductAttributes($product_id, Arr::get($payload, 'attributes', []));
+        $this->upsertProductManufacturerBrandBinding($product_id, Arr::get($payload, 'product', []));
         $this->upsertSeoUrls($product_id, $payload, Arr::get($payload, 'seo_urls', []));
         $this->upsertProductSpecials($product_id, Arr::get($payload, 'specials', []));
         $this->upsertProductDiscounts($product_id, Arr::get($payload, 'discounts', []));
@@ -959,6 +979,44 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 );
             }
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $product_row
+     */
+    private function upsertProductManufacturerBrandBinding(int $product_id, array $product_row): void
+    {
+        if ($product_id <= 0) {
+            return;
+        }
+
+        $manufacturer_name = Str::trim((string) Arr::get($product_row, 'manufacturer', ''));
+        $brand_name        = Str::trim((string) Arr::get($product_row, 'brand', ''));
+
+        $manufacturer_id = $manufacturer_name !== ''
+            ? $this->resolveOrCreateManufacturerIdByName($manufacturer_name)
+            : null;
+        $brand_id = $brand_name !== ''
+            ? $this->resolveOrCreateBrandIdByName($brand_name)
+            : null;
+
+        if ($manufacturer_id === null && $brand_id === null) {
+            ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->delete();
+
+            return;
+        }
+
+        ProductToManufacturerBrand::query()->updateOrCreate(
+            [
+                'product_id' => $product_id,
+            ],
+            [
+                'manufacturer_id' => $manufacturer_id,
+                'brand_id'        => $brand_id,
+            ]
+        );
     }
 
     /**
@@ -1237,6 +1295,62 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         AttributeDescription::upsertName($attribute_id, $shop_language_id ?? 0, $attribute_name);
+    }
+
+    private function resolveOrCreateManufacturerIdByName(string $manufacturer_name): ?int
+    {
+        $clean_name = Str::trim($manufacturer_name);
+        if ($clean_name === '') {
+            return null;
+        }
+
+        $cache_key = Str::lower($clean_name);
+        if (array_key_exists($cache_key, $this->manufacturer_id_cache_by_name)) {
+            return $this->manufacturer_id_cache_by_name[$cache_key];
+        }
+
+        $manufacturer_id = ManufacturerDescription::findManufacturerIdByNameForLanguage($clean_name, 0);
+        if ($manufacturer_id <= 0) {
+            $manufacturer = Manufacturer::query()->create([
+                'sort_order' => 1,
+                'is_active'  => true,
+            ]);
+
+            $manufacturer_id = (int) $manufacturer->id;
+        }
+
+        ManufacturerDescription::upsertName($manufacturer_id, 0, $clean_name);
+        $this->manufacturer_id_cache_by_name[$cache_key] = $manufacturer_id;
+
+        return $manufacturer_id;
+    }
+
+    private function resolveOrCreateBrandIdByName(string $brand_name): ?int
+    {
+        $clean_name = Str::trim($brand_name);
+        if ($clean_name === '') {
+            return null;
+        }
+
+        $cache_key = Str::lower($clean_name);
+        if (array_key_exists($cache_key, $this->brand_id_cache_by_name)) {
+            return $this->brand_id_cache_by_name[$cache_key];
+        }
+
+        $brand_id = BrandDescription::findBrandIdByNameForLanguage($clean_name, 0);
+        if ($brand_id <= 0) {
+            $brand = Brand::query()->create([
+                'sort_order' => 1,
+                'is_active'  => true,
+            ]);
+
+            $brand_id = (int) $brand->id;
+        }
+
+        BrandDescription::upsertName($brand_id, 0, $clean_name);
+        $this->brand_id_cache_by_name[$cache_key] = $brand_id;
+
+        return $brand_id;
     }
 
     /**

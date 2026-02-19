@@ -9,11 +9,6 @@ use Filament\Tables\Columns\TextColumn;
 
 trait CommonTextTableTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getTextTableField(array $params = []): Column
     {
         return TextColumn::make($params['field_name'])

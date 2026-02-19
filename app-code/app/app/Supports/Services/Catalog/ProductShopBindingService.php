@@ -8,9 +8,11 @@ use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
+use App\Models\Brands\BrandShop;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
 use App\Models\Categories\CategoryShop;
+use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductDescription;
@@ -19,13 +21,14 @@ use App\Models\Products\ProductImage;
 use App\Models\Products\ProductShop;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Container\Container;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -40,9 +43,9 @@ class ProductShopBindingService
      * @throws Throwable
      */
     public function bindProductToShopAndReturnTargetProduct(
-        int   $product_id,
-        int   $shop_id,
-        int   $product_import_batch_id = 0,
+        int $product_id,
+        int $shop_id,
+        int $product_import_batch_id = 0,
         array $source_payload = []
     ): array {
         $source_product = Product::query()->find($product_id);
@@ -76,23 +79,22 @@ class ProductShopBindingService
     }
 
     /**
-     * @param list<int> $product_ids
-     * @param list<int> $shop_ids
-     *
+     * @param  list<int>  $product_ids
+     * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
     public function bindProductsToShops(array $product_ids, array $shop_ids, int $product_import_batch_id = 0): array
     {
         $normalized_product_ids = collect($product_ids)
-            ->map(static fn($product_id): int => (int)$product_id)
-            ->filter(static fn(int $product_id): bool => $product_id > 0)
+            ->map(static fn ($product_id): int => (int) $product_id)
+            ->filter(static fn (int $product_id): bool => $product_id > 0)
             ->unique()
             ->values()
             ->all();
 
         $normalized_shop_ids = collect($shop_ids)
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -115,8 +117,8 @@ class ProductShopBindingService
                 }
 
                 foreach ($normalized_shop_ids as $shop_id) {
-                    $bind_result                    = $this->bindProductToShop($source_product, $shop_id, $product_import_batch_id);
-                    $summary['products_bound']      += $bind_result['bound'];
+                    $bind_result = $this->bindProductToShop($source_product, $shop_id, $product_import_batch_id);
+                    $summary['products_bound'] += $bind_result['bound'];
                     $summary['products_duplicated'] += $bind_result['duplicated'];
 
                     $target_product_id = $bind_result['product_id'] ?? 0;
@@ -150,7 +152,7 @@ class ProductShopBindingService
     {
         if ($shop_id <= 0) {
             return [
-                'product_id' => (int)$source_product->id,
+                'product_id' => (int) $source_product->id,
                 'bound'      => 0, 'duplicated' => 0,
             ];
         }
@@ -158,18 +160,18 @@ class ProductShopBindingService
         return $this->runBindingWithFamilyLock(
             $source_product,
             $shop_id,
-            fn(): array => DB::transaction(function () use ($source_product, $shop_id, $product_import_batch_id): array {
-                $shop_name         = (string)(Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
+            fn (): array => DB::transaction(function () use ($source_product, $shop_id, $product_import_batch_id): array {
+                $shop_name         = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
                 $resolved_batch_id = $this->resolveProductImportBatchId($source_product, $product_import_batch_id);
                 if ($resolved_batch_id <= 0) {
-                    return ['product_id' => (int)$source_product->id, 'bound' => 0, 'duplicated' => 0];
+                    return ['product_id' => (int) $source_product->id, 'bound' => 0, 'duplicated' => 0];
                 }
 
-                $family_ulid = $this->ensureProductFamilyUlid($source_product);
+                $family_ulid                     = $this->ensureProductFamilyUlid($source_product);
                 $already_bound_family_product_id = $this->resolveAlreadyBoundProductIdByFamilyUlid($family_ulid, $shop_id);
                 if ($already_bound_family_product_id > 0) {
                     $already_bound_product = Product::query()->find($already_bound_family_product_id);
-                    if ($already_bound_product instanceof Product && (string)($already_bound_product->marked_to_shop ?? '') !== $shop_name) {
+                    if ($already_bound_product instanceof Product && (string) ($already_bound_product->marked_to_shop ?? '') !== $shop_name) {
                         $already_bound_product->update([
                             'marked_to_shop' => $shop_name,
                         ]);
@@ -180,7 +182,7 @@ class ProductShopBindingService
                         ->where('shop_id', $shop_id)
                         ->when(
                             $resolved_batch_id > 0,
-                            static fn($query) => $query->update(['product_import_batch_id' => $resolved_batch_id]),
+                            static fn ($query) => $query->update(['product_import_batch_id' => $resolved_batch_id]),
                         );
 
                     return [
@@ -196,20 +198,20 @@ class ProductShopBindingService
                     ->first();
 
                 if ($already_bound instanceof ProductShop) {
-                    if ((int)$already_bound->product_import_batch_id !== $resolved_batch_id) {
+                    if ((int) $already_bound->product_import_batch_id !== $resolved_batch_id) {
                         $already_bound->update([
                             'product_import_batch_id' => $resolved_batch_id,
                         ]);
                     }
 
-                    if ((string)($source_product->marked_to_shop ?? '') !== $shop_name) {
+                    if ((string) ($source_product->marked_to_shop ?? '') !== $shop_name) {
                         $source_product->update([
                             'marked_to_shop' => $shop_name,
                         ]);
                     }
 
                     return [
-                        'product_id' => (int)$source_product->id,
+                        'product_id' => (int) $source_product->id,
                         'bound'      => 0,
                         'duplicated' => 0,
                     ];
@@ -219,7 +221,7 @@ class ProductShopBindingService
                     ->where('product_id', $source_product->id)
                     ->exists();
 
-                if (!$has_any_shop_binding) {
+                if (! $has_any_shop_binding) {
                     ProductShop::query()->firstOrCreate([
                         'product_id' => $source_product->id,
                         'shop_id'    => $shop_id,
@@ -234,20 +236,19 @@ class ProductShopBindingService
 
                     $this->ensureShopLinksForProduct($source_product->id, $shop_id);
 
-                    return ['product_id' => (int)$source_product->id, 'bound' => 1, 'duplicated' => 0];
+                    return ['product_id' => (int) $source_product->id, 'bound' => 1, 'duplicated' => 0];
                 }
 
                 $duplicated_product = $this->duplicateProductWithRelationsForShop($source_product, $shop_id, $shop_name, $resolved_batch_id);
                 $this->ensureShopLinksForProduct($duplicated_product->id, $shop_id);
 
-                return ['product_id' => (int)$duplicated_product->id, 'bound' => 1, 'duplicated' => 1];
+                return ['product_id' => (int) $duplicated_product->id, 'bound' => 1, 'duplicated' => 1];
             }),
         );
     }
 
     /**
-     * @param callable():array{product_id:int, bound: int, duplicated: int} $binding_callback
-     *
+     * @param  callable():array{product_id:int, bound: int, duplicated: int}  $binding_callback
      * @return array{product_id:int, bound: int, duplicated: int}
      */
     private function runBindingWithFamilyLock(Product $source_product, int $shop_id, callable $binding_callback): array
@@ -260,12 +261,12 @@ class ProductShopBindingService
         try {
             return cache()
                 ->lock($binding_lock_key, 15)
-                ->block(10, function () use ($binding_callback, $binding_lock_key, $source_product, $shop_id): array {
+                ->block(10, function () use ($binding_callback): array {
                     return $binding_callback();
                 });
         } catch (LockTimeoutException $exception) {
             return [
-                'product_id' => (int)$source_product->id,
+                'product_id' => (int) $source_product->id,
                 'bound'      => 0,
                 'duplicated' => 0,
             ];
@@ -279,7 +280,7 @@ class ProductShopBindingService
         }
 
         $app_container = Container::getInstance();
-        if (!$app_container instanceof Container || !$app_container->bound('cache')) {
+        if (! $app_container instanceof Container || ! $app_container->bound('cache')) {
             return null;
         }
 
@@ -288,7 +289,7 @@ class ProductShopBindingService
             return null;
         }
 
-        return 'product-shop-binding:shop:' . $shop_id . ':family:' . $family_ulid;
+        return 'product-shop-binding:shop:'.$shop_id.':family:'.$family_ulid;
     }
 
     private function resolveAlreadyBoundProductIdByFamilyUlid(string $family_ulid, int $shop_id): int
@@ -312,7 +313,7 @@ class ProductShopBindingService
             return $family_ulid;
         }
 
-        $source_ulid = '';
+        $source_ulid            = '';
         $product_import_item_id = (int) ($product->product_import_item_id ?? 0);
 
         if ($product_import_item_id > 0 && $this->hasProductImportItemUlidColumn()) {
@@ -350,16 +351,16 @@ class ProductShopBindingService
 
     private function duplicateProductWithRelationsForShop(
         Product $source_product,
-        int     $shop_id,
-        string  $shop_name,
-        int     $product_import_batch_id
+        int $shop_id,
+        string $shop_name,
+        int $product_import_batch_id
     ): Product {
         if ($product_import_batch_id <= 0) {
             throw new RuntimeException('Invalid product_import_batch_id for product duplication');
         }
 
         $duplicated_import_item = ProductImportItem::createDraftItemForBatch($product_import_batch_id, [
-            'source_product_id' => (int)$source_product->id,
+            'source_product_id' => (int) $source_product->id,
             'source_type'       => 'shop_binding_duplication',
             'shop_id'           => $shop_id,
         ]);
@@ -367,7 +368,7 @@ class ProductShopBindingService
         $family_ulid = $this->ensureProductFamilyUlid($source_product);
 
         $duplicated_product = Product::query()->create([
-            'product_import_item_id' => (int)$duplicated_import_item->id,
+            'product_import_item_id' => (int) $duplicated_import_item->id,
             'family_ulid'            => $family_ulid,
             'marked_to_shop'         => $shop_name,
             'model'                  => $source_product->model,
@@ -377,12 +378,12 @@ class ProductShopBindingService
             'minimum'                => $source_product->minimum,
             'image'                  => $source_product->image,
             'price'                  => $source_product->price,
-            'is_active'              => (bool)$source_product->is_active,
+            'is_active'              => (bool) $source_product->is_active,
             'date_available'         => $source_product->date_available,
             'date_added'             => $source_product->date_added,
         ]);
 
-        $duplicated_import_item->linkProduct((int)$duplicated_product->id);
+        $duplicated_import_item->linkProduct((int) $duplicated_product->id);
 
         ProductDescription::query()
             ->where('product_id', $source_product->id)
@@ -436,6 +437,24 @@ class ProductShopBindingService
                 ]);
             });
 
+        if ($this->hasProductManufacturerBrandTable()) {
+            $manufacturer_brand_binding = ProductToManufacturerBrand::query()
+                ->where('product_id', $source_product->id)
+                ->first();
+
+            if ($manufacturer_brand_binding instanceof ProductToManufacturerBrand) {
+                ProductToManufacturerBrand::query()->updateOrCreate(
+                    [
+                        'product_id' => (int) $duplicated_product->id,
+                    ],
+                    [
+                        'manufacturer_id' => $manufacturer_brand_binding->manufacturer_id,
+                        'brand_id'        => $manufacturer_brand_binding->brand_id,
+                    ]
+                );
+            }
+        }
+
         SeoUrl::query()
             ->where('seoable_type', Product::class)
             ->where('seoable_id', $source_product->id)
@@ -446,7 +465,7 @@ class ProductShopBindingService
                     'seoable_type'     => Product::class,
                     'seoable_id'       => $duplicated_product->id,
                     'shop_language_id' => null,
-                    'query_value'      => (string)$duplicated_product->id,
+                    'query_value'      => (string) $duplicated_product->id,
                     'keyword'          => $seo_url->keyword,
                     'sort_order'       => $seo_url->sort_order,
                 ]);
@@ -516,6 +535,89 @@ class ProductShopBindingService
                 'external_attribute_id' => null,
             ]);
         }
+
+        if ($this->hasProductManufacturerBrandTable()) {
+            $manufacturer_brand_binding = ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->first();
+
+            $manufacturer_id = (int) ($manufacturer_brand_binding?->manufacturer_id ?? 0);
+            if ($manufacturer_id > 0 && $this->hasManufacturerShopTable()) {
+                ManufacturerShop::query()->firstOrCreate(
+                    [
+                        'manufacturer_id' => $manufacturer_id,
+                        'shop_id'         => $shop_id,
+                    ],
+                    [
+                        'external_manufacturer_id' => null,
+                    ]
+                );
+            }
+
+            $brand_id = (int) ($manufacturer_brand_binding?->brand_id ?? 0);
+            if ($brand_id > 0 && $this->hasBrandShopTable()) {
+                BrandShop::query()->firstOrCreate(
+                    [
+                        'brand_id' => $brand_id,
+                        'shop_id'  => $shop_id,
+                    ],
+                    [
+                        'external_brand_id' => null,
+                    ]
+                );
+            }
+        }
+    }
+
+    private function hasProductManufacturerBrandTable(): bool
+    {
+        static $has_table = null;
+
+        if (is_bool($has_table)) {
+            return $has_table;
+        }
+
+        try {
+            $has_table = DB::connection()->getSchemaBuilder()->hasTable('product_to_manufacturer_brand');
+        } catch (Throwable) {
+            $has_table = false;
+        }
+
+        return $has_table;
+    }
+
+    private function hasManufacturerShopTable(): bool
+    {
+        static $has_table = null;
+
+        if (is_bool($has_table)) {
+            return $has_table;
+        }
+
+        try {
+            $has_table = DB::connection()->getSchemaBuilder()->hasTable('manufacturer_shop');
+        } catch (Throwable) {
+            $has_table = false;
+        }
+
+        return $has_table;
+    }
+
+    private function hasBrandShopTable(): bool
+    {
+        static $has_table = null;
+
+        if (is_bool($has_table)) {
+            return $has_table;
+        }
+
+        try {
+            $has_table = DB::connection()->getSchemaBuilder()->hasTable('brand_shop');
+        } catch (Throwable) {
+            $has_table = false;
+        }
+
+        return $has_table;
     }
 
     private function resolveProductImportBatchId(Product $source_product, int $product_import_batch_id): int
@@ -524,15 +626,15 @@ class ProductShopBindingService
             return $product_import_batch_id;
         }
 
-        $batch_id_from_product_import_item = (int)(ProductImportItem::query()
-            ->whereKey((int)($source_product->product_import_item_id ?? 0))
+        $batch_id_from_product_import_item = (int) (ProductImportItem::query()
+            ->whereKey((int) ($source_product->product_import_item_id ?? 0))
             ->value('product_import_batch_id') ?? 0);
 
         if ($batch_id_from_product_import_item > 0) {
             return $batch_id_from_product_import_item;
         }
 
-        $batch_id_from_items = (int)(ProductImportItem::query()
+        $batch_id_from_items = (int) (ProductImportItem::query()
             ->where('product_id', $source_product->id)
             ->orderByDesc('id')
             ->value('product_import_batch_id') ?? 0);
@@ -541,7 +643,7 @@ class ProductShopBindingService
             return $batch_id_from_items;
         }
 
-        return (int)(ProductShop::query()
+        return (int) (ProductShop::query()
             ->where('product_id', $source_product->id)
             ->orderByDesc('id')
             ->value('product_import_batch_id') ?? 0);
@@ -578,8 +680,8 @@ class ProductShopBindingService
         $shop_ids = ProductShop::query()
             ->where('product_id', $product_id)
             ->pluck('shop_id')
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();
@@ -590,11 +692,11 @@ class ProductShopBindingService
 
         foreach ($shop_ids as $shop_id) {
             try {
-                $this->synchronizeProductTranslationsForShop($product_id, (int)$shop_id);
+                $this->synchronizeProductTranslationsForShop($product_id, (int) $shop_id);
             } catch (Throwable $exception) {
                 Log::channel('stack')->warning('Product translation synchronization failed for shop', [
                     'product_id' => $product_id,
-                    'shop_id'    => (int)$shop_id,
+                    'shop_id'    => (int) $shop_id,
                     'message'    => $exception->getMessage(),
                 ]);
             }
@@ -653,7 +755,7 @@ class ProductShopBindingService
             ->get();
 
         foreach ($null_language_rows as $null_language_row) {
-            $attribute_id = (int)($null_language_row->attribute_id ?? 0);
+            $attribute_id = (int) ($null_language_row->attribute_id ?? 0);
             if ($attribute_id <= 0) {
                 continue;
             }
@@ -706,7 +808,7 @@ class ProductShopBindingService
             ->get();
 
         foreach ($null_language_rows as $null_language_row) {
-            $category_id = (int)($null_language_row->category_id ?? 0);
+            $category_id = (int) ($null_language_row->category_id ?? 0);
             if ($category_id <= 0) {
                 continue;
             }
@@ -752,7 +854,7 @@ class ProductShopBindingService
             ->get();
 
         foreach ($null_language_rows as $null_language_row) {
-            $attribute_id = (int)($null_language_row->attribute_id ?? 0);
+            $attribute_id = (int) ($null_language_row->attribute_id ?? 0);
             if ($attribute_id <= 0) {
                 continue;
             }
@@ -789,15 +891,15 @@ class ProductShopBindingService
             return;
         }
 
-        $default_shop_language = $shop_languages->first(static fn(ShopLanguage $shop_language): bool => (bool)$shop_language->is_default)
+        $default_shop_language = $shop_languages->first(static fn (ShopLanguage $shop_language): bool => (bool) $shop_language->is_default)
             ?? $shop_languages->first();
 
-        if (!$default_shop_language instanceof ShopLanguage) {
+        if (! $default_shop_language instanceof ShopLanguage) {
             return;
         }
 
-        $default_shop_language_id = (int)$default_shop_language->id;
-        $source_language_code     = $this->normalizeLanguageCode((string)($default_shop_language->code ?? 'uk'));
+        $default_shop_language_id = (int) $default_shop_language->id;
+        $source_language_code     = $this->normalizeLanguageCode((string) ($default_shop_language->code ?? 'uk'));
         if ($source_language_code === '') {
             $source_language_code = 'uk';
         }
@@ -805,36 +907,36 @@ class ProductShopBindingService
         $product_descriptions = ProductDescription::getByProductId($product_id);
 
         $source_description_row = $product_descriptions->first(function (ProductDescription $description) use ($shop_languages, $source_language_code): bool {
-            $shop_language = $shop_languages->firstWhere('id', (int)($description->shop_language_id ?? 0));
-            if (!$shop_language instanceof ShopLanguage) {
+            $shop_language = $shop_languages->firstWhere('id', (int) ($description->shop_language_id ?? 0));
+            if (! $shop_language instanceof ShopLanguage) {
                 return false;
             }
 
-            return $this->normalizeLanguageCode((string)$shop_language->code) === $source_language_code;
+            return $this->normalizeLanguageCode((string) $shop_language->code) === $source_language_code;
         });
 
-        if (!$source_description_row instanceof ProductDescription) {
+        if (! $source_description_row instanceof ProductDescription) {
             $source_description_row = $product_descriptions->first();
         }
 
-        if (!$source_description_row instanceof ProductDescription) {
+        if (! $source_description_row instanceof ProductDescription) {
             return;
         }
 
         $source_language_code = $this->resolveSourceLanguageCodeByShopLanguageId(
-            (int)($source_description_row->shop_language_id ?? 0),
+            (int) ($source_description_row->shop_language_id ?? 0),
             $source_language_code
         );
 
-        $source_name             = Str::trim((string)($source_description_row->name ?? ''));
-        $source_description      = Str::trim((string)($source_description_row->description ?? ''));
-        $source_meta_title       = Str::trim((string)($source_description_row->meta_title ?? $source_name));
-        $source_meta_description = Str::trim((string)($source_description_row->meta_description ?? $source_description));
-        $source_meta_keywords    = Str::trim((string)($source_description_row->meta_keywords ?? ''));
+        $source_name             = Str::trim((string) ($source_description_row->name ?? ''));
+        $source_description      = Str::trim((string) ($source_description_row->description ?? ''));
+        $source_meta_title       = Str::trim((string) ($source_description_row->meta_title ?? $source_name));
+        $source_meta_description = Str::trim((string) ($source_description_row->meta_description ?? $source_description));
+        $source_meta_keywords    = Str::trim((string) ($source_description_row->meta_keywords ?? ''));
 
         foreach ($shop_languages as $shop_language) {
-            $shop_language_id     = (int)$shop_language->id;
-            $target_language_code = $this->normalizeLanguageCode((string)$shop_language->code);
+            $shop_language_id     = (int) $shop_language->id;
+            $target_language_code = $this->normalizeLanguageCode((string) $shop_language->code);
             if ($shop_language_id <= 0 || $target_language_code === '') {
                 continue;
             }
@@ -850,28 +952,28 @@ class ProductShopBindingService
                     'shop_language_id' => $shop_language_id,
                 ],
                 [
-                    'name'             => $this->translateText(
+                    'name' => $this->translateText(
                         $product_id,
                         $source_name,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_description->name ?? ''),
+                        (string) ($existing_description->name ?? ''),
                         'productName'
                     ),
-                    'description'      => $this->translateText(
+                    'description' => $this->translateText(
                         $product_id,
                         $source_description,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_description->description ?? ''),
+                        (string) ($existing_description->description ?? ''),
                         'productDescription'
                     ),
-                    'meta_title'       => $this->translateText(
+                    'meta_title' => $this->translateText(
                         $product_id,
                         $source_meta_title,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_description->meta_title ?? ''),
+                        (string) ($existing_description->meta_title ?? ''),
                         'productName'
                     ),
                     'meta_description' => $this->translateText(
@@ -879,15 +981,15 @@ class ProductShopBindingService
                         $source_meta_description,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_description->meta_description ?? ''),
+                        (string) ($existing_description->meta_description ?? ''),
                         'productDescription'
                     ),
-                    'meta_keywords'    => $this->translateText(
+                    'meta_keywords' => $this->translateText(
                         $product_id,
                         $source_meta_keywords,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_description->meta_keywords ?? ''),
+                        (string) ($existing_description->meta_keywords ?? ''),
                         'productName'
                     ),
                 ]
@@ -907,21 +1009,21 @@ class ProductShopBindingService
         );
 
         foreach ($source_attributes as $source_attribute) {
-            $attribute_id = (int)($source_attribute['attribute_id'] ?? 0);
+            $attribute_id = (int) ($source_attribute['attribute_id'] ?? 0);
             if ($attribute_id <= 0) {
                 continue;
             }
 
-            $source_attribute_name          = Str::trim((string)($source_attribute['source_attribute_name'] ?? ''));
-            $source_attribute_text          = Str::trim((string)($source_attribute['source_attribute_text'] ?? ''));
+            $source_attribute_name          = Str::trim((string) ($source_attribute['source_attribute_name'] ?? ''));
+            $source_attribute_text          = Str::trim((string) ($source_attribute['source_attribute_text'] ?? ''));
             $source_attribute_language_code = $this->resolveSourceLanguageCodeByShopLanguageId(
-                (int)($source_attribute['source_shop_language_id'] ?? 0),
+                (int) ($source_attribute['source_shop_language_id'] ?? 0),
                 $source_language_code
             );
 
             foreach ($shop_languages as $shop_language) {
-                $shop_language_id     = (int)$shop_language->id;
-                $target_language_code = $this->normalizeLanguageCode((string)$shop_language->code);
+                $shop_language_id     = (int) $shop_language->id;
+                $target_language_code = $this->normalizeLanguageCode((string) $shop_language->code);
                 if ($shop_language_id <= 0 || $target_language_code === '') {
                     continue;
                 }
@@ -942,7 +1044,7 @@ class ProductShopBindingService
                             $source_attribute_name,
                             $source_attribute_language_code,
                             $target_language_code,
-                            (string)($existing_attribute_description->name ?? ''),
+                            (string) ($existing_attribute_description->name ?? ''),
                             'attributeName',
                             $attribute_id
                         ),
@@ -967,7 +1069,7 @@ class ProductShopBindingService
                             $source_attribute_text,
                             $source_attribute_language_code,
                             $target_language_code,
-                            (string)($existing_attribute_row->text ?? ''),
+                            (string) ($existing_attribute_row->text ?? ''),
                             'productAttributeText',
                             $attribute_id
                         ),
@@ -1006,7 +1108,7 @@ class ProductShopBindingService
         $source_attributes_map = [];
 
         foreach ($source_rows as $source_row) {
-            $source_attribute_id = (int)($source_row->attribute_id ?? 0);
+            $source_attribute_id = (int) ($source_row->attribute_id ?? 0);
             if ($source_attribute_id <= 0) {
                 continue;
             }
@@ -1018,7 +1120,7 @@ class ProductShopBindingService
 
             $source_attribute_name_parts = $this->splitAttributePartsByPipe($source_attribute_name, true);
             $source_attribute_text_parts = $this->splitAttributePartsByPipe(
-                (string)($source_row->text ?? ''),
+                (string) ($source_row->text ?? ''),
                 false
             );
 
@@ -1060,7 +1162,7 @@ class ProductShopBindingService
             }
 
             $should_delete_source_attribute_rows = count(array_unique($created_attribute_ids)) > 1
-                || !in_array($source_attribute_id, $created_attribute_ids, true);
+                || ! in_array($source_attribute_id, $created_attribute_ids, true);
 
             if ($should_delete_source_attribute_rows) {
                 ProductToAttribute::query()
@@ -1077,7 +1179,7 @@ class ProductShopBindingService
             ->get();
 
         foreach ($default_language_rows as $default_language_row) {
-            $attribute_id = (int)($default_language_row->attribute_id ?? 0);
+            $attribute_id = (int) ($default_language_row->attribute_id ?? 0);
             if ($attribute_id <= 0 || array_key_exists($attribute_id, $source_attributes_map)) {
                 continue;
             }
@@ -1085,7 +1187,7 @@ class ProductShopBindingService
             $source_attributes_map[$attribute_id] = [
                 'attribute_id'            => $attribute_id,
                 'source_attribute_name'   => $this->resolveAttributeNameForLanguage($attribute_id, $default_shop_language_id),
-                'source_attribute_text'   => Str::trim((string)($default_language_row->text ?? '')),
+                'source_attribute_text'   => Str::trim((string) ($default_language_row->text ?? '')),
                 'source_shop_language_id' => $default_shop_language_id,
             ];
         }
@@ -1097,17 +1199,17 @@ class ProductShopBindingService
                 ->get();
 
             foreach ($fallback_rows as $fallback_row) {
-                $attribute_id = (int)($fallback_row->attribute_id ?? 0);
+                $attribute_id = (int) ($fallback_row->attribute_id ?? 0);
                 if ($attribute_id <= 0 || array_key_exists($attribute_id, $source_attributes_map)) {
                     continue;
                 }
 
-                $fallback_shop_language_id = (int)($fallback_row->shop_language_id ?? 0);
+                $fallback_shop_language_id = (int) ($fallback_row->shop_language_id ?? 0);
 
                 $source_attributes_map[$attribute_id] = [
                     'attribute_id'            => $attribute_id,
                     'source_attribute_name'   => $this->resolveAttributeNameForLanguage($attribute_id, $fallback_shop_language_id),
-                    'source_attribute_text'   => Str::trim((string)($fallback_row->text ?? '')),
+                    'source_attribute_text'   => Str::trim((string) ($fallback_row->text ?? '')),
                     'source_shop_language_id' => $fallback_shop_language_id,
                 ];
             }
@@ -1117,15 +1219,15 @@ class ProductShopBindingService
     }
 
     /**
-     * @param list<ShopLanguage> $shop_languages
+     * @param  list<ShopLanguage>  $shop_languages
      *
      * @throws Throwable
      */
     private function synchronizeCategoryDescriptionsForShopLanguages(
-        int    $product_id,
-        array  $shop_languages,
+        int $product_id,
+        array $shop_languages,
         string $fallback_source_language_code,
-        int    $default_shop_language_id
+        int $default_shop_language_id
     ): void {
         $category_ids = CategoryProduct::getUniqueCategoryIdsByProductId($product_id);
 
@@ -1136,25 +1238,25 @@ class ProductShopBindingService
         foreach ($category_ids as $category_id) {
             $source_category_description = CategoryDescription::findSourceForCategory($category_id, $default_shop_language_id);
 
-            if (!$source_category_description instanceof CategoryDescription) {
+            if (! $source_category_description instanceof CategoryDescription) {
                 continue;
             }
 
             $source_language_code = $this->resolveSourceLanguageCodeByShopLanguageId(
-                (int)($source_category_description->shop_language_id ?? 0),
+                (int) ($source_category_description->shop_language_id ?? 0),
                 $fallback_source_language_code
             );
 
-            $source_name             = Str::trim((string)($source_category_description->name ?? ''));
-            $source_description      = Str::trim((string)($source_category_description->description ?? ''));
-            $source_h1_title         = Str::trim((string)($source_category_description->h1_title ?? $source_name));
-            $source_meta_title       = Str::trim((string)($source_category_description->meta_title ?? $source_name));
-            $source_meta_description = Str::trim((string)($source_category_description->meta_description ?? $source_description));
-            $source_meta_keywords    = Str::trim((string)($source_category_description->meta_keywords ?? ''));
+            $source_name             = Str::trim((string) ($source_category_description->name ?? ''));
+            $source_description      = Str::trim((string) ($source_category_description->description ?? ''));
+            $source_h1_title         = Str::trim((string) ($source_category_description->h1_title ?? $source_name));
+            $source_meta_title       = Str::trim((string) ($source_category_description->meta_title ?? $source_name));
+            $source_meta_description = Str::trim((string) ($source_category_description->meta_description ?? $source_description));
+            $source_meta_keywords    = Str::trim((string) ($source_category_description->meta_keywords ?? ''));
 
             foreach ($shop_languages as $shop_language) {
-                $shop_language_id     = (int)($shop_language->id ?? 0);
-                $target_language_code = $this->normalizeLanguageCode((string)($shop_language->code ?? ''));
+                $shop_language_id     = (int) ($shop_language->id ?? 0);
+                $target_language_code = $this->normalizeLanguageCode((string) ($shop_language->code ?? ''));
                 if ($shop_language_id <= 0 || $target_language_code === '') {
                     continue;
                 }
@@ -1165,36 +1267,36 @@ class ProductShopBindingService
                     ->first();
 
                 CategoryDescription::upsertByCategoryAndLanguage($category_id, $shop_language_id, [
-                    'name'             => $this->translateText(
+                    'name' => $this->translateText(
                         $product_id,
                         $source_name,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->name ?? ''),
+                        (string) ($existing_category_description->name ?? ''),
                         'productName'
                     ),
-                    'description'      => $this->translateText(
+                    'description' => $this->translateText(
                         $product_id,
                         $source_description,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->description ?? ''),
+                        (string) ($existing_category_description->description ?? ''),
                         'productDescription'
                     ),
-                    'h1_title'         => $this->translateText(
+                    'h1_title' => $this->translateText(
                         $product_id,
                         $source_h1_title,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->h1_title ?? ''),
+                        (string) ($existing_category_description->h1_title ?? ''),
                         'productName'
                     ),
-                    'meta_title'       => $this->translateText(
+                    'meta_title' => $this->translateText(
                         $product_id,
                         $source_meta_title,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->meta_title ?? ''),
+                        (string) ($existing_category_description->meta_title ?? ''),
                         'productName'
                     ),
                     'meta_description' => $this->translateText(
@@ -1202,15 +1304,15 @@ class ProductShopBindingService
                         $source_meta_description,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->meta_description ?? ''),
+                        (string) ($existing_category_description->meta_description ?? ''),
                         'productDescription'
                     ),
-                    'meta_keywords'    => $this->translateText(
+                    'meta_keywords' => $this->translateText(
                         $product_id,
                         $source_meta_keywords,
                         $source_language_code,
                         $target_language_code,
-                        (string)($existing_category_description->meta_keywords ?? ''),
+                        (string) ($existing_category_description->meta_keywords ?? ''),
                         'productName'
                     ),
                 ]);
@@ -1247,11 +1349,11 @@ class ProductShopBindingService
 
         $parts = preg_split('/\s*\|\s*/u', $raw_value) ?: [];
         $parts = array_values(array_filter(
-            array_map(static fn(string $part): string => Str::trim($part), $parts),
-            static fn(string $part): bool => $part !== ''
+            array_map(static fn (string $part): string => Str::trim($part), $parts),
+            static fn (string $part): bool => $part !== ''
         ));
 
-        if (!$deduplicate) {
+        if (! $deduplicate) {
             return $parts;
         }
 
@@ -1290,7 +1392,7 @@ class ProductShopBindingService
                 'is_active'  => true,
             ]);
 
-            $attribute_id = (int)$attribute->id;
+            $attribute_id = (int) $attribute->id;
         }
 
         AttributeDescription::upsertName($attribute_id, $default_shop_language_id, $clean_attribute_name);
@@ -1302,13 +1404,13 @@ class ProductShopBindingService
      * @throws Throwable
      */
     private function translateText(
-        int    $product_id,
+        int $product_id,
         string $source_text,
         string $source_language_code,
         string $target_language_code,
         string $existing_text,
         string $translation_method,
-        int    $attribute_id = 0
+        int $attribute_id = 0
     ): string {
         $existing_text = Str::trim($existing_text);
         if ($existing_text !== '') {
@@ -1324,7 +1426,7 @@ class ProductShopBindingService
             return $source_text;
         }
 
-        if (!(bool)config('app.ai_translation_enabled', true)) {
+        if (! (bool) config('app.ai_translation_enabled', true)) {
             return sprintf('translated-to-%s-%s', $target_language_code, $source_text);
         }
 

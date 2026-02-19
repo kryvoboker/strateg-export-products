@@ -23,10 +23,13 @@ class ShopLanguageResource extends Resource
 {
     use TotalModelItemsResourceTrait;
 
-    protected static ?string                $model                = ShopLanguage::class;
-    protected static string|BackedEnum|null $navigationIcon       = Heroicon::Language;
-    protected static ?string                $recordTitleAttribute = 'name';
-    protected static string|null|UnitEnum   $navigationGroup      = AdminNavigationGroupEnum::Shops;
+    protected static ?string $model = ShopLanguage::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::Language;
+
+    protected static ?string $recordTitleAttribute = 'name';
+
+    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Shops;
 
     public static function form(Schema $schema): Schema
     {

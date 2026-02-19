@@ -9,11 +9,6 @@ use Filament\Tables\Columns\IconColumn;
 
 trait BooleanTableTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getIsActiveTableField(array $params = []): Column
     {
         return IconColumn::make('is_active')
@@ -22,11 +17,6 @@ trait BooleanTableTrait
             ->sortable($params['sortable'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getIsDefaultTableField(array $params = []): Column
     {
         return IconColumn::make('is_default')
@@ -35,11 +25,6 @@ trait BooleanTableTrait
             ->sortable($params['sortable'] ?? true);
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Column
-     */
     protected static function getIsNoIndexTableField(array $params = []): Column
     {
         return IconColumn::make('is_noindex')

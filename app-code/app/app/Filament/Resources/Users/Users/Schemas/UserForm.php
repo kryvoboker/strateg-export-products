@@ -15,13 +15,8 @@ use Illuminate\Validation\Rule;
 
 class UserForm
 {
-    use CommonTextFormTrait, ToggleCheckboxFormTrait, ImageFormTrait, DateFormTrait;
+    use CommonTextFormTrait, DateFormTrait, ImageFormTrait, ToggleCheckboxFormTrait;
 
-    /**
-     * @param Schema $schema
-     *
-     * @return Schema
-     */
     public static function configure(Schema $schema): Schema
     {
         /** @var User|null $record */
@@ -51,17 +46,17 @@ class UserForm
 
                 self::getTelFormField([
                     'max_length' => 20,
-                    'rules'      => ['nullable', 'string', 'max:20', Rule::unique('users', 'telephone')->ignore($record?->id), 'regex:' . config('app.regex_validate_conditions.telephone')],
+                    'rules'      => ['nullable', 'string', 'max:20', Rule::unique('users', 'telephone')->ignore($record?->id), 'regex:'.config('app.regex_validate_conditions.telephone')],
                 ]),
 
                 self::getImageFormField([
                     'field_name'   => 'avatar',
                     'label'        => __('admin/default.labels.avatar'),
                     'directory'    => config('app.images.user.image_path'),
-                    'max_size'     => (int)config('app.images.user.upload.max_size_kb'),
-                    'rules'        => ['nullable', Rule::file()->types(['jpeg', 'jpg', 'png'])->max((int)config('app.images.user.upload.max_size_kb'))],
-                    'image_width'  => (int)config('app.images.user.preview_in_page_in_admin.width'),
-                    'image_height' => (int)config('app.images.user.preview_in_page_in_admin.height'),
+                    'max_size'     => (int) config('app.images.user.upload.max_size_kb'),
+                    'rules'        => ['nullable', Rule::file()->types(['jpeg', 'jpg', 'png'])->max((int) config('app.images.user.upload.max_size_kb'))],
+                    'image_width'  => (int) config('app.images.user.preview_in_page_in_admin.width'),
+                    'image_height' => (int) config('app.images.user.preview_in_page_in_admin.height'),
                 ]),
 
                 self::getEmailVerifiedAtFormField(),
@@ -70,7 +65,7 @@ class UserForm
                     ->label(__('admin/default.labels.password'))
                     ->helperText(__('admin/users/users.helpers.password'))
                     ->password()
-                    ->rules(['nullable', 'string', 'min:3', 'confirmed', 'regex:' . config('app.regex_validate_conditions.password')])
+                    ->rules(['nullable', 'string', 'min:3', 'confirmed', 'regex:'.config('app.regex_validate_conditions.password')])
                     ->default(null),
 
                 TextInput::make('password_confirmation')
@@ -87,7 +82,7 @@ class UserForm
                 self::getIsActiveFormField([
                     'helper_text' => __('admin/users/users.helpers.is_active'),
                     'default'     => false,
-                ])
+                ]),
             ]);
     }
 }

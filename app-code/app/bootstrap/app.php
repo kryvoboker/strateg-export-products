@@ -3,14 +3,15 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Configuration\{Exceptions, Middleware};
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web     : __DIR__ . '/../routes/web.php',
-        commands: __DIR__ . '/../routes/console.php',
+        web     : __DIR__.'/../routes/web.php',
+        commands: __DIR__.'/../routes/console.php',
         health  : '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
@@ -23,13 +24,13 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 // Only render custom view for 500 errors
                 if ($e->getStatusCode() === Response::HTTP_INTERNAL_SERVER_ERROR) {
                     return response()->view('errors.500', [], Response::HTTP_INTERNAL_SERVER_ERROR);
-                } else if ($e->getStatusCode() === Response::HTTP_SERVICE_UNAVAILABLE) {
+                } elseif ($e->getStatusCode() === Response::HTTP_SERVICE_UNAVAILABLE) {
                     return response()->view('errors.503', [], Response::HTTP_SERVICE_UNAVAILABLE);
                 }
             }
 
             // Return null to let Laravel handle other errors by default
-            return null;
+
         });
     })->create();
 

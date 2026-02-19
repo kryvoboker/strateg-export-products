@@ -5,7 +5,7 @@ return [
     'navigation_label' => 'Імпорт товарів',
 
     // Labels
-    'labels'           => [
+    'labels' => [
         'model'             => 'Пакет імпорту',
         'plural_model'      => 'Пакети імпорту',
         'excel_file'        => 'EXCEL файл',
@@ -16,14 +16,14 @@ return [
         'attribute'         => 'Атрибут',
     ],
 
-    'sources'  => [
+    'sources' => [
         'excel'         => 'EXCEL',
         'google_sheets' => 'Google Sheets',
         'admin_panel'   => 'Адмінка',
     ],
 
     // Tabs/Sections/Actions
-    'tabs'     => [
+    'tabs' => [
         'excel'         => 'EXCEL файл',
         'google_sheets' => 'Google Sheets',
         'admin_form'    => 'Через адмінку',
@@ -32,21 +32,23 @@ return [
         'product_fields'     => 'Поля товару',
         'sheets_coordinates' => 'Координати для кожного листа',
     ],
-    'actions'  => [
-        'create'                   => 'Завантажити нові товари',
-        'open_result'              => 'Переглянути результат',
-        'download_error_log'       => 'Завантажити лог помилок',
-        'delete_error_log'         => 'Видалити лог помилок',
-        'view_payload'             => 'Переглянути payload',
-        'edit_product'             => 'Редагувати товар',
-        'bind_products_to_shops'   => 'Масово прив\'язати товари до магазинів',
-        'export_products_to_shops' => 'Масово вигрузити товари в магазини',
-        'export_product_to_shops'  => 'Вигрузити товар в магазини',
-        'retry_failed_exports'     => 'Повторити невдалі вигрузки',
+    'actions' => [
+        'create'                        => 'Завантажити нові товари',
+        'open_result'                   => 'Переглянути результат',
+        'download_error_log'            => 'Завантажити лог помилок',
+        'delete_error_log'              => 'Видалити лог помилок',
+        'view_payload'                  => 'Переглянути payload',
+        'edit_product'                  => 'Редагувати товар',
+        'bind_products_to_shops'        => 'Масово прив\'язати товари до магазинів',
+        'export_products_to_shops'      => 'Масово вигрузити товари в магазини',
+        'export_product_to_shops'       => 'Вигрузити товар в магазини',
+        'retry_failed_exports'          => 'Повторити невдалі вигрузки',
+        'restore_product_from_backup'   => 'Відновити товар з backup',
+        'restore_products_from_backups' => 'Масово відновити товари з backup',
     ],
 
     // Columns
-    'columns'  => [
+    'columns' => [
         'source_type'       => 'Джерело',
         'source_name'       => 'Назва джерела',
         'status'            => 'Статус',
@@ -70,7 +72,7 @@ return [
 
     'filters' => [
         'has_errors' => 'Лише з помилками',
-        'shop' => 'Інтернет-магазин',
+        'shop'       => 'Інтернет-магазин',
     ],
 
     'titles' => [
@@ -80,11 +82,11 @@ return [
     ],
 
     'product_edit' => [
-        'heading'       => 'Редагування товару',
-        'actions'       => [
+        'heading' => 'Редагування товару',
+        'actions' => [
             'add_attribute' => 'Додати атрибут',
         ],
-        'tabs'          => [
+        'tabs' => [
             'main'         => 'Головна інформація',
             'descriptions' => 'Описи',
             'images'       => 'Картинки',
@@ -93,11 +95,11 @@ return [
             'seo'          => 'SEO URL',
             'pricing'      => 'Знижки та спецціни',
         ],
-        'sections'      => [
+        'sections' => [
             'discounts' => 'Знижки',
             'specials'  => 'Спецціни',
         ],
-        'helpers'       => [
+        'helpers' => [
             'bind_shop_id'               => 'За одне збереження можна прив\'язати товар лише до одного магазину.',
             'select_existing_categories' => 'Ви можете вибрати категорії зі списку або додати власні нижче.',
             'select_existing_attributes' => 'Ви можете вибрати атрибути зі списку або додати власні нижче.',
@@ -108,16 +110,16 @@ return [
             'all'  => 'Загальний список',
             'shop' => 'Список магазину',
         ],
-        'messages'      => [
+        'messages' => [
             'no_shop_languages_title'   => 'Немає доступних мов магазину',
             'no_shop_languages_content' => 'Оберіть магазин з активними мовами, щоб редагувати переклади й атрибути по мовах.',
         ],
-        'errors'        => [
+        'errors' => [
             'duplicate_category'  => 'Виявлено дубль категорії. Видаліть повтори перед збереженням.',
             'duplicate_attribute' => 'Виявлено дубль атрибута. Видаліть повтори перед збереженням.',
             'invalid_attribute'   => 'Невірно вказаний атрибут.',
         ],
-        'fields'        => [
+        'fields' => [
             'bind_shop_id'            => 'Прив\'язати до магазину',
             'bind_shop_language_id'   => 'Мова за замовчуванням',
             'source_scope'            => 'Джерело даних',
@@ -175,7 +177,7 @@ return [
     ],
 
     // Statuses
-    'statuses'      => [
+    'statuses' => [
         'new'            => 'Новий',
         'processing'     => 'В обробці',
         'exporting_api'  => 'Експорт в API',
@@ -186,48 +188,57 @@ return [
     ],
 
     // Messages
-    'messages'      => [
-        'created'                       => 'Пакет імпорту створено, завдання додано в чергу.',
-        'processing_row_locked'         => 'Запис в обробці. Дочекайтесь завершення.',
-        'status_line'                   => 'Статус: :status',
-        'last_error_line'               => 'Помилка: :error',
-        'error_log_ready'               => 'Лог помилок доступний для завантаження.',
-        'only_owner_can_delete_log'     => 'Видаляти лог може лише користувач, який створив імпорт.',
-        'error_log_deleted'             => 'Лог помилок видалено.',
-        'delete_error_log_confirmation' => 'Ви дійсно хочете видалити файл логу помилок?',
-        'payload_is_empty'              => 'Payload порожній.',
-        'bulk_bind_select_shops'        => 'Оберіть один або кілька магазинів для прив\'язки товарів із вибраних черг.',
-        'bulk_bind_no_shops'            => 'Оберіть хоча б один магазин.',
-        'bulk_bind_no_products'         => 'Серед вибраних записів немає товарів, які можна прив\'язати.',
-        'bulk_bind_completed'           => 'Масова прив\'язка завершена.',
-        'bulk_bind_queued'              => 'Завдання на прив\'язку поставлено в чергу.',
-        'bulk_bind_result'              => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до обробки: :products_total; прив\'язок створено: :products_bound; дублікатів товарів створено: :products_duplicated; пропущено товарів: :products_skipped; помилок: :errors.',
-        'bulk_bind_items_result'        => 'Вибрано товарів у черзі: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; унікальних товарів до обробки: :products_total; прив\'язок створено: :products_bound; дублікатів товарів створено: :products_duplicated; пропущено товарів: :products_skipped; помилок: :errors.',
-        'bulk_bind_queued_result'       => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до обробки: :products_total; задач прив\'язки в черзі: :jobs_queued.',
-        'bulk_bind_items_queued_result' => 'Вибрано товарів у черзі: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; унікальних товарів до обробки: :products_total; задач прив\'язки в черзі: :jobs_queued.',
-        'bulk_export_select_shops'      => 'Оберіть один або кілька магазинів для вигрузки товарів із вибраних черг.',
-        'bulk_export_queued'            => 'Завдання на вигрузку поставлено в чергу.',
-        'bulk_export_result'            => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
-        'bulk_export_items_result'      => 'Вибрано товарів: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
-        'bulk_retry_queued'             => 'Повторні завдання на вигрузку поставлено в чергу.',
-        'bulk_retry_result'             => 'Знайдено невдалих вигрузок: :failed_found; поставлено в чергу повторно: :queued.',
-        'item_export_queued'            => 'Товар поставлено в чергу на вигрузку.',
-        'item_export_result'            => 'Товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
-        'item_export_needs_binding'     => 'Товар не прив\'язаний до магазину. Спочатку виконайте прив\'язку товару до магазину.',
-        'item_export_only_bound_shops'  => 'Для поштучної вигрузки доступні лише магазини, до яких товар уже прив\'язаний.',
-        'no_bound_shops'                => 'Немає прив\'язаних інтернет-магазинів',
-        'item_retry_queued'             => 'Повторні завдання для товару поставлено в чергу.',
-        'item_retry_result'             => 'Знайдено невдалих вигрузок: :failed_found; поставлено в чергу повторно: :queued.',
+    'messages' => [
+        'created'                            => 'Пакет імпорту створено, завдання додано в чергу.',
+        'processing_row_locked'              => 'Запис в обробці. Дочекайтесь завершення.',
+        'status_line'                        => 'Статус: :status',
+        'last_error_line'                    => 'Помилка: :error',
+        'error_log_ready'                    => 'Лог помилок доступний для завантаження.',
+        'only_owner_can_delete_log'          => 'Видаляти лог може лише користувач, який створив імпорт.',
+        'error_log_deleted'                  => 'Лог помилок видалено.',
+        'delete_error_log_confirmation'      => 'Ви дійсно хочете видалити файл логу помилок?',
+        'payload_is_empty'                   => 'Payload порожній.',
+        'bulk_bind_select_shops'             => 'Оберіть один або кілька магазинів для прив\'язки товарів із вибраних черг.',
+        'bulk_bind_no_shops'                 => 'Оберіть хоча б один магазин.',
+        'bulk_bind_no_products'              => 'Серед вибраних записів немає товарів, які можна прив\'язати.',
+        'bulk_bind_completed'                => 'Масова прив\'язка завершена.',
+        'bulk_bind_queued'                   => 'Завдання на прив\'язку поставлено в чергу.',
+        'bulk_bind_result'                   => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до обробки: :products_total; прив\'язок створено: :products_bound; дублікатів товарів створено: :products_duplicated; пропущено товарів: :products_skipped; помилок: :errors.',
+        'bulk_bind_items_result'             => 'Вибрано товарів у черзі: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; унікальних товарів до обробки: :products_total; прив\'язок створено: :products_bound; дублікатів товарів створено: :products_duplicated; пропущено товарів: :products_skipped; помилок: :errors.',
+        'bulk_bind_queued_result'            => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до обробки: :products_total; задач прив\'язки в черзі: :jobs_queued.',
+        'bulk_bind_items_queued_result'      => 'Вибрано товарів у черзі: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; унікальних товарів до обробки: :products_total; задач прив\'язки в черзі: :jobs_queued.',
+        'bulk_export_select_shops'           => 'Оберіть один або кілька магазинів для вигрузки товарів із вибраних черг.',
+        'bulk_export_queued'                 => 'Завдання на вигрузку поставлено в чергу.',
+        'bulk_export_result'                 => 'Вибрано черг: :batches_selected; пропущено (в обробці): :batches_skipped_processing; товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
+        'bulk_export_items_result'           => 'Вибрано товарів: :items_selected; пропущено (в обробці): :items_skipped_processing; без product_id: :items_skipped_without_product; товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
+        'bulk_retry_queued'                  => 'Повторні завдання на вигрузку поставлено в чергу.',
+        'bulk_retry_result'                  => 'Знайдено невдалих вигрузок: :failed_found; поставлено в чергу повторно: :queued.',
+        'item_export_queued'                 => 'Товар поставлено в чергу на вигрузку.',
+        'item_export_result'                 => 'Товарів до вигрузки: :products_total; задач вигрузки створено: :exports_queued; вже невдалих (доступний retry): :already_failed; вже в черзі або вигружено: :already_queued_or_exported; не прив\'язані до магазину: :skipped_not_bound; помилок: :errors.',
+        'item_export_needs_binding'          => 'Товар не прив\'язаний до магазину. Спочатку виконайте прив\'язку товару до магазину.',
+        'item_export_only_bound_shops'       => 'Для поштучної вигрузки доступні лише магазини, до яких товар уже прив\'язаний.',
+        'no_bound_shops'                     => 'Немає прив\'язаних інтернет-магазинів',
+        'item_retry_queued'                  => 'Повторні завдання для товару поставлено в чергу.',
+        'item_retry_result'                  => 'Знайдено невдалих вигрузок: :failed_found; поставлено в чергу повторно: :queued.',
+        'restore_product_confirmation'       => 'Підтвердіть відновлення товару з останнього локального backup.',
+        'restore_product_success'            => 'Товар успішно відновлено з backup.',
+        'restore_product_not_available'      => 'Для цього товару немає доступного backup для відновлення.',
+        'restore_product_failed'             => 'Не вдалося відновити товар з backup.',
+        'restore_products_bulk_confirmation' => 'Підтвердіть масове відновлення вибраних товарів з backup.',
+        'restore_products_bulk_no_items'     => 'Не обрано жодного товару для масового відновлення.',
+        'restore_products_bulk_queued'       => 'Завдання масового відновлення поставлено в чергу.',
+        'restore_products_bulk_result'       => 'Обрано товарів: :items_selected. Відновлення виконується асинхронно.',
+        'product_update_success'             => 'Товар успішно оновлено.',
     ],
 
     // Source Names
-    'source_names'  => [
+    'source_names' => [
         'google_sheets' => 'Google Sheets (:id)',
         'manual_import' => 'Ручний імпорт :datetime',
     ],
 
     // Errors
-    'errors'        => [
+    'errors' => [
         'excel_file_required'       => 'Оберіть Excel-файл.',
         'google_sheet_url_required' => 'Вкажіть посилання на Google Sheet.',
         'google_sheet_url_invalid'  => 'Некоректне посилання Google Sheet.',
@@ -240,5 +251,6 @@ return [
         'sheet_missing_columns'     => 'Лист :sheet: відсутні колонки :columns.',
         'excel_read_failed'         => 'Не вдалося прочитати Excel-файл.',
         'user_not_authorized'       => 'Користувач не авторизований.',
+        'update_product'            => 'Помилка при оновленні',
     ],
 ];

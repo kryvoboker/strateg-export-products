@@ -30,8 +30,8 @@ class AttributeForm
                                     ->label(__('admin/attributes/attributes.labels.name'))
                                     ->required()
                                     ->maxLength(255)
-                                    ->default(fn($record): string => $record instanceof Attribute
-                                        ? (string)($record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '')
+                                    ->default(fn ($record): string => $record instanceof Attribute
+                                        ? (string) ($record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '')
                                         : '')
                                     ->columnSpan(1),
 
@@ -43,7 +43,7 @@ class AttributeForm
 
                                 Select::make('shop_ids')
                                     ->label(__('admin/attributes/attributes.labels.shops'))
-                                    ->options(fn(): array => Shop::query()
+                                    ->options(fn (): array => Shop::query()
                                         ->where('is_active', true)
                                         ->orderBy('name')
                                         ->pluck('name', 'id')
@@ -51,8 +51,8 @@ class AttributeForm
                                     ->multiple()
                                     ->searchable()
                                     ->preload()
-                                    ->default(fn($record): array => $record instanceof Attribute
-                                        ? $record->shops()->pluck('shops.id')->map(static fn($shop_id): int => (int)$shop_id)->all()
+                                    ->default(fn ($record): array => $record instanceof Attribute
+                                        ? $record->shops()->pluck('shops.id')->map(static fn ($shop_id): int => (int) $shop_id)->all()
                                         : [])
                                     ->columnSpan(2),
 
@@ -67,12 +67,12 @@ class AttributeForm
 
     public static function syncAttributeAdditionalData(Attribute $attribute, array $data): void
     {
-        $attribute_name = trim((string)Arr::get($data, 'attribute_name', ''));
+        $attribute_name = trim((string) Arr::get($data, 'attribute_name', ''));
 
         if ($attribute_name !== '') {
             AttributeDescription::query()->updateOrCreate(
                 [
-                    'attribute_id'     => (int)$attribute->id,
+                    'attribute_id'     => (int) $attribute->id,
                     'shop_language_id' => null,
                 ],
                 [
@@ -82,8 +82,8 @@ class AttributeForm
         }
 
         $shop_ids = collect(Arr::get($data, 'shop_ids', []))
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();

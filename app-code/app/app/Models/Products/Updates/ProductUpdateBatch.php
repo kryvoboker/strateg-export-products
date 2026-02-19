@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Models\Products\Updates;
 
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
+use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Users\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -35,8 +37,8 @@ class ProductUpdateBatch extends Model
     protected function casts(): array
     {
         return [
-            'options' => 'array',
-            'started_at' => 'datetime',
+            'options'     => 'array',
+            'started_at'  => 'datetime',
             'finished_at' => 'datetime',
         ];
     }
@@ -47,6 +49,14 @@ class ProductUpdateBatch extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ProductUpdateItem::class, 'product_update_batch_id');
+    }
+
+    /**
+     * @return MorphMany<ProductExportItem>
+     */
+    public function exportItems(): MorphMany
+    {
+        return $this->morphMany(ProductExportItem::class, 'batchable');
     }
 
     /**
@@ -77,7 +87,7 @@ class ProductUpdateBatch extends Model
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param  array<string, mixed>  $options
      */
     public function mergeOptions(array $options): bool
     {
@@ -101,4 +111,3 @@ class ProductUpdateBatch extends Model
         return $this->getErrorLogPath() !== null;
     }
 }
-

@@ -11,24 +11,19 @@ use Illuminate\Support\Str;
 
 trait CommonTextFilterTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Filter
-     */
     protected static function getTextFilterField(array $params = []): Filter
     {
         if (isset($params['min_length']) && $params['min_length'] > 0) {
-            $min_length = (int)$params['min_length'];
-        } else if (isset($params['min_length']) === false) {
+            $min_length = (int) $params['min_length'];
+        } elseif (isset($params['min_length']) === false) {
             $min_length = null;
         } else {
             $min_length = 3;
         }
 
         if (isset($params['max_length']) && $params['max_length'] > 0) {
-            $max_length = (int)$params['max_length'];
-        } else if (isset($params['max_length']) === false) {
+            $max_length = (int) $params['max_length'];
+        } elseif (isset($params['max_length']) === false) {
             $max_length = null;
         } else {
             $max_length = 255;
@@ -50,9 +45,9 @@ trait CommonTextFilterTrait
                         if (str_more_or_equal_length($state, $min_length) === false) {
                             $set($field_name, null);
                         }
-                    })
+                    }),
             ])
-            ->query($params['query_cb'] ?? function (Builder $query, array $data) use ($field_name, $min_length) : Builder {
+            ->query($params['query_cb'] ?? function (Builder $query, array $data) use ($field_name, $min_length): Builder {
                 $search = $data[$field_name] ?? null;
 
                 // Apply validation in query
@@ -71,7 +66,7 @@ trait CommonTextFilterTrait
                     return null;
                 }
 
-                return $filter_label . ': ' . Str::trim($search);
+                return $filter_label.': '.Str::trim($search);
             });
     }
 }

@@ -190,15 +190,15 @@ class ProductSearchTablesTest extends TestCase
 
         $cases = [
             ['name' => 'alpha'],
-            ['model' => 'mdl-1'],
-            ['sku' => 'sku-1'],
-            ['ean' => 'ean-1'],
+            ['model'               => 'mdl-1'],
+            ['sku'                 => 'sku-1'],
+            ['ean'                 => 'ean-1'],
             ['external_product_id' => '1001'],
-            ['quantity' => '15'],
-            ['price' => '99.99'],
-            ['attribute_name' => 'color'],
-            ['attribute_value' => 'red'],
-            ['category_name' => 'electronics'],
+            ['quantity'            => '15'],
+            ['price'               => '99.99'],
+            ['attribute_name'      => 'color'],
+            ['attribute_value'     => 'red'],
+            ['category_name'       => 'electronics'],
         ];
 
         foreach ($cases as $case) {
@@ -394,4 +394,3 @@ class ProductSearchTablesTest extends TestCase
         return [(int) $product->id, (int) $import_item->id, (int) $update_item->id];
     }
 }
-

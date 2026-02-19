@@ -29,7 +29,7 @@ class ProductUpdateItem extends Model
     protected function casts(): array
     {
         return [
-            'payload' => 'array',
+            'payload'      => 'array',
             'processed_at' => 'datetime',
         ];
     }
@@ -74,7 +74,7 @@ class ProductUpdateItem extends Model
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     public static function ensureBatchProductItem(
         int $product_update_batch_id,
@@ -94,11 +94,11 @@ class ProductUpdateItem extends Model
 
         return static::query()->create([
             'product_update_batch_id' => $product_update_batch_id,
-            'product_id' => $product_id,
-            'payload' => $payload,
-            'status' => $status ?? ProductUpdateItemsStatusEnum::SUCCESSED->value,
-            'error_message' => null,
-            'processed_at' => now(),
+            'product_id'              => $product_id,
+            'payload'                 => $payload,
+            'status'                  => $status ?? ProductUpdateItemsStatusEnum::SUCCESSED->value,
+            'error_message'           => null,
+            'processed_at'            => now(),
         ]);
     }
 }

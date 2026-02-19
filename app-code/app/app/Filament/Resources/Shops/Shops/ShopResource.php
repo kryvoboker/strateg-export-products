@@ -25,26 +25,19 @@ class ShopResource extends Resource
 {
     use TotalModelItemsResourceTrait;
 
-    protected static ?string                $model                = Shop::class;
-    protected static string|BackedEnum|null $navigationIcon       = Heroicon::BuildingStorefront;
-    protected static ?string                $recordTitleAttribute = 'name';
-    protected static string|null|UnitEnum   $navigationGroup      = AdminNavigationGroupEnum::Shops;
+    protected static ?string $model = Shop::class;
 
-    /**
-     * @param Schema $schema
-     *
-     * @return Schema
-     */
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::BuildingStorefront;
+
+    protected static ?string $recordTitleAttribute = 'name';
+
+    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::Shops;
+
     public static function form(Schema $schema): Schema
     {
         return ShopForm::configure($schema);
     }
 
-    /**
-     * @param Table $table
-     *
-     * @return Table
-     */
     public static function table(Table $table): Table
     {
         return ShopsTable::configure($table);
@@ -72,25 +65,16 @@ class ShopResource extends Resource
         ];
     }
 
-    /**
-     * @return string
-     */
     public static function getNavigationLabel(): string
     {
         return __('admin/shops/shops.navigation_label');
     }
 
-    /**
-     * @return string
-     */
     public static function getModelLabel(): string
     {
         return __('admin/shops/shops.labels.model');
     }
 
-    /**
-     * @return string
-     */
     public static function getPluralModelLabel(): string
     {
         return __('admin/shops/shops.labels.plural_model');

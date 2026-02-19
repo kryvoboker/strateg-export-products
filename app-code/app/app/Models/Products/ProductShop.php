@@ -27,9 +27,9 @@ class ProductShop extends Model
     {
         return [
             'product_import_batch_id' => 'integer',
-            'product_id' => 'integer',
-            'shop_id' => 'integer',
-            'external_product_id' => 'integer',
+            'product_id'              => 'integer',
+            'shop_id'                 => 'integer',
+            'external_product_id'     => 'integer',
         ];
     }
 

@@ -16,7 +16,7 @@ use Filament\Tables\Table;
 
 class ShopsTable
 {
-    use CommonTextTableTrait, BooleanTableTrait, DateTableTrait, BooleanFilterTrait;
+    use BooleanFilterTrait, BooleanTableTrait, CommonTextTableTrait, DateTableTrait;
 
     public static function configure(Table $table): Table
     {
@@ -34,7 +34,7 @@ class ShopsTable
 
                 TextColumn::make('base_url')
                     ->label(__('admin/shops/shops.columns.base_url'))
-                    ->url(fn($record) => $record->base_url, true)
+                    ->url(fn ($record) => $record->base_url, true)
                     ->copyable()
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),

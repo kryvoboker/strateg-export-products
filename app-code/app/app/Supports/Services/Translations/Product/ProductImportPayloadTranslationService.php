@@ -32,7 +32,7 @@ final class ProductImportPayloadTranslationService
         }
 
         $source_language_code = $this->resolveSourceLanguageCode($payload, $language_codes);
-        $product_id_for_ai = $this->resolveProductIdForAi($payload);
+        $product_id_for_ai    = $this->resolveProductIdForAi($payload);
 
         $payload['descriptions'] = $this->translateDescriptionsToAllLanguages(
             payload: $payload,
@@ -141,10 +141,10 @@ final class ProductImportPayloadTranslationService
             $source_name = $this->resolveBaseTextForSlug($payload);
         }
 
-        $source_description = Str::trim((string) Arr::get($source_row, 'description', ''));
-        $source_meta_title = Str::trim((string) Arr::get($source_row, 'meta_title', $source_name));
+        $source_description      = Str::trim((string) Arr::get($source_row, 'description', ''));
+        $source_meta_title       = Str::trim((string) Arr::get($source_row, 'meta_title', $source_name));
         $source_meta_description = Str::trim((string) Arr::get($source_row, 'meta_description', $source_description));
-        $source_meta_keywords = Str::trim((string) Arr::get($source_row, 'meta_keywords', ''));
+        $source_meta_keywords    = Str::trim((string) Arr::get($source_row, 'meta_keywords', ''));
 
         $translated_rows = [];
 
@@ -202,13 +202,13 @@ final class ProductImportPayloadTranslationService
             }
 
             $translated_rows[] = [
-                'product_id' => Arr::get($payload, 'product.product_id'),
+                'product_id'         => Arr::get($payload, 'product.product_id'),
                 'shop_language_code' => $language_code,
-                'name' => $row_name,
-                'description' => $row_description,
-                'meta_title' => $row_meta_title,
-                'meta_description' => $row_meta_description,
-                'meta_keywords' => $row_meta_keywords,
+                'name'               => $row_name,
+                'description'        => $row_description,
+                'meta_title'         => $row_meta_title,
+                'meta_description'   => $row_meta_description,
+                'meta_keywords'      => $row_meta_keywords,
             ];
         }
 
@@ -254,13 +254,13 @@ final class ProductImportPayloadTranslationService
         $translated_rows = [];
 
         foreach ($by_attribute_name as $attribute_name => $rows_by_language) {
-            $source_row = $rows_by_language[$source_language_code] ?? Arr::first($rows_by_language) ?? [];
-            $source_text = Str::trim((string) Arr::get($source_row, 'attribute_text', Arr::get($source_row, 'text', '')));
+            $source_row          = $rows_by_language[$source_language_code] ?? Arr::first($rows_by_language) ?? [];
+            $source_text         = Str::trim((string) Arr::get($source_row, 'attribute_text', Arr::get($source_row, 'text', '')));
             $attribute_id_for_ai = max(abs(crc32(Str::lower((string) $attribute_name))), 1);
 
             foreach ($language_codes as $language_code) {
                 $existing_row = $rows_by_language[$language_code] ?? [];
-                $row_text = Str::trim((string) Arr::get($existing_row, 'attribute_text', Arr::get($existing_row, 'text', '')));
+                $row_text     = Str::trim((string) Arr::get($existing_row, 'attribute_text', Arr::get($existing_row, 'text', '')));
 
                 if ($row_text === '' && $source_text !== '') {
                     $row_text = $this->translateProductAttributeTextForLanguage(
@@ -273,10 +273,10 @@ final class ProductImportPayloadTranslationService
                 }
 
                 $translated_rows[] = [
-                    'product_id' => Arr::get($payload, 'product.product_id'),
-                    'attribute_name' => $attribute_name,
+                    'product_id'         => Arr::get($payload, 'product.product_id'),
+                    'attribute_name'     => $attribute_name,
                     'shop_language_code' => $language_code,
-                    'attribute_text' => $row_text,
+                    'attribute_text'     => $row_text,
                 ];
             }
         }
@@ -295,9 +295,9 @@ final class ProductImportPayloadTranslationService
             return max((int) $product_id, 1);
         }
 
-        $sku = (string) Arr::get($payload, 'product.sku', '');
+        $sku   = (string) Arr::get($payload, 'product.sku', '');
         $model = (string) Arr::get($payload, 'product.model', '');
-        $seed = Str::trim($sku.'|'.$model.'|'.$product_id);
+        $seed  = Str::trim($sku.'|'.$model.'|'.$product_id);
 
         if ($seed === '') {
             return 1;
@@ -379,17 +379,17 @@ final class ProductImportPayloadTranslationService
     ): string {
         try {
             return match ($method) {
-                'productName' => $this->ai_translation_service->productName($product_id_for_ai, $prompt),
-                'productDescription' => $this->ai_translation_service->productDescription($product_id_for_ai, $prompt),
+                'productName'          => $this->ai_translation_service->productName($product_id_for_ai, $prompt),
+                'productDescription'   => $this->ai_translation_service->productDescription($product_id_for_ai, $prompt),
                 'productAttributeText' => $this->ai_translation_service->productAttributeText($product_id_for_ai, (int) $attribute_id_for_ai, $prompt),
-                default => $fallback,
+                default                => $fallback,
             };
         } catch (Throwable $exception) {
             Log::channel('stack')->warning('AI translation failed, fallback is used', [
-                'method' => $method,
-                'product_id_for_ai' => $product_id_for_ai,
+                'method'              => $method,
+                'product_id_for_ai'   => $product_id_for_ai,
                 'attribute_id_for_ai' => $attribute_id_for_ai,
-                'exception' => $exception->getMessage(),
+                'exception'           => $exception->getMessage(),
             ]);
 
             return $fallback;

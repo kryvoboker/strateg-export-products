@@ -13,11 +13,6 @@ class ShopForm
 {
     use CommonTextFormTrait, ToggleCheckboxFormTrait;
 
-    /**
-     * @param Schema $schema
-     *
-     * @return Schema
-     */
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -58,6 +53,22 @@ class ShopForm
                     'label'       => __('admin/shops/shops.labels.part_api_url_export_prods'),
                     'helper_text' => __('admin/shops/shops.helpers.part_api_url_export_prods'),
                     'placeholder' => '/export/products',
+                    'required'    => false,
+                ]),
+
+                self::getTextFormField([
+                    'field_name'  => 'part_api_url_restore_prods',
+                    'label'       => __('admin/shops/shops.labels.part_api_url_restore_prods'),
+                    'helper_text' => __('admin/shops/shops.helpers.part_api_url_restore_prods'),
+                    'placeholder' => '/restore/products',
+                    'required'    => false,
+                ]),
+
+                self::getTextFormField([
+                    'field_name'  => 'part_api_url_update_prods',
+                    'label'       => __('admin/shops/shops.labels.part_api_url_update_prods'),
+                    'helper_text' => __('admin/shops/shops.helpers.part_api_url_update_prods'),
+                    'placeholder' => '/update/products',
                     'required'    => false,
                 ]),
 

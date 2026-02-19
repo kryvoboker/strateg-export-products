@@ -37,7 +37,7 @@ class ProductNameAiTranslatorService extends AiDbCachedTranslatorAbstract
         if ($product_hash === null) {
             $product_hash = ProductNameHash::create([
                 'product_id' => $this->product_id,
-                'hash' => $hash,
+                'hash'       => $hash,
             ]);
         }
 

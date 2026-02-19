@@ -9,11 +9,6 @@ use Filament\Forms\Components\TextInput;
 
 trait SortOrderFormTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getSortOrderFormField(array $params = []): Field
     {
         return TextInput::make('sort_order')

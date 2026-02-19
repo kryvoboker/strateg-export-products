@@ -30,14 +30,14 @@ class CategoryForm
                                     ->label(__('admin/categories/categories.labels.name'))
                                     ->required()
                                     ->maxLength(255)
-                                    ->default(fn($record): string => $record instanceof Category
-                                        ? (string)($record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '')
+                                    ->default(fn ($record): string => $record instanceof Category
+                                        ? (string) ($record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '')
                                         : '')
                                     ->columnSpan(1),
 
                                 Select::make('parent_id')
                                     ->label(__('admin/categories/categories.labels.parent'))
-                                    ->options(fn($record): array => self::getParentCategoryOptions($record))
+                                    ->options(fn ($record): array => self::getParentCategoryOptions($record))
                                     ->searchable()
                                     ->preload()
                                     ->placeholder(__('admin/default.placeholders.select_parent_category'))
@@ -51,7 +51,7 @@ class CategoryForm
 
                                 Select::make('shop_ids')
                                     ->label(__('admin/categories/categories.labels.shops'))
-                                    ->options(fn(): array => Shop::query()
+                                    ->options(fn (): array => Shop::query()
                                         ->where('is_active', true)
                                         ->orderBy('name')
                                         ->pluck('name', 'id')
@@ -59,8 +59,8 @@ class CategoryForm
                                     ->multiple()
                                     ->searchable()
                                     ->preload()
-                                    ->default(fn($record): array => $record instanceof Category
-                                        ? $record->shops()->pluck('shops.id')->map(static fn($shop_id): int => (int)$shop_id)->all()
+                                    ->default(fn ($record): array => $record instanceof Category
+                                        ? $record->shops()->pluck('shops.id')->map(static fn ($shop_id): int => (int) $shop_id)->all()
                                         : [])
                                     ->columnSpan(1),
 
@@ -78,16 +78,16 @@ class CategoryForm
      */
     public static function getParentCategoryOptions(mixed $record): array
     {
-        $current_category_id = $record instanceof Category ? (int)$record->id : 0;
+        $current_category_id = $record instanceof Category ? (int) $record->id : 0;
         $categories          = Category::query()
             ->with([
-                'descriptions' => static fn($query) => $query
+                'descriptions' => static fn ($query) => $query
                     ->orderByRaw('shop_language_id IS NULL DESC')
-                    ->orderBy('id')
+                    ->orderBy('id'),
             ])
             ->when(
                 $current_category_id > 0,
-                static fn($query) => $query->where('id', '!=', $current_category_id),
+                static fn ($query) => $query->where('id', '!=', $current_category_id),
             )
             ->orderBy('parent_id')
             ->orderBy('sort_order')
@@ -96,21 +96,21 @@ class CategoryForm
 
         $name_by_id = [];
         foreach ($categories as $category) {
-            $name_by_id[(int)$category->id] = (string)(
+            $name_by_id[(int) $category->id] = (string) (
                 Arr::get($category->descriptions->first(), 'name')
-                ?? ('#' . (int)$category->id)
+                ?? ('#'.(int) $category->id)
             );
         }
 
         $options = [];
 
         $append_options = function (int $parent_id, string $prefix) use (&$append_options, &$options, $categories, $name_by_id): void {
-            $children = $categories->filter(static fn(Category $category): bool => (int)($category->parent_id ?? 0) === $parent_id);
+            $children = $categories->filter(static fn (Category $category): bool => (int) ($category->parent_id ?? 0) === $parent_id);
 
             foreach ($children as $child) {
-                $child_id           = (int)$child->id;
-                $options[$child_id] = $prefix . ($name_by_id[$child_id] ?? ('#' . $child_id));
-                $append_options($child_id, $prefix . '  ');
+                $child_id           = (int) $child->id;
+                $options[$child_id] = $prefix.($name_by_id[$child_id] ?? ('#'.$child_id));
+                $append_options($child_id, $prefix.'  ');
             }
         };
 
@@ -121,12 +121,12 @@ class CategoryForm
 
     public static function syncCategoryAdditionalData(Category $category, array $data): void
     {
-        $category_name = trim((string)Arr::get($data, 'category_name', ''));
+        $category_name = trim((string) Arr::get($data, 'category_name', ''));
 
         if ($category_name !== '') {
             CategoryDescription::query()->updateOrCreate(
                 [
-                    'category_id'      => (int)$category->id,
+                    'category_id'      => (int) $category->id,
                     'shop_language_id' => null,
                 ],
                 [
@@ -141,8 +141,8 @@ class CategoryForm
         }
 
         $shop_ids = collect(Arr::get($data, 'shop_ids', []))
-            ->map(static fn($shop_id): int => (int)$shop_id)
-            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
+            ->map(static fn ($shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
             ->unique()
             ->values()
             ->all();

@@ -6,6 +6,21 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
+/**
+ * Force testing environment for `php artisan test` command.
+ */
+$argv_command = $argv[1] ?? null;
+
+if ($argv_command === 'test') {
+    $_ENV['APP_ENV']        = 'testing';
+    $_SERVER['APP_ENV']     = 'testing';
+    $_ENV['APP_CONFIG_CACHE']    = '/tmp/strateg-export-products-config-testing.php';
+    $_SERVER['APP_CONFIG_CACHE'] = '/tmp/strateg-export-products-config-testing.php';
+
+    putenv('APP_ENV=testing');
+    putenv('APP_CONFIG_CACHE=/tmp/strateg-export-products-config-testing.php');
+}
+
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
 

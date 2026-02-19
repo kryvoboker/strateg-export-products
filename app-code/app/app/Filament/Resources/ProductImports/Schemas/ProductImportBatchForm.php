@@ -51,12 +51,12 @@ class ProductImportBatchForm
                             ->label(__('admin/product_imports/batches.tabs.google_sheets'))
                             ->schema([
                                 self::getUrlFormField([
-                                    'field_name' => 'sheets_url',
-                                    'label' => __('admin/product_imports/batches.labels.google_sheets_url'),
-                                    'placeholder' => 'https://docs.google.com/spreadsheets/d/...',
-                                    'max_length' => 2000,
-                                    'rules' => ['nullable', 'url', 'max:2000'],
-                                    'required' => false,
+                                    'field_name'          => 'sheets_url',
+                                    'label'               => __('admin/product_imports/batches.labels.google_sheets_url'),
+                                    'placeholder'         => 'https://docs.google.com/spreadsheets/d/...',
+                                    'max_length'          => 2000,
+                                    'rules'               => ['nullable', 'url', 'max:2000'],
+                                    'required'            => false,
                                     'is_column_span_full' => true,
                                 ]),
                             ]),

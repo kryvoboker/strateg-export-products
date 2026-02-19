@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Products\Schemas;
 
 use App\Models\Attributes\Attribute;
-use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandShop;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryShop;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
@@ -22,9 +25,9 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
-use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
@@ -47,9 +50,9 @@ class ProductForm
                                     ->default(fn (?Product $record): ?int => self::resolveBoundShopId($record))
                                     ->live()
                                     ->afterStateUpdated(function ($state, callable $set, callable $get): void {
-                                        $shop_id = (int) ($state ?? 0);
-                                        $product_id = (int) ($get('product_id') ?? 0);
-                                        $language_options = self::getShopLanguageOptions($shop_id);
+                                        $shop_id              = (int) ($state ?? 0);
+                                        $product_id           = (int) ($get('product_id') ?? 0);
+                                        $language_options     = self::getShopLanguageOptions($shop_id);
                                         $selected_language_id = (int) ($get('bind_shop_language_id') ?? 0);
                                         $set('external_product_id', self::resolveExternalProductIdForProductAndShop($product_id, $shop_id));
 
@@ -72,17 +75,37 @@ class ProductForm
                                     ->dehydrated(false),
                                 TextInput::make('model')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.model'))
+                                    ->disabled()
+                                    ->dehydrated(false)
                                     ->maxLength(255),
                                 TextInput::make('sku')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.sku'))
                                     ->maxLength(255),
                                 TextInput::make('ean')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.ean'))
+                                    ->disabled()
+                                    ->dehydrated(false)
                                     ->maxLength(255),
                                 TextInput::make('external_product_id')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.external_product_id'))
                                     ->numeric()
                                     ->visible(fn (callable $get): bool => (int) ($get('bind_shop_id') ?? 0) > 0),
+                                Select::make('manufacturer_id')
+                                    ->label('Manufacturer')
+                                    ->options(fn (callable $get): array => self::getManufacturerOptionsByScope(
+                                        (int) ($get('bind_shop_id') ?? 0),
+                                        (int) ($get('bind_shop_language_id') ?? 0),
+                                    ))
+                                    ->searchable()
+                                    ->preload(),
+                                Select::make('brand_id')
+                                    ->label('Brand')
+                                    ->options(fn (callable $get): array => self::getBrandOptionsByScope(
+                                        (int) ($get('bind_shop_id') ?? 0),
+                                        (int) ($get('bind_shop_language_id') ?? 0),
+                                    ))
+                                    ->searchable()
+                                    ->preload(),
                                 TextInput::make('quantity')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.quantity'))
                                     ->numeric(),
@@ -131,7 +154,7 @@ class ProductForm
                                 Select::make('category_source_scope')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.source_scope'))
                                     ->options([
-                                        'all' => __('admin/product_imports/batches.product_edit.source_scopes.all'),
+                                        'all'  => __('admin/product_imports/batches.product_edit.source_scopes.all'),
                                         'shop' => __('admin/product_imports/batches.product_edit.source_scopes.shop'),
                                     ])
                                     ->default('shop')
@@ -159,7 +182,7 @@ class ProductForm
                                 Select::make('attribute_source_scope')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.source_scope'))
                                     ->options([
-                                        'all' => __('admin/product_imports/batches.product_edit.source_scopes.all'),
+                                        'all'  => __('admin/product_imports/batches.product_edit.source_scopes.all'),
                                         'shop' => __('admin/product_imports/batches.product_edit.source_scopes.shop'),
                                     ])
                                     ->default('shop')
@@ -246,13 +269,13 @@ class ProductForm
         return [
             Section::make(__('admin/products/products.api_update.sections.product'))
                 ->schema([
-                    self::makeApiUpdateModeToggle('api_update_modes.product.model', __('admin/product_imports/batches.product_edit.fields.model')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.sku', __('admin/product_imports/batches.product_edit.fields.sku')),
-                    self::makeApiUpdateModeToggle('api_update_modes.product.ean', __('admin/product_imports/batches.product_edit.fields.ean')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.quantity', __('admin/product_imports/batches.product_edit.fields.quantity')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.minimum', __('admin/product_imports/batches.product_edit.fields.minimum')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.image', __('admin/product_imports/batches.product_edit.fields.image')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.price', __('admin/product_imports/batches.product_edit.fields.price')),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.manufacturer', 'Manufacturer'),
+                    self::makeApiUpdateModeToggle('api_update_modes.product.brand', 'Brand'),
                     self::makeApiUpdateModeToggle('api_update_modes.product.is_active', __('admin/product_imports/batches.product_edit.fields.is_active')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.date_available', __('admin/product_imports/batches.product_edit.fields.date_available')),
                     self::makeApiUpdateModeToggle('api_update_modes.product.date_added', __('admin/product_imports/batches.product_edit.fields.date_added')),
@@ -326,17 +349,17 @@ class ProductForm
         return ToggleButtons::make($state_path)
             ->label($label)
             ->options([
-                'skip' => __('admin/products/products.api_update.actions.skip'),
+                'skip'   => __('admin/products/products.api_update.actions.skip'),
                 'delete' => __('admin/products/products.api_update.actions.delete'),
                 'update' => __('admin/products/products.api_update.actions.update'),
             ])
             ->colors([
-                'skip' => 'gray',
+                'skip'   => 'gray',
                 'delete' => 'danger',
                 'update' => 'success',
             ])
             ->icons([
-                'skip' => Heroicon::PauseCircle,
+                'skip'   => Heroicon::PauseCircle,
                 'delete' => Heroicon::Trash,
                 'update' => Heroicon::CheckCircle,
             ])
@@ -451,7 +474,7 @@ class ProductForm
         foreach ($shop_languages as $shop_language) {
             $shop_language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('description_language_' . $shop_language_id)
+            $tabs[] = Tab::make('description_language_'.$shop_language_id)
                 ->label((string) $shop_language->name)
                 ->badge((string) $shop_language->code)
                 ->schema([
@@ -500,7 +523,7 @@ class ProductForm
         foreach ($shop_languages as $shop_language) {
             $shop_language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('attribute_language_' . $shop_language_id)
+            $tabs[] = Tab::make('attribute_language_'.$shop_language_id)
                 ->label((string) $shop_language->name)
                 ->badge((string) $shop_language->code)
                 ->schema([
@@ -556,7 +579,7 @@ class ProductForm
         foreach ($shop_languages as $shop_language) {
             $shop_language_id = (int) $shop_language->id;
 
-            $tabs[] = Tab::make('seo_urls_language_' . $shop_language_id)
+            $tabs[] = Tab::make('seo_urls_language_'.$shop_language_id)
                 ->label((string) $shop_language->name)
                 ->badge((string) $shop_language->code)
                 ->schema([
@@ -635,7 +658,7 @@ class ProductForm
         return Category::query()
             ->orderBy('id')
             ->get()
-            ->mapWithKeys(static fn (Category $category): array => [(int) $category->id => '#' . (int) $category->id])
+            ->mapWithKeys(static fn (Category $category): array => [(int) $category->id => '#'.(int) $category->id])
             ->toArray();
     }
 
@@ -678,10 +701,96 @@ class ProductForm
             ->mapWithKeys(static function (Attribute $attribute): array {
                 $name = Str::trim((string) ($attribute->descriptions->first()?->name ?? ''));
                 if ($name === '') {
-                    $name = '#' . (int) $attribute->id;
+                    $name = '#'.(int) $attribute->id;
                 }
 
                 return [(int) $attribute->id => $name];
+            })
+            ->toArray();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function getManufacturerOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    {
+        $default_language_id = $shop_language_id > 0
+            ? $shop_language_id
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+
+        $query = Manufacturer::query()
+            ->with(['descriptions' => static function ($query) use ($default_language_id): void {
+                if ($default_language_id > 0) {
+                    $query->where('shop_language_id', $default_language_id);
+                }
+            }]);
+
+        if ($shop_id > 0) {
+            $shop_manufacturer_ids = ManufacturerShop::query()
+                ->where('shop_id', $shop_id)
+                ->pluck('manufacturer_id')
+                ->map(static fn ($manufacturer_id): int => (int) $manufacturer_id)
+                ->all();
+
+            if ($shop_manufacturer_ids === []) {
+                return [];
+            }
+
+            $query->whereIn('id', $shop_manufacturer_ids);
+        }
+
+        return $query->orderBy('id')
+            ->get()
+            ->mapWithKeys(static function (Manufacturer $manufacturer): array {
+                $name = Str::trim((string) ($manufacturer->descriptions->first()?->name ?? ''));
+                if ($name === '') {
+                    $name = '#'.(int) $manufacturer->id;
+                }
+
+                return [(int) $manufacturer->id => $name];
+            })
+            ->toArray();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function getBrandOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    {
+        $default_language_id = $shop_language_id > 0
+            ? $shop_language_id
+            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+
+        $query = Brand::query()
+            ->with(['descriptions' => static function ($query) use ($default_language_id): void {
+                if ($default_language_id > 0) {
+                    $query->where('shop_language_id', $default_language_id);
+                }
+            }]);
+
+        if ($shop_id > 0) {
+            $shop_brand_ids = BrandShop::query()
+                ->where('shop_id', $shop_id)
+                ->pluck('brand_id')
+                ->map(static fn ($brand_id): int => (int) $brand_id)
+                ->all();
+
+            if ($shop_brand_ids === []) {
+                return [];
+            }
+
+            $query->whereIn('id', $shop_brand_ids);
+        }
+
+        return $query->orderBy('id')
+            ->get()
+            ->mapWithKeys(static function (Brand $brand): array {
+                $name = Str::trim((string) ($brand->descriptions->first()?->name ?? ''));
+                if ($name === '') {
+                    $name = '#'.(int) $brand->id;
+                }
+
+                return [(int) $brand->id => $name];
             })
             ->toArray();
     }

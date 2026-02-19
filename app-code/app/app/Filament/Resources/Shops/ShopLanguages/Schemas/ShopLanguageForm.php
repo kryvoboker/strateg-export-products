@@ -13,11 +13,6 @@ class ShopLanguageForm
 {
     use CommonTextFormTrait, ToggleCheckboxFormTrait;
 
-    /**
-     * @param Schema $schema
-     *
-     * @return Schema
-     */
     public static function configure(Schema $schema): Schema
     {
         return $schema

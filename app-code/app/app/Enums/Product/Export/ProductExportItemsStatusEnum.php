@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums\Product\Export;
 
-enum ProductExportItemsStatusEnum:string
+enum ProductExportItemsStatusEnum: string
 {
     case PROCESSING     = 'processing'; // item is currently being processed
     case FAILED         = 'failed';

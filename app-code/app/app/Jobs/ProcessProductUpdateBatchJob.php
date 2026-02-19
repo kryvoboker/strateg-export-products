@@ -9,16 +9,23 @@ use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandDescription;
+use App\Models\Brands\BrandShop;
 use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerDescription;
+use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Product;
-use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductDescription;
+use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductImage;
 use App\Models\Products\ProductShop;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Products\Updates\ProductBackups;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
@@ -55,6 +62,8 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             'Minimum',
             'Image',
             'Price',
+            'Manufacturer',
+            'Brand',
             'Is Active',
             'Date Available',
             'Date Added',
@@ -122,6 +131,16 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
     ];
 
     public function __construct(public int $product_update_batch_id) {}
+
+    /**
+     * @var array<string, int>
+     */
+    private array $manufacturer_id_cache_by_name = [];
+
+    /**
+     * @var array<string, int>
+     */
+    private array $brand_id_cache_by_name = [];
 
     public function handle(): void
     {
@@ -398,12 +417,12 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                 $unique_values = $this->extractUniqueValuesFromProductRow($product_row);
 
                 if ($this->isAllUniqueValuesEmpty($unique_values)) {
-                        $this->createFailedUpdateItem(
-                            $product_update_batch_id,
-                            (int) $row_number,
-                            $product_row,
-                            'Missing unique values in Product row. Required at least one: product_id, external_product_id, model, ean.'
-                        );
+                    $this->createFailedUpdateItem(
+                        $product_update_batch_id,
+                        (int) $row_number,
+                        $product_row,
+                        'Missing unique values in Product row. Required at least one: product_id, external_product_id, model, ean.'
+                    );
 
                     Log::channel('stack')->warning('Product update row skipped because unique values are empty', [
                         'product_update_batch_id' => $product_update_batch_id,
@@ -449,6 +468,11 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                     $resolved_product_id,
                     $resolved_shop_id,
                     Arr::get($row_instructions, 'Product Attribute.fields', [])
+                );
+                $this->applyLocalManufacturerBrandUpdates(
+                    $resolved_product_id,
+                    $resolved_shop_id,
+                    Arr::get($row_instructions, 'Product.fields', [])
                 );
                 $this->applyLocalSeoUrlUpdates(
                     $resolved_product_id,
@@ -499,11 +523,11 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
      */
     private function extractUniqueValuesFromProductRow(array $product_row): array
     {
-        $product_id          = Str::trim((string) ($product_row[$this->normalizeHeaderKey('Product Id')] ?? ''));
-        $shop_id             = Str::trim((string) ($product_row[$this->normalizeHeaderKey('Shop Id')] ?? ''));
-        $external_product_id = Str::trim((string) ($product_row[$this->normalizeHeaderKey('External Product Id')] ?? ''));
-        $model               = Str::trim((string) ($product_row[$this->normalizeHeaderKey('Model')] ?? ''));
-        $ean                 = Str::trim((string) ($product_row[$this->normalizeHeaderKey('EAN')] ?? ''));
+        $product_id          = $this->normalizeLookupIdentifierValue((string) ($product_row[$this->normalizeHeaderKey('Product Id')] ?? ''));
+        $shop_id             = $this->normalizeLookupIdentifierValue((string) ($product_row[$this->normalizeHeaderKey('Shop Id')] ?? ''));
+        $external_product_id = $this->normalizeLookupIdentifierValue((string) ($product_row[$this->normalizeHeaderKey('External Product Id')] ?? ''));
+        $model               = $this->normalizeLookupIdentifierValue((string) ($product_row[$this->normalizeHeaderKey('Model')] ?? ''));
+        $ean                 = $this->normalizeLookupIdentifierValue((string) ($product_row[$this->normalizeHeaderKey('EAN')] ?? ''));
 
         return [
             'product_id'          => $product_id,
@@ -678,15 +702,8 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                     continue;
                 }
 
-                $raw_value = Str::trim((string) ($sheet_row[$normalized_header] ?? ''));
-                $is_unique = in_array($normalized_header, [
-                    $this->normalizeHeaderKey('Product Id'),
-                    $this->normalizeHeaderKey('External Product Id'),
-                    $this->normalizeHeaderKey('Model'),
-                    $this->normalizeHeaderKey('EAN'),
-                ], true);
-
-                $sheet_field_instructions[$normalized_header] = $this->buildFieldInstruction($raw_value, $is_unique);
+                $raw_value                                    = Str::trim((string) ($sheet_row[$normalized_header] ?? ''));
+                $sheet_field_instructions[$normalized_header] = $this->buildFieldInstruction($raw_value);
             }
 
             if ($sheet_field_instructions !== []) {
@@ -702,25 +719,18 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
     /**
      * @return array{action:string,value:mixed}
      */
-    private function buildFieldInstruction(string $raw_value, bool $is_unique): array
+    private function buildFieldInstruction(string $raw_value): array
     {
         if (preg_match('/^\s*[xх]\s*$/iu', $raw_value) === 1) {
             return [
-                'action' => 'no_change',
+                'action' => 'delete',
                 'value'  => null,
             ];
         }
 
         if ($raw_value === '') {
-            if ($is_unique) {
-                return [
-                    'action' => 'skip',
-                    'value'  => null,
-                ];
-            }
-
             return [
-                'action' => 'delete',
+                'action' => 'no_change',
                 'value'  => null,
             ];
         }
@@ -729,6 +739,17 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             'action' => 'set',
             'value'  => $raw_value,
         ];
+    }
+
+    private function normalizeLookupIdentifierValue(string $raw_value): string
+    {
+        $normalized_value = Str::trim($raw_value);
+
+        if (preg_match('/^\s*[xх]\s*$/iu', $normalized_value) === 1) {
+            return '';
+        }
+
+        return $normalized_value;
     }
 
     /**
@@ -748,7 +769,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             if (! is_array($instruction)) {
                 continue;
             }
-            $action      = (string) ($instruction['action'] ?? 'skip');
+            $action = (string) ($instruction['action'] ?? 'skip');
 
             if ($action === 'skip' || $action === 'no_change') {
                 continue;
@@ -1074,6 +1095,104 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
     }
 
     /**
+     * @param  array<string,array{action:string,value:mixed}>  $product_fields
+     */
+    private function applyLocalManufacturerBrandUpdates(int $product_id, int $resolved_shop_id, array $product_fields): void
+    {
+        if ($product_id <= 0 || $product_fields === []) {
+            return;
+        }
+
+        $manufacturer_instruction = $this->resolveSheetFieldInstruction(
+            $product_fields,
+            $this->normalizeHeaderKey('Manufacturer')
+        );
+        $brand_instruction = $this->resolveSheetFieldInstruction(
+            $product_fields,
+            $this->normalizeHeaderKey('Brand')
+        );
+
+        if (! is_array($manufacturer_instruction) && ! is_array($brand_instruction)) {
+            return;
+        }
+
+        $default_shop_language_id = $this->resolveDefaultShopLanguageId($resolved_shop_id);
+
+        $existing_binding = ProductToManufacturerBrand::query()
+            ->where('product_id', $product_id)
+            ->first();
+
+        $manufacturer_id = (int) ($existing_binding?->manufacturer_id ?? 0);
+        $brand_id        = (int) ($existing_binding?->brand_id ?? 0);
+
+        if (is_array($manufacturer_instruction)) {
+            $manufacturer_action = (string) ($manufacturer_instruction['action'] ?? 'skip');
+            if ($manufacturer_action === 'delete') {
+                $manufacturer_id = 0;
+            } elseif ($manufacturer_action === 'set') {
+                $manufacturer_name = Str::trim((string) ($manufacturer_instruction['value'] ?? ''));
+                $manufacturer_id   = $manufacturer_name !== ''
+                    ? $this->resolveOrCreateManufacturerIdByName($manufacturer_name, $default_shop_language_id)
+                    : 0;
+            }
+        }
+
+        if (is_array($brand_instruction)) {
+            $brand_action = (string) ($brand_instruction['action'] ?? 'skip');
+            if ($brand_action === 'delete') {
+                $brand_id = 0;
+            } elseif ($brand_action === 'set') {
+                $brand_name = Str::trim((string) ($brand_instruction['value'] ?? ''));
+                $brand_id   = $brand_name !== ''
+                    ? $this->resolveOrCreateBrandIdByName($brand_name, $default_shop_language_id)
+                    : 0;
+            }
+        }
+
+        if ($manufacturer_id <= 0 && $brand_id <= 0) {
+            ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->delete();
+
+            return;
+        }
+
+        ProductToManufacturerBrand::query()->updateOrCreate(
+            [
+                'product_id' => $product_id,
+            ],
+            [
+                'manufacturer_id' => $manufacturer_id > 0 ? $manufacturer_id : null,
+                'brand_id'        => $brand_id > 0 ? $brand_id : null,
+            ]
+        );
+
+        if ($resolved_shop_id > 0 && $manufacturer_id > 0) {
+            ManufacturerShop::query()->firstOrCreate(
+                [
+                    'manufacturer_id' => $manufacturer_id,
+                    'shop_id'         => $resolved_shop_id,
+                ],
+                [
+                    'external_manufacturer_id' => null,
+                ]
+            );
+        }
+
+        if ($resolved_shop_id > 0 && $brand_id > 0) {
+            BrandShop::query()->firstOrCreate(
+                [
+                    'brand_id' => $brand_id,
+                    'shop_id'  => $resolved_shop_id,
+                ],
+                [
+                    'external_brand_id' => null,
+                ]
+            );
+        }
+    }
+
+    /**
      * @param  array<string,array{action:string,value:mixed}>  $seo_fields
      */
     private function applyLocalSeoUrlUpdates(int $product_id, int $resolved_shop_id, array $seo_fields): void
@@ -1373,6 +1492,62 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         );
 
         return $attribute_id;
+    }
+
+    private function resolveOrCreateManufacturerIdByName(string $manufacturer_name, int $shop_language_id): int
+    {
+        $clean_name = Str::trim($manufacturer_name);
+        if ($clean_name === '') {
+            return 0;
+        }
+
+        $cache_key = Str::lower($clean_name).':'.$shop_language_id;
+        if (array_key_exists($cache_key, $this->manufacturer_id_cache_by_name)) {
+            return $this->manufacturer_id_cache_by_name[$cache_key];
+        }
+
+        $manufacturer_id = ManufacturerDescription::findManufacturerIdByNameForLanguage($clean_name, $shop_language_id);
+        if ($manufacturer_id <= 0) {
+            $manufacturer = Manufacturer::query()->create([
+                'sort_order' => 1,
+                'is_active'  => true,
+            ]);
+
+            $manufacturer_id = (int) $manufacturer->id;
+        }
+
+        ManufacturerDescription::upsertName($manufacturer_id, $shop_language_id, $clean_name);
+        $this->manufacturer_id_cache_by_name[$cache_key] = $manufacturer_id;
+
+        return $manufacturer_id;
+    }
+
+    private function resolveOrCreateBrandIdByName(string $brand_name, int $shop_language_id): int
+    {
+        $clean_name = Str::trim($brand_name);
+        if ($clean_name === '') {
+            return 0;
+        }
+
+        $cache_key = Str::lower($clean_name).':'.$shop_language_id;
+        if (array_key_exists($cache_key, $this->brand_id_cache_by_name)) {
+            return $this->brand_id_cache_by_name[$cache_key];
+        }
+
+        $brand_id = BrandDescription::findBrandIdByNameForLanguage($clean_name, $shop_language_id);
+        if ($brand_id <= 0) {
+            $brand = Brand::query()->create([
+                'sort_order' => 1,
+                'is_active'  => true,
+            ]);
+
+            $brand_id = (int) $brand->id;
+        }
+
+        BrandDescription::upsertName($brand_id, $shop_language_id, $clean_name);
+        $this->brand_id_cache_by_name[$cache_key] = $brand_id;
+
+        return $brand_id;
     }
 
     private function normalizeValueByType(string $type, mixed $value): mixed

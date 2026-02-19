@@ -16,6 +16,7 @@ class SeoUrl extends Model
         'seoable_type',
         'seoable_id',
         'shop_language_id',
+        'query_key',
         'query_value',
         'keyword',
         'sort_order',
@@ -27,9 +28,9 @@ class SeoUrl extends Model
     protected function casts(): array
     {
         return [
-            'seoable_id' => 'integer',
+            'seoable_id'       => 'integer',
             'shop_language_id' => 'integer',
-            'sort_order' => 'integer',
+            'sort_order'       => 'integer',
         ];
     }
 
@@ -50,7 +51,7 @@ class SeoUrl extends Model
     }
 
     /**
-     * @param list<int> $shop_language_ids
+     * @param  list<int>  $shop_language_ids
      * @return Collection<int, self>
      */
     public static function getForSeoableAndLanguageIds(string $seoable_type, int $seoable_id, array $shop_language_ids = []): Collection

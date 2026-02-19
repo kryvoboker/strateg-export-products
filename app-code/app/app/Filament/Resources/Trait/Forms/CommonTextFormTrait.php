@@ -9,11 +9,6 @@ use Filament\Forms\Components\TextInput;
 
 trait CommonTextFormTrait
 {
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getTextFormField(array $params = []): Field
     {
         $max_length = self::processGetMaxLength($params);
@@ -38,11 +33,6 @@ trait CommonTextFormTrait
         return $text_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getEmailFormField(array $params = []): Field
     {
         $max_length = self::processGetMaxLength($params);
@@ -69,11 +59,6 @@ trait CommonTextFormTrait
         return $text_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getTelFormField(array $params = []): Field
     {
         $max_length = self::processGetMaxLength($params);
@@ -85,7 +70,7 @@ trait CommonTextFormTrait
             ->placeholder($params['placeholder'] ?? '+380 (96) 690-64-12')
             ->regex($params['regex'] ?? config('app.regex_validate_conditions.telephone'))
             ->tel()
-            ->rules($params['rules'] ?? ['nullable', 'string', "max:$max_length", 'regex:' . config('app.regex_validate_conditions.telephone')])
+            ->rules($params['rules'] ?? ['nullable', 'string', "max:$max_length", 'regex:'.config('app.regex_validate_conditions.telephone')])
             ->required($params['required'] ?? false)
             ->default($params['default'] ?? null);
 
@@ -100,11 +85,6 @@ trait CommonTextFormTrait
         return $text_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return Field
-     */
     protected static function getUrlFormField(array $params = []): Field
     {
         $max_length = self::processGetMaxLength($params);
@@ -129,16 +109,11 @@ trait CommonTextFormTrait
         return $text_input;
     }
 
-    /**
-     * @param array $params
-     *
-     * @return int|null
-     */
     private static function processGetMaxLength(array $params): ?int
     {
         if (isset($params['max_length']) && is_numeric($params['max_length']) && $params['max_length'] > 0) {
-            $max_length = (int)$params['max_length'];
-        } else if (array_key_exists('max_length', $params) && $params['max_length'] === null) {
+            $max_length = (int) $params['max_length'];
+        } elseif (array_key_exists('max_length', $params) && $params['max_length'] === null) {
             $max_length = null;
         } else {
             $max_length = 255;

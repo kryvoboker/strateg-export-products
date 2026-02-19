@@ -31,7 +31,7 @@ class EditProductExternalProductIdTest extends TestCase
         $container->instance('config', new Repository([
             'database.db_prefix' => '',
         ]));
-        $container->instance('log', new class
+        $container->instance('log', new class()
         {
             public function channel(string $name = 'stack'): self
             {
@@ -45,9 +45,9 @@ class EditProductExternalProductIdTest extends TestCase
 
         self::$capsule = new Capsule();
         self::$capsule->addConnection([
-            'driver' => 'sqlite',
+            'driver'   => 'sqlite',
             'database' => ':memory:',
-            'prefix' => '',
+            'prefix'   => '',
         ]);
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
@@ -74,21 +74,21 @@ class EditProductExternalProductIdTest extends TestCase
     public function test_it_updates_external_product_id_only_for_selected_shop_binding(): void
     {
         ProductShop::query()->create([
-            'product_id' => 100,
-            'shop_id' => 10,
+            'product_id'          => 100,
+            'shop_id'             => 10,
             'external_product_id' => 555,
         ]);
 
         ProductShop::query()->create([
-            'product_id' => 100,
-            'shop_id' => 20,
+            'product_id'          => 100,
+            'shop_id'             => 20,
             'external_product_id' => 777,
         ]);
 
         $page = new EditProduct();
 
         $this->invokeSyncExternalProductIdForSelectedShop($page, 100, [
-            'bind_shop_id' => 10,
+            'bind_shop_id'        => 10,
             'external_product_id' => 9999,
         ]);
 
@@ -105,15 +105,15 @@ class EditProductExternalProductIdTest extends TestCase
     public function test_it_sets_external_product_id_to_null_when_value_is_empty(): void
     {
         ProductShop::query()->create([
-            'product_id' => 200,
-            'shop_id' => 11,
+            'product_id'          => 200,
+            'shop_id'             => 11,
             'external_product_id' => 333,
         ]);
 
         $page = new EditProduct();
 
         $this->invokeSyncExternalProductIdForSelectedShop($page, 200, [
-            'bind_shop_id' => 11,
+            'bind_shop_id'        => 11,
             'external_product_id' => '',
         ]);
 
@@ -123,7 +123,7 @@ class EditProductExternalProductIdTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function invokeSyncExternalProductIdForSelectedShop(EditProduct $page, int $product_id, array $data): void
     {
@@ -131,4 +131,3 @@ class EditProductExternalProductIdTest extends TestCase
         $method->invoke($page, $product_id, $data);
     }
 }
-
