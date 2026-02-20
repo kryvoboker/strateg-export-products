@@ -128,9 +128,6 @@ abstract class AiDbCachedTranslatorAbstract
         return $this;
     }
 
-    /**
-     * @return AiDbCachedTranslatorAbstract
-     */
     public function setProductId(?int $product_id): static
     {
         $this->product_id = $product_id;

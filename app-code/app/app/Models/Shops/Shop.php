@@ -46,7 +46,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<ShopLanguage>
+     * @return HasMany<ShopLanguage, $this>
      */
     public function shopLanguage(): HasMany
     {
@@ -54,7 +54,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<UserGroupToShop>
+     * @return HasMany<UserGroupToShop, $this>
      */
     public function userGroups(): HasMany
     {
@@ -62,7 +62,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<ProductShop>
+     * @return HasMany<ProductShop, $this>
      */
     public function productShops(): HasMany
     {
@@ -70,7 +70,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<AttributeShop>
+     * @return HasMany<AttributeShop, $this>
      */
     public function attributeShops(): HasMany
     {
@@ -78,7 +78,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<CategoryShop>
+     * @return HasMany<CategoryShop, $this>
      */
     public function categoryShops(): HasMany
     {
@@ -86,7 +86,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<ManufacturerShop>
+     * @return HasMany<ManufacturerShop, $this>
      */
     public function manufacturerShops(): HasMany
     {
@@ -94,7 +94,7 @@ class Shop extends Model
     }
 
     /**
-     * @return HasMany<BrandShop>
+     * @return HasMany<BrandShop, $this>
      */
     public function brandShops(): HasMany
     {

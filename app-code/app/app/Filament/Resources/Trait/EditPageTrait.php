@@ -11,7 +11,11 @@ trait EditPageTrait
 {
     public function getTitle(): Htmlable|string
     {
-        $attribute_name = $this->record->descriptions->first()?->name;
+        $record = $this->getRecord();
+
+        $attribute_name = method_exists($record, 'descriptions')
+            ? $record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name')
+            : null;
 
         if ($attribute_name === null) {
             return __('filament-panels::resources/pages/edit-record.title', [

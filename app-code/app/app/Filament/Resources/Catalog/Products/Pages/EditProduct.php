@@ -1011,7 +1011,7 @@ class EditProduct extends EditRecord
             ]);
         }
 
-        if ($resolved_attribute_id === null) {
+        if ($resolved_attribute_id <= 0) {
             throw ValidationException::withMessages([
                 'attributes_custom_by_language' => __('admin/product_imports/batches.product_edit.errors.invalid_attribute'),
             ]);
@@ -1247,8 +1247,8 @@ class EditProduct extends EditRecord
                 'manufacturer'   => (string) ($product->productToManufacturerBrand?->manufacturer?->descriptions->sortBy('id')->first()?->name ?? ''),
                 'brand'          => (string) ($product->productToManufacturerBrand?->brand?->descriptions->sortBy('id')->first()?->name ?? ''),
                 'is_active'      => (bool) $product->is_active,
-                'date_available' => $product->date_available?->toDateTimeString(),
-                'date_added'     => $product->date_added?->toDateTimeString(),
+                'date_available' => $this->normalizeDateTimeValue($product->date_available),
+                'date_added'     => $this->normalizeDateTimeValue($product->date_added),
             ],
             'description' => [
                 'name'             => collect($product_descriptions)->map(static fn (array $row): mixed => Arr::get($row, 'name'))->toArray(),
@@ -1505,5 +1505,20 @@ class EditProduct extends EditRecord
                 'update_finished_at'   => $processing_count > 0 ? null : now()->toDateTimeString(),
             ],
         ]);
+    }
+
+    private function normalizeDateTimeValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_object($value) && method_exists($value, 'toDateTimeString')) {
+            return (string) $value->toDateTimeString();
+        }
+
+        $clean_value = trim((string) $value);
+
+        return $clean_value !== '' ? $clean_value : null;
     }
 }

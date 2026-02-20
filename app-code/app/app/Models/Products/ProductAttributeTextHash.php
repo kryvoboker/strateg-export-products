@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Products;
 
-use App\Models\Attributes\ProductAttribute;
+use App\Models\Attributes\Attribute;
 use App\Models\Trait\OpenAiRelationsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,7 +32,7 @@ class ProductAttributeTextHash extends Model
     }
 
     /**
-     * @return BelongsTo<Product>
+     * @return BelongsTo<Product, $this>
      */
     public function product(): BelongsTo
     {
@@ -40,11 +40,11 @@ class ProductAttributeTextHash extends Model
     }
 
     /**
-     * @return BelongsTo<ProductAttribute>
+     * @return BelongsTo<Attribute, $this>
      */
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(ProductAttribute::class, 'attribute_id');
+        return $this->belongsTo(Attribute::class, 'attribute_id');
     }
 
     public static function getAttributeTextHash(int $product_id, int $attribute_id, string $hash): ?self

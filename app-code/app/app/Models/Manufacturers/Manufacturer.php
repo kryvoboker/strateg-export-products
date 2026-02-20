@@ -33,7 +33,7 @@ class Manufacturer extends Model
     }
 
     /**
-     * @return HasMany<ManufacturerDescription>
+     * @return HasMany<ManufacturerDescription, $this>
      */
     public function descriptions(): HasMany
     {
@@ -41,7 +41,7 @@ class Manufacturer extends Model
     }
 
     /**
-     * @return HasMany<ManufacturerShop>
+     * @return HasMany<ManufacturerShop, $this>
      */
     public function manufacturerShops(): HasMany
     {
@@ -49,7 +49,7 @@ class Manufacturer extends Model
     }
 
     /**
-     * @return HasMany<ProductToManufacturerBrand>
+     * @return HasMany<ProductToManufacturerBrand, $this>
      */
     public function productBindings(): HasMany
     {

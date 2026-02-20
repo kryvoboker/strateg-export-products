@@ -124,6 +124,7 @@ class CreateProductImportBatch extends CreateRecord
             'excel'  => $this->createBatchFromExcel($data),
             'google' => $this->createBatchFromGoogleSheets($data),
             'manual' => $this->createBatchFromManualForm($data),
+            default  => throw new \RuntimeException('Unsupported import mode: '.$mode),
         };
     }
 
@@ -214,7 +215,6 @@ class CreateProductImportBatch extends CreateRecord
                 'current_file'   => __FILE__,
                 'file'           => $e->getFile(),
                 'line'           => $e->getLine(),
-                'spreadsheet_id' => $extract_spreadsheet_id ?? null,
             ]);
 
             $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.google_sheet_fetch_failed'));
@@ -389,7 +389,6 @@ class CreateProductImportBatch extends CreateRecord
                 'current_file'   => __FILE__,
                 'file'           => $e->getFile(),
                 'line'           => $e->getLine(),
-                'spreadsheet_id' => $extract_spreadsheet_id ?? null,
             ]);
 
             $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.excel_read_failed'));
@@ -552,10 +551,6 @@ class CreateProductImportBatch extends CreateRecord
         $normalized = [];
 
         foreach ($rows as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-
             $normalized[] = array_map(static fn ($cell) => is_scalar($cell) ? (string) $cell : '', array_values($row));
         }
 

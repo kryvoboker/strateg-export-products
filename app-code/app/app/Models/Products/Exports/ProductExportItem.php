@@ -66,8 +66,9 @@ class ProductExportItem extends Model
 
     public function scopeForBatchProductShop(Builder $query, int $batch_id, int $product_id, int $shop_id): Builder
     {
+        $query = $this->scopeForBatchable($query, ProductImportBatch::class, $batch_id);
+
         return $query
-            ->forBatchable(ProductImportBatch::class, $batch_id)
             ->where('product_id', $product_id)
             ->where('payload->shop_id', $shop_id);
     }

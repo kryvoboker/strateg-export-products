@@ -116,7 +116,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return BelongsTo<Shop>
+     * @return BelongsTo<Shop, $this>
      */
     public function shop(): BelongsTo
     {
@@ -124,7 +124,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return HasMany<ProductDescription>
+     * @return HasMany<ProductDescription, $this>
      */
     public function productDescriptions(): HasMany
     {
@@ -132,7 +132,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return HasMany<ProductToAttribute>
+     * @return HasMany<ProductToAttribute, $this>
      */
     public function productToAttributes(): HasMany
     {
@@ -140,7 +140,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return HasMany<AttributeDescription>
+     * @return HasMany<AttributeDescription, $this>
      */
     public function attributeDescriptions(): HasMany
     {
@@ -148,7 +148,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return HasMany<CategoryDescription>
+     * @return HasMany<CategoryDescription, $this>
      */
     public function categoryDescriptions(): HasMany
     {
@@ -156,7 +156,7 @@ class ShopLanguage extends Model
     }
 
     /**
-     * @return HasMany<SeoUrl>
+     * @return HasMany<SeoUrl, $this>
      */
     public function seoUrls(): HasMany
     {

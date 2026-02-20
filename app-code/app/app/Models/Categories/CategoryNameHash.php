@@ -29,7 +29,7 @@ class CategoryNameHash extends Model
     }
 
     /**
-     * @return BelongsTo<Category>
+     * @return BelongsTo<Category, $this>
      */
     public function category(): BelongsTo
     {

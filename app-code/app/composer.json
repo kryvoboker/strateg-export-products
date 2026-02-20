@@ -33,6 +33,7 @@
         "barryvdh/laravel-debugbar": "^3.16",
         "buggregator/trap": "^1.15",
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.9",
         "laravel/boost": "^1.8",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",

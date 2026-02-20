@@ -41,7 +41,7 @@ class ProductImportItem extends Model
     }
 
     /**
-     * @return HasOne<Product>
+     * @return HasOne<Product, $this>
      */
     public function product(): HasOne
     {

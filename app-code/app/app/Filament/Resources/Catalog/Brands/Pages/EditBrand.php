@@ -12,14 +12,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Livewire\Attributes\Locked;
 
 class EditBrand extends EditRecord
 {
     use EditPageTrait;
-
-    #[Locked]
-    public Model|int|string|null|Brand $record;
 
     protected static string $resource = BrandResource::class;
 
@@ -40,15 +36,18 @@ class EditBrand extends EditRecord
         return $data;
     }
 
-    protected function handleRecordUpdate(Model|Brand $record, array $data): Brand
+    protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $record->update([
+        /** @var Brand $brand */
+        $brand = $record;
+
+        $brand->update([
             'sort_order' => (int) Arr::get($data, 'sort_order', 1),
             'is_active'  => (bool) Arr::get($data, 'is_active', true),
         ]);
 
-        BrandForm::syncBrandAdditionalData($record, $data);
+        BrandForm::syncBrandAdditionalData($brand, $data);
 
-        return $record;
+        return $brand;
     }
 }

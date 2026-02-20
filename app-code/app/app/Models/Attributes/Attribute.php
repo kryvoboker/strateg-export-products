@@ -40,7 +40,7 @@ class Attribute extends Model
     }
 
     /**
-     * @return HasMany<AttributeDescription>
+     * @return HasMany<AttributeDescription, $this>
      */
     public function descriptions(): HasMany
     {
@@ -48,7 +48,7 @@ class Attribute extends Model
     }
 
     /**
-     * @return HasMany<ProductToAttribute>
+     * @return HasMany<ProductToAttribute, $this>
      */
     public function productToAttributes(): HasMany
     {
@@ -56,7 +56,7 @@ class Attribute extends Model
     }
 
     /**
-     * @return HasMany<AttributeShop>
+     * @return HasMany<AttributeShop, $this>
      */
     public function attributeShops(): HasMany
     {
@@ -64,7 +64,7 @@ class Attribute extends Model
     }
 
     /**
-     * @return HasMany<AttributeNameHash>
+     * @return HasMany<AttributeNameHash, $this>
      */
     public function nameHashes(): HasMany
     {

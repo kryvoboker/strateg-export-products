@@ -26,6 +26,7 @@ use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
+use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
 use App\Supports\Services\SeoSlug\EnSeoSlugService;
@@ -125,6 +126,15 @@ class ProcessProductImportBatchJob implements ShouldQueue
             ],
         ]);
 
+        Log::channel('stack')->info('Product import batch started with optional shop_id auto-binding support', [
+            'batch_id'     => (int) $batch->id,
+            'source_type'  => (string) $batch->source_type,
+            'source_name'  => (string) ($batch->source_name ?? ''),
+            'source_path'  => (string) ($batch->source_path ?? ''),
+            'source_shop'  => 'product.shop_id',
+            'autobind_job' => ProcessProductShopBindingJob::class,
+        ]);
+
         try {
             [$items_payloads, $failed_rows, $failed_details] = match ($batch->source_type) {
                 ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value   => $this->prepareItemsFromExcelBatch($batch),
@@ -221,10 +231,11 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         $payload = [
-            'product' => [
-                'product_id'     => null,
-                'model'          => Arr::get($raw_data, 'admin_model'),
-                'sku'            => Arr::get($raw_data, 'admin_sku'),
+                'product' => [
+                    'product_id'     => null,
+                    'shop_id'        => Arr::get($raw_data, 'admin_shop_id'),
+                    'model'          => Arr::get($raw_data, 'admin_model'),
+                    'sku'            => Arr::get($raw_data, 'admin_sku'),
                 'ean'            => Arr::get($raw_data, 'admin_ean'),
                 'quantity'       => Arr::get($raw_data, 'admin_quantity'),
                 'minimum'        => Arr::get($raw_data, 'admin_minimum'),
@@ -342,6 +353,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
             $payload = [
                 'product' => [
                     'product_id'     => null,
+                    'shop_id'        => Arr::get($product_assoc, $this->normalizeHeaderKey('Shop Id')),
                     'model'          => Arr::get($product_assoc, $this->normalizeHeaderKey('Model')),
                     'sku'            => Arr::get($product_assoc, $this->normalizeHeaderKey('SKU')),
                     'ean'            => Arr::get($product_assoc, $this->normalizeHeaderKey('EAN')),
@@ -522,7 +534,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
         $payload['seo_urls'] = array_values(array_filter(
             $seo_urls,
-            static fn ($seo_row) => is_array($seo_row) && Str::trim((string) Arr::get($seo_row, 'keyword', '')) !== ''
+            static fn ($seo_row) => Str::trim((string) Arr::get($seo_row, 'keyword', '')) !== ''
         ));
 
         return $payload;
@@ -748,6 +760,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
                             'error_message' => null,
                             'processed_at'  => now(),
                         ]);
+
+                        $this->dispatchAutoBindJobIfNeeded(
+                            $item,
+                            $normalized_payload,
+                            $resolved_product_id
+                        );
                     } catch (Throwable $exception) {
                         $item->update([
                             'status'        => ProductImportItemsStatusEnum::FAILED->value,
@@ -759,6 +777,111 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     }
                 }
             });
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function dispatchAutoBindJobIfNeeded(
+        ProductImportItem $product_import_item,
+        array $payload,
+        int $product_id
+    ): void {
+        if ($product_id <= 0) {
+            return;
+        }
+
+        $resolved_shop_id = $this->resolveAutoBindShopIdFromPayload($payload);
+
+        if ($resolved_shop_id <= 0) {
+            return;
+        }
+
+        try {
+            ProcessProductShopBindingJob::dispatch(
+                $product_id,
+                $resolved_shop_id,
+                (int) $product_import_item->product_import_batch_id,
+                $payload,
+                null,
+            );
+
+            Log::channel('stack')->info('Auto-bind job dispatched from import item payload', [
+                'batch_id'    => (int) $product_import_item->product_import_batch_id,
+                'item_id'     => (int) $product_import_item->id,
+                'product_id'  => $product_id,
+                'shop_id'     => $resolved_shop_id,
+                'row_number'  => $product_import_item->getSourceRowNumber(),
+                'source_path' => $product_import_item->getSourceFilePath(),
+            ]);
+        } catch (Throwable $exception) {
+            Log::channel('stack')->warning('Failed to dispatch auto-bind job from import item payload', [
+                'batch_id'    => (int) $product_import_item->product_import_batch_id,
+                'item_id'     => (int) $product_import_item->id,
+                'product_id'  => $product_id,
+                'shop_id'     => $resolved_shop_id,
+                'row_number'  => $product_import_item->getSourceRowNumber(),
+                'source_path' => $product_import_item->getSourceFilePath(),
+                'error_msg'   => $exception->getMessage(),
+                'file'        => $exception->getFile(),
+                'line'        => $exception->getLine(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function resolveAutoBindShopIdFromPayload(array $payload): int
+    {
+        $raw_shop_id = Str::trim((string) Arr::get($payload, 'product.shop_id', ''));
+
+        if ($raw_shop_id === '') {
+            return 0;
+        }
+
+        if (! ctype_digit($raw_shop_id)) {
+            Log::channel('stack')->warning('Product import auto-bind skipped due to invalid shop_id format', [
+                'shop_id'   => $raw_shop_id,
+                'row_number'=> Arr::get($payload, 'source_meta.row_number'),
+                'batch_id'  => Arr::get($payload, 'source_meta.batch_id'),
+                'path'      => Arr::get($payload, 'source_meta.path'),
+            ]);
+
+            return 0;
+        }
+
+        $shop_id = (int) $raw_shop_id;
+
+        if ($shop_id <= 0) {
+            Log::channel('stack')->warning('Product import auto-bind skipped due to non-positive shop_id', [
+                'shop_id'   => $shop_id,
+                'row_number'=> Arr::get($payload, 'source_meta.row_number'),
+                'batch_id'  => Arr::get($payload, 'source_meta.batch_id'),
+                'path'      => Arr::get($payload, 'source_meta.path'),
+            ]);
+
+            return 0;
+        }
+
+        try {
+            $shop_exists = Shop::query()->whereKey($shop_id)->exists();
+        } catch (Throwable) {
+            return 0;
+        }
+
+        if (! $shop_exists) {
+            Log::channel('stack')->warning('Product import auto-bind skipped because shop_id does not exist', [
+                'shop_id'   => $shop_id,
+                'row_number'=> Arr::get($payload, 'source_meta.row_number'),
+                'batch_id'  => Arr::get($payload, 'source_meta.batch_id'),
+                'path'      => Arr::get($payload, 'source_meta.path'),
+            ]);
+
+            return 0;
+        }
+
+        return $shop_id;
     }
 
     /**
@@ -1167,10 +1290,6 @@ class ProcessProductImportBatchJob implements ShouldQueue
             );
 
             $parent_category_id = $current_category_id;
-        }
-
-        if ($parent_category_id === null) {
-            return null;
         }
 
         $this->category_id_cache_by_path[$path_cache_key] = $parent_category_id;

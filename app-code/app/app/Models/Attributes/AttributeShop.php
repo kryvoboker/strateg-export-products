@@ -31,11 +31,11 @@ class AttributeShop extends Model
     }
 
     /**
-     * @return BelongsTo<ProductAttribute, $this>
+     * @return BelongsTo<Attribute, $this>
      */
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(ProductAttribute::class, 'attribute_id');
+        return $this->belongsTo(Attribute::class, 'attribute_id');
     }
 
     /**

@@ -59,7 +59,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductDescription>
+     * @return HasMany<ProductDescription, $this>
      */
     public function descriptions(): HasMany
     {
@@ -67,7 +67,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductImage>
+     * @return HasMany<ProductImage, $this>
      */
     public function images(): HasMany
     {
@@ -75,7 +75,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductSpecial>
+     * @return HasMany<ProductSpecial, $this>
      */
     public function specials(): HasMany
     {
@@ -83,7 +83,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductDiscount>
+     * @return HasMany<ProductDiscount, $this>
      */
     public function discounts(): HasMany
     {
@@ -91,7 +91,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductToAttribute>
+     * @return HasMany<ProductToAttribute, $this>
      */
     public function productToAttributes(): HasMany
     {
@@ -99,7 +99,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasOne<ProductToManufacturerBrand>
+     * @return HasOne<ProductToManufacturerBrand, $this>
      */
     public function productToManufacturerBrand(): HasOne
     {
@@ -115,7 +115,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductUpdateItem>
+     * @return HasMany<ProductUpdateItem, $this>
      */
     public function updateItems(): HasMany
     {
@@ -123,7 +123,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductShop>
+     * @return HasMany<ProductShop, $this>
      */
     public function productShops(): HasMany
     {
@@ -131,7 +131,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductExportItem>
+     * @return HasMany<ProductExportItem, $this>
      */
     public function exportItems(): HasMany
     {
@@ -139,7 +139,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductNameHash>
+     * @return HasMany<ProductNameHash, $this>
      */
     public function nameHashes(): HasMany
     {
@@ -147,7 +147,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductDescriptionHash>
+     * @return HasMany<ProductDescriptionHash, $this>
      */
     public function descriptionHashes(): HasMany
     {
@@ -155,7 +155,7 @@ class Product extends Model
     }
 
     /**
-     * @return HasMany<ProductAttributeTextHash>
+     * @return HasMany<ProductAttributeTextHash, $this>
      */
     public function attributeTextHashes(): HasMany
     {

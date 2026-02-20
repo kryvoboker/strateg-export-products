@@ -30,11 +30,11 @@ class AttributeDescription extends Model
     }
 
     /**
-     * @return BelongsTo<ProductAttribute, $this>
+     * @return BelongsTo<Attribute, $this>
      */
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(ProductAttribute::class, 'attribute_id');
+        return $this->belongsTo(Attribute::class, 'attribute_id');
     }
 
     /**
@@ -105,7 +105,7 @@ class AttributeDescription extends Model
             ->value('attribute_id') ?? 0);
     }
 
-    public static function upsertName(int $attribute_id, int $shop_language_id, string $name): self
+    public static function upsertName(int $attribute_id, int $shop_language_id, string $name): self|Model
     {
         return self::query()->updateOrCreate(
             [
@@ -129,12 +129,12 @@ class AttributeDescription extends Model
         }
 
         $attribute_ids = array_values(array_unique(array_filter(array_map(
-            static fn (array $pair): int => (int) ($pair['attribute_id'] ?? 0),
+            static fn (array $pair): int => (int) $pair['attribute_id'],
             $pairs
         ))));
 
         $language_ids = array_values(array_unique(array_filter(array_map(
-            static fn (array $pair): int => (int) ($pair['shop_language_id'] ?? 0),
+            static fn (array $pair): int => (int) $pair['shop_language_id'],
             $pairs
         ))));
 

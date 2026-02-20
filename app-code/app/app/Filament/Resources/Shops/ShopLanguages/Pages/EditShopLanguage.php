@@ -13,16 +13,12 @@ use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Exceptions\Halt;
 use Illuminate\Database\Eloquent\Model;
-use Livewire\Attributes\Locked;
 
 class EditShopLanguage extends EditRecord
 {
     use CommonTrait;
 
     protected static string $resource = ShopLanguageResource::class;
-
-    #[Locked]
-    public string|int|null|Model|ShopLanguage $record;
 
     /**
      * @return array|Action[]|ActionGroup[]
@@ -39,7 +35,9 @@ class EditShopLanguage extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if ($this->record->code != $data['code']) {
+        $record = $this->getRecord();
+
+        if ($record instanceof ShopLanguage && $record->code !== (string) ($data['code'] ?? '')) {
             // Validate only if the code has been changed
             $this->validateShopLanguageBefore($data);
         }

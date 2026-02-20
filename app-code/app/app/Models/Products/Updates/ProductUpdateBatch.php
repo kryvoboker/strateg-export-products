@@ -44,7 +44,7 @@ class ProductUpdateBatch extends Model
     }
 
     /**
-     * @return HasMany<ProductUpdateItem>
+     * @return HasMany<ProductUpdateItem, $this>
      */
     public function items(): HasMany
     {
@@ -52,7 +52,7 @@ class ProductUpdateBatch extends Model
     }
 
     /**
-     * @return MorphMany<ProductExportItem>
+     * @return MorphMany<ProductExportItem, $this>
      */
     public function exportItems(): MorphMany
     {

@@ -180,10 +180,7 @@ class ProductShopBindingService
                     ProductShop::query()
                         ->where('product_id', $already_bound_family_product_id)
                         ->where('shop_id', $shop_id)
-                        ->when(
-                            $resolved_batch_id > 0,
-                            static fn ($query) => $query->update(['product_import_batch_id' => $resolved_batch_id]),
-                        );
+                        ->update(['product_import_batch_id' => $resolved_batch_id]);
 
                     return [
                         'product_id' => $already_bound_family_product_id,

@@ -43,11 +43,17 @@ class ProductImportBatch extends Model
         ];
     }
 
+    /**
+     * @return HasMany<ProductImportItem, $this>
+     */
     public function items(): HasMany
     {
         return $this->hasMany(ProductImportItem::class, 'product_import_batch_id');
     }
 
+    /**
+     * @return MorphMany<ProductExportItem, $this>
+     */
     public function exportItems(): MorphMany
     {
         return $this->morphMany(ProductExportItem::class, 'batchable');

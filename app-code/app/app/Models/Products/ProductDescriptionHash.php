@@ -29,7 +29,7 @@ class ProductDescriptionHash extends Model
     }
 
     /**
-     * @return BelongsTo<Product>
+     * @return BelongsTo<Product, $this>
      */
     public function product(): BelongsTo
     {

@@ -8,25 +8,20 @@ use App\Filament\Resources\ProductUpdates\ProductUpdateBatchResource;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
-use Livewire\Attributes\Locked;
 
 class ViewProductUpdateBatch extends ViewRecord
 {
     protected static string $resource = ProductUpdateBatchResource::class;
-
-    #[Locked]
-    public Model|int|string|null|ProductUpdateBatch $record;
 
     protected function getHeaderActions(): array
     {
         return [
             Action::make('downloadErrorLog')
                 ->label(__('admin/product_updates/batches.actions.download_error_log'))
-                ->visible(fn (): bool => (bool) $this->record?->hasErrorLog())
-                ->url(fn (): ?string => $this->record?->hasErrorLog()
-                    ? Storage::url((string) $this->record?->getErrorLogPath())
+                ->visible(fn (): bool => $this->getTypedRecord()->hasErrorLog())
+                ->url(fn (): ?string => $this->getTypedRecord()->hasErrorLog()
+                    ? Storage::url((string) $this->getTypedRecord()->getErrorLogPath())
                     : null)
                 ->openUrlInNewTab(),
             Action::make('back')
@@ -37,6 +32,14 @@ class ViewProductUpdateBatch extends ViewRecord
 
     public function getTitle(): string
     {
-        return __('admin/product_updates/batches.navigation_label').' #'.(string) $this->record->id;
+        return __('admin/product_updates/batches.navigation_label').' #'.(string) $this->getTypedRecord()->id;
+    }
+
+    private function getTypedRecord(): ProductUpdateBatch
+    {
+        /** @var ProductUpdateBatch $record */
+        $record = $this->getRecord();
+
+        return $record;
     }
 }

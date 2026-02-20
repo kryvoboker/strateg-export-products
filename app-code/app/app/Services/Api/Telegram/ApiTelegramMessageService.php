@@ -45,7 +45,7 @@ final class ApiTelegramMessageService
 
             $plain_params = $params;
             // Remove parse_mode to send as plain text
-            unset($plain_params['parse_mode'], $data['parse_mode']);
+            unset($plain_params['parse_mode']);
 
             Log::channel('stack')->info(
                 'Retrying to send message without formatting',
@@ -276,10 +276,6 @@ final class ApiTelegramMessageService
     {
         $document = get_telegram_doc($update);
 
-        if ($document === null) {
-            return null;
-        }
-
         $file_id = $document->getFileId();
 
         // Get file info from Telegram
@@ -305,7 +301,10 @@ final class ApiTelegramMessageService
         }
 
         // Generate unique filename
-        $original_name = $document->getFileName() ?? 'document';
+        $original_name = (string) $document->getFileName();
+        if ($original_name === '') {
+            $original_name = 'document';
+        }
         $extension     = pathinfo($file_path, PATHINFO_EXTENSION);
         $filename      = $file->getFileUniqueId().'_'.$original_name;
         $message       = get_telegram_message($update);
@@ -377,12 +376,8 @@ final class ApiTelegramMessageService
      */
     public function downloadVoiceFromUpdate(Update $update): ?string
     {
-        $message = $update->getMessage() ?? $update->getEditedMessage();
-        $voice   = $message?->getVoice();
-
-        if ($voice === null) {
-            return null;
-        }
+        $message = get_telegram_message($update);
+        $voice   = $message->getVoice();
 
         $file_id = $voice->getFileId();
 
@@ -488,12 +483,8 @@ final class ApiTelegramMessageService
      */
     public function downloadVideoFromUpdate(Update $update): ?array
     {
-        $message = $update->getMessage() ?? $update->getEditedMessage();
-        $video   = $message?->getVideo();
-
-        if ($video === null) {
-            return null;
-        }
+        $message = get_telegram_message($update);
+        $video   = $message->getVideo();
 
         $file_id = $video->getFileId();
 
@@ -507,7 +498,7 @@ final class ApiTelegramMessageService
         /** @var File $file */
         $file      = $response->getResult();
         $file_path = $file->getFilePath();
-        $file_name = $video->getFileName();
+        $file_name = trim((string) $video->getFileName());
 
         // Build download URL
         $api_token    = config('telegram.bot_token');
@@ -522,7 +513,7 @@ final class ApiTelegramMessageService
 
         // Generate unique filename
         $extension    = pathinfo($file_path, PATHINFO_EXTENSION) ?: 'mp4';
-        $filename     = $file->getFileUniqueId().'_'.($file_name ?? '.'.$extension);
+        $filename     = $file->getFileUniqueId().'_'.($file_name !== '' ? $file_name : '.'.$extension);
         $storage_path = 'telegram/videos/'.date('Y/m/').$filename;
         $directory    = dirname($storage_path);
 

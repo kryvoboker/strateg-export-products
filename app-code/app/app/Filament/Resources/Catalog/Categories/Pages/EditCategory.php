@@ -13,14 +13,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Livewire\Attributes\Locked;
 
 class EditCategory extends EditRecord
 {
     use EditPageTrait;
-
-    #[Locked]
-    public Model|int|string|null|Category $record;
 
     protected static string $resource = CategoryResource::class;
 
@@ -53,17 +49,20 @@ class EditCategory extends EditRecord
         return $data;
     }
 
-    protected function handleRecordUpdate(Model|Category $record, array $data): Category
+    protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $record->update([
+        /** @var Category $category */
+        $category = $record;
+
+        $category->update([
             'parent_id'  => Arr::get($data, 'parent_id'),
             'sort_order' => (int) Arr::get($data, 'sort_order', 0),
             'is_active'  => (bool) Arr::get($data, 'is_active', true),
         ]);
 
-        CategoryForm::syncCategoryAdditionalData($record, $data);
+        CategoryForm::syncCategoryAdditionalData($category, $data);
         ProcessCategoryNameTranslationJob::dispatch(
-            (int) $record->id,
+            (int) $category->id,
             collect(Arr::get($data, 'shop_ids', []))
                 ->map(static fn ($shop_id): int => (int) $shop_id)
                 ->filter(static fn (int $shop_id): bool => $shop_id > 0)
@@ -72,6 +71,6 @@ class EditCategory extends EditRecord
                 ->all()
         );
 
-        return $record;
+        return $category;
     }
 }

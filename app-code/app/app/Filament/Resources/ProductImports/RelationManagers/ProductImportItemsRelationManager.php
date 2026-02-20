@@ -96,7 +96,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'product.descriptions',
                 'product.productToManufacturerBrand.manufacturer.descriptions',
                 'product.productToManufacturerBrand.brand.descriptions',
-            ])->where('product_import_batch_id', (int) $this->getOwnerRecord()->id))
+            ])->where('product_import_batch_id', (int) $this->getTypedOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
@@ -247,7 +247,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
                         $query,
                         $data,
-                        (int) $this->getOwnerRecord()->id
+                        (int) $this->getTypedOwnerRecord()->id
                     )),
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
@@ -2808,7 +2808,7 @@ class ProductImportItemsRelationManager extends RelationManager
             ]);
         }
 
-        if ($resolved_attribute_id === null) {
+        if ($resolved_attribute_id <= 0) {
             throw ValidationException::withMessages([
                 'attributes_custom_by_language' => __('admin/product_imports/batches.product_edit.errors.invalid_attribute'),
             ]);
@@ -3207,5 +3207,13 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
+    }
+
+    private function getTypedOwnerRecord(): ProductImportBatch
+    {
+        /** @var ProductImportBatch $record */
+        $record = $this->getOwnerRecord();
+
+        return $record;
     }
 }

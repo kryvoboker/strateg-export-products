@@ -784,7 +784,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
 
             if ($action === 'set') {
                 $updates[$column] = $this->normalizeValueByType(
-                    (string) ($field_config['type'] ?? 'string'),
+                    (string) $field_config['type'],
                     $instruction['value']
                 );
             }
@@ -841,7 +841,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             }
 
             $instruction = $description_fields[$normalized_header];
-            $action      = (string) ($instruction['action'] ?? 'skip');
+            $action      = (string) $instruction['action'];
 
             if ($action === 'skip' || $action === 'no_change') {
                 continue;
@@ -1375,7 +1375,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             }
 
             $instruction = $fields[$normalized_header];
-            $action      = (string) ($instruction['action'] ?? 'skip');
+            $action      = (string) $instruction['action'];
 
             if (in_array($action, ['skip', 'no_change'], true)) {
                 $all_delete = false;
@@ -1461,7 +1461,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             $parent_category_id = $existing_category_id;
         }
 
-        return $parent_category_id !== null ? (int) $parent_category_id : 0;
+        return (int) $parent_category_id;
     }
 
     private function resolveOrCreateAttributeIdByName(string $attribute_name, int $shop_language_id): int
@@ -1676,8 +1676,8 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                 'image'                  => $product->image,
                 'price'                  => (string) ($product->price ?? '0'),
                 'is_active'              => (bool) $product->is_active,
-                'date_available'         => $product->date_available?->toDateTimeString(),
-                'date_added'             => $product->date_added?->toDateTimeString(),
+                'date_available'         => $this->normalizeDateTimeValue((string) ($product->date_available ?? '')),
+                'date_added'             => $this->normalizeDateTimeValue((string) ($product->date_added ?? '')),
             ],
             'descriptions' => $product->descriptions
                 ->map(static fn ($description): array => [
@@ -1790,4 +1790,5 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             ],
         ]);
     }
+
 }

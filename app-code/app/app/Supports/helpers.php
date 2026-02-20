@@ -55,11 +55,11 @@ if (! function_exists('trim_strs_in_arr')) {
 
 if (! function_exists('get_telegram_photo')) {
     /**
-     * @return array<PhotoSize>|null
+     * @return array<PhotoSize>
      */
-    function get_telegram_photo(Update $update): ?array
+    function get_telegram_photo(Update $update): array
     {
-        return $update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto();
+        return get_telegram_message($update)->getPhoto();
     }
 }
 
@@ -71,23 +71,23 @@ if (! function_exists('get_telegram_message')) {
 }
 
 if (! function_exists('get_telegram_doc')) {
-    function get_telegram_doc(Update $update): ?Document
+    function get_telegram_doc(Update $update): Document
     {
-        return $update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument();
+        return get_telegram_message($update)->getDocument();
     }
 }
 
 if (! function_exists('is_telegram_has_photo')) {
     function is_telegram_has_photo(Update $update): bool
     {
-        return ($update->getMessage()?->getPhoto() ?? $update->getEditedMessage()?->getPhoto()) !== null;
+        return get_telegram_photo($update) !== [];
     }
 }
 
 if (! function_exists('is_telegram_has_doc')) {
     function is_telegram_has_doc(Update $update): bool
     {
-        return ($update->getMessage()?->getDocument() ?? $update->getEditedMessage()?->getDocument()) !== null;
+        return trim((string) get_telegram_doc($update)->getFileId()) !== '';
     }
 }
 

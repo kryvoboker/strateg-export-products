@@ -44,7 +44,7 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<CategoryDescription>
+     * @return HasMany<CategoryDescription, $this>
      */
     public function descriptions(): HasMany
     {
@@ -52,7 +52,7 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<CategoryShop>
+     * @return HasMany<CategoryShop, $this>
      */
     public function categoryShops(): HasMany
     {
@@ -60,7 +60,7 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<CategoryProduct>
+     * @return HasMany<CategoryProduct, $this>
      */
     public function categoryProducts(): HasMany
     {
@@ -68,7 +68,7 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<CategoryNameHash>
+     * @return HasMany<CategoryNameHash, $this>
      */
     public function nameHashes(): HasMany
     {
@@ -84,7 +84,7 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<Category>
+     * @return HasMany<Category, $this>
      */
     public function children(): HasMany
     {

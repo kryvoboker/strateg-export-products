@@ -70,9 +70,9 @@ class User extends Authenticatable implements FilamentUser
     protected static function booted(): void
     {
         static::saving(function (User $user) {
-            // If password is null and it's being changed, prevent saving it
-            if ($user->password === null && $user->isDirty('password')) {
-                // Restore the original password value from database
+            $incoming_password = $user->getAttribute('password');
+
+            if (($incoming_password === null || $incoming_password === '') && $user->isDirty('password')) {
                 $user->password = $user->getOriginal('password');
             }
         });
@@ -106,7 +106,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * @return HasMany<ProductImportBatch>
+     * @return HasMany<ProductImportBatch, $this>
      */
     public function productImportBatches(): HasMany
     {
@@ -114,7 +114,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /**
-     * @return HasMany<ProductUpdateBatch>
+     * @return HasMany<ProductUpdateBatch, $this>
      */
     public function productUpdateBatches(): HasMany
     {

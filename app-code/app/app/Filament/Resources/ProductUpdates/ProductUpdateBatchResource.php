@@ -73,7 +73,7 @@ class ProductUpdateBatchResource extends Resource
                                     ->placeholder(__('admin/product_imports/batches.columns.empty_value')),
                                 TextEntry::make('options.error_log_path')
                                     ->label(__('admin/product_imports/batches.columns.error_log'))
-                                    ->url(fn ($record): ?string => method_exists($record, 'hasErrorLog') && $record->hasErrorLog()
+                                    ->url(fn (ProductUpdateBatch $record): ?string => $record->hasErrorLog()
                                         ? Storage::url((string) $record->getErrorLogPath())
                                         : null)
                                     ->openUrlInNewTab()

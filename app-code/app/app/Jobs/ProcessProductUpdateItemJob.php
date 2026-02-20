@@ -319,8 +319,8 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 'brand_id'        => $product->productToManufacturerBrand?->brand_id,
                 'brand'           => $product->productToManufacturerBrand?->brand?->brand_name,
                 'is_active'       => (bool) $product->is_active,
-                'date_available'  => $product->date_available?->toDateTimeString(),
-                'date_added'      => $product->date_added?->toDateTimeString(),
+                'date_available'  => $this->normalizeDateTimeValue($product->date_available),
+                'date_added'      => $this->normalizeDateTimeValue($product->date_added),
             ],
             'descriptions' => $product->descriptions
                 ->filter(static fn ($description): bool => $shop_language_ids === []
@@ -948,5 +948,20 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 'update_finished_at'   => now()->toDateTimeString(),
             ],
         ]);
+    }
+
+    private function normalizeDateTimeValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_object($value) && method_exists($value, 'toDateTimeString')) {
+            return (string) $value->toDateTimeString();
+        }
+
+        $clean_value = trim((string) $value);
+
+        return $clean_value !== '' ? $clean_value : null;
     }
 }

@@ -56,7 +56,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'product.descriptions',
                 'product.productToManufacturerBrand.manufacturer.descriptions',
                 'product.productToManufacturerBrand.brand.descriptions',
-            ])->where('product_update_batch_id', (int) $this->getOwnerRecord()->id))
+            ])->where('product_update_batch_id', (int) $this->getTypedOwnerRecord()->id))
             ->columns([
                 TextColumn::make('id')->label('ID')->sortable(),
                 TextColumn::make('status')
@@ -166,7 +166,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ->query(fn (Builder $query, array $data): Builder => self::applyBatchSearchFieldsQuery(
                         $query,
                         $data,
-                        (int) $this->getOwnerRecord()->id
+                        (int) $this->getTypedOwnerRecord()->id
                     )),
                 SelectFilter::make('status')
                     ->label(__('admin/product_imports/batches.columns.item_status'))
@@ -759,5 +759,13 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'update_finished_at' => null,
             ],
         ]);
+    }
+
+    private function getTypedOwnerRecord(): ProductUpdateBatch
+    {
+        /** @var ProductUpdateBatch $record */
+        $record = $this->getOwnerRecord();
+
+        return $record;
     }
 }
