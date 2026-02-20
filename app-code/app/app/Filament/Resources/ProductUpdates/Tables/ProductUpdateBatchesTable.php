@@ -313,7 +313,7 @@ class ProductUpdateBatchesTable
                 'processed_at'  => null,
             ]);
 
-            ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
+            ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
             $summary['updates_queued']++;
 
             self::markBatchAsUpdating($batch_id);
@@ -389,7 +389,7 @@ class ProductUpdateBatchesTable
                 'processed_at'  => null,
             ]);
 
-            ProcessProductUpdateItemJob::dispatchSync((int) $failed_update_item->id);
+            ProcessProductUpdateItemJob::dispatch((int) $failed_update_item->id);
             $queued++;
         }
 

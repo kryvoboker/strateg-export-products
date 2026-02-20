@@ -951,7 +951,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                         continue;
                                     }
 
-                                    ProcessProductShopBindingJob::dispatchSync(
+                                    ProcessProductShopBindingJob::dispatch(
                                         $product_id,
                                         (int) $shop_id,
                                         $batch_id,
@@ -1340,7 +1340,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'processed_at'  => null,
                 ]);
 
-                ProcessProductExportItemJob::dispatchSync((int) $export_item->id);
+                ProcessProductExportItemJob::dispatch((int) $export_item->id);
                 $summary['exports_queued']++;
             } catch (Throwable) {
                 $summary['errors']++;
@@ -1512,7 +1512,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'processed_at'  => null,
             ]);
 
-            ProcessProductExportItemJob::dispatchSync((int) $failed_export_item->id);
+            ProcessProductExportItemJob::dispatch((int) $failed_export_item->id);
             $summary['queued']++;
         }
 

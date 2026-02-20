@@ -803,17 +803,18 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 $resolved_shop_id,
                 (int) $product_import_item->product_import_batch_id,
                 $payload,
-                null,
             );
 
-            Log::channel('stack')->info('Auto-bind job dispatched from import item payload', [
-                'batch_id'    => (int) $product_import_item->product_import_batch_id,
-                'item_id'     => (int) $product_import_item->id,
-                'product_id'  => $product_id,
-                'shop_id'     => $resolved_shop_id,
-                'row_number'  => $product_import_item->getSourceRowNumber(),
-                'source_path' => $product_import_item->getSourceFilePath(),
-            ]);
+            if (app()->isProduction()) {
+                Log::channel('stack')->info('Auto-bind job dispatched from import item payload', [
+                    'batch_id'    => (int) $product_import_item->product_import_batch_id,
+                    'item_id'     => (int) $product_import_item->id,
+                    'product_id'  => $product_id,
+                    'shop_id'     => $resolved_shop_id,
+                    'row_number'  => $product_import_item->getSourceRowNumber(),
+                    'source_path' => $product_import_item->getSourceFilePath(),
+                ]);
+            }
         } catch (Throwable $exception) {
             Log::channel('stack')->warning('Failed to dispatch auto-bind job from import item payload', [
                 'batch_id'    => (int) $product_import_item->product_import_batch_id,

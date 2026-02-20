@@ -258,7 +258,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             'processed_at'  => null,
                         ]);
 
-                        ProcessProductUpdateItemJob::dispatchSync((int) $record->id);
+                        ProcessProductUpdateItemJob::dispatch((int) $record->id);
 
                         Notification::make()
                             ->title(__('admin/product_updates/batches.messages.item_retry_queued'))
@@ -342,7 +342,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                                     'error_message' => null,
                                     'processed_at'  => null,
                                 ]);
-                                ProcessProductUpdateItemJob::dispatchSync((int) $record->id);
+                                ProcessProductUpdateItemJob::dispatch((int) $record->id);
                                 $queued++;
                             }
 
@@ -701,7 +701,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             'processed_at'  => null,
         ]);
 
-        ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
+        ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
         $summary['updates_queued']++;
 
         $this->markBatchAsUpdating($batch_id);

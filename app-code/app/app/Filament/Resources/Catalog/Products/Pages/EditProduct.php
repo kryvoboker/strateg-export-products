@@ -1387,7 +1387,7 @@ class EditProduct extends EditRecord
                 'processed_at'  => null,
             ]);
 
-            ProcessProductUpdateItemJob::dispatchSync((int) $update_item->id);
+            ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
             $summary['updates_queued']++;
         } catch (QueryException $exception) {
             $sql_state = (string) ($exception->errorInfo[0] ?? '');

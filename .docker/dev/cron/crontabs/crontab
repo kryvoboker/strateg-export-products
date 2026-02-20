@@ -1,2 +1,3 @@
-# Run every day at 4 AM
-0 4 * * * /usr/local/bin/php -f /var/www/app/artisan app:update-currency-rates-command >> /var/log/cron/cron.log 2>&1
+# Run every day every minute every hour
+# Stop the process after 10900 seconds (3.02 hours) (just in case it hangs)
+* * * * * timeout 10900 /usr/local/bin/php -f /var/webroot/sites/export-products.strateg.ua/app/artisan schedule:run >> /var/log/cron/cron.log 2>&1

@@ -63,7 +63,7 @@ class CreateProductUpdateBatch extends CreateRecord
             ],
         ]);
 
-        ProcessProductUpdateBatchJob::dispatchSync((int) $batch->id);
+        ProcessProductUpdateBatchJob::dispatch((int) $batch->id);
 
         return $batch->refresh();
     }
@@ -95,7 +95,7 @@ class CreateProductUpdateBatch extends CreateRecord
             ],
         ]);
 
-        ProcessProductUpdateBatchJob::dispatchSync((int) $batch->id);
+        ProcessProductUpdateBatchJob::dispatch((int) $batch->id);
 
         return $batch->refresh();
     }

@@ -158,7 +158,7 @@ class CreateProductImportBatch extends CreateRecord
             ],
         ]);
 
-        ProcessProductImportBatchJob::dispatchSync($batch->id);
+        ProcessProductImportBatchJob::dispatch($batch->id);
 
         return $batch;
     }
@@ -237,7 +237,7 @@ class CreateProductImportBatch extends CreateRecord
             ],
         ]);
 
-        ProcessProductImportBatchJob::dispatchSync($batch->id);
+        ProcessProductImportBatchJob::dispatch($batch->id);
 
         return $batch;
     }
@@ -270,7 +270,7 @@ class CreateProductImportBatch extends CreateRecord
             ],
         ]);
 
-        ProcessProductImportBatchJob::dispatchSync($batch->id);
+        ProcessProductImportBatchJob::dispatch($batch->id);
 
         return $batch;
     }

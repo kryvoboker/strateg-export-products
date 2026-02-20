@@ -56,7 +56,7 @@ class CreateProduct extends CreateRecord
         }
 
         foreach ($attribute_ids as $attribute_id) {
-            ProcessAttributeNameTranslationJob::dispatchSync(
+            ProcessAttributeNameTranslationJob::dispatch(
                 $attribute_id,
                 $shop_ids
             );
@@ -89,7 +89,7 @@ class CreateProduct extends CreateRecord
         }
 
         foreach ($category_ids as $category_id) {
-            ProcessCategoryNameTranslationJob::dispatchSync(
+            ProcessCategoryNameTranslationJob::dispatch(
                 $category_id,
                 $shop_ids
             );
