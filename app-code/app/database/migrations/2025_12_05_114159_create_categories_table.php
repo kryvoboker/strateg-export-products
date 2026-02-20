@@ -14,11 +14,21 @@ return new class() extends Migration
         Schema::create('categories', function (Blueprint $table) {
             $table->id();
 
+            $table->ulid('family_ulid');
+
+            $table->foreignId('shop_id')
+                ->nullable()
+                ->constrained()
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
             $table->unsignedInteger('parent_id')->nullable()->index();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(false);
 
             $table->timestamps();
+
+            $table->index(['shop_id', 'family_ulid']);
         });
     }
 

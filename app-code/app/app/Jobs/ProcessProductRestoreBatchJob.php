@@ -121,7 +121,7 @@ class ProcessProductRestoreBatchJob implements ShouldQueue
             }
         }
 
-        Log::channel('stack')->info('Bulk product restore completed', [
+        Log::channel('daily')->info('Bulk product restore completed', [
             ...$summary,
             'requested_by_user_id' => $this->requested_by_user_id,
         ]);

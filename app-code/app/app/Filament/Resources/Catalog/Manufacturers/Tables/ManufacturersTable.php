@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Manufacturers\Tables;
 
 use App\Models\Manufacturers\Manufacturer;
-use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Shops\Shop;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -33,7 +32,7 @@ class ManufacturersTable
                     'descriptions' => static fn ($description_query) => $description_query
                         ->orderByRaw('shop_language_id IS NULL DESC')
                         ->orderBy('id'),
-                    'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
+                    'shop',
                 ])
                 ->orderBy('sort_order')
                 ->orderBy('id'))
@@ -56,6 +55,15 @@ class ManufacturersTable
                     ->label(__('admin/manufacturers/manufacturers.columns.shops'))
                     ->state(static fn (Manufacturer $record): string => self::resolveManufacturerShopsText($record))
                     ->wrap(),
+                TextColumn::make('shop_context')
+                    ->label('Shop Scope')
+                    ->state(static fn (Manufacturer $record): string => self::resolveDirectShopContext($record))
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('family_ulid')
+                    ->label('Family ULID')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->copyable(),
                 IconColumn::make('is_active')
                     ->label(__('admin/default.columns.is_active'))
                     ->boolean()
@@ -74,7 +82,7 @@ class ManufacturersTable
                             return $query;
                         }
 
-                        return $query->whereHas('shops', static fn (Builder $shop_query): Builder => $shop_query->where('shops.id', $shop_id));
+                        return $query->where('shop_id', $shop_id);
                     }),
                 SelectFilter::make('is_active')
                     ->label(__('admin/manufacturers/manufacturers.filters.status'))
@@ -125,12 +133,27 @@ class ManufacturersTable
                             }
 
                             $manufacturers_total = 0;
+                            $created_total       = 0;
+                            $reused_total        = 0;
                             foreach ($records as $record) {
                                 if (! $record instanceof Manufacturer) {
                                     continue;
                                 }
 
-                                $record->shops()->syncWithoutDetaching($shop_ids);
+                                foreach ($shop_ids as $shop_id) {
+                                    $source_family_ulid = Str::trim((string) ($record->family_ulid ?? ''));
+                                    $existing_target = $source_family_ulid !== ''
+                                        ? Manufacturer::findByFamilyAndShop($source_family_ulid, $shop_id)
+                                        : null;
+
+                                    $resolved_manufacturer = $record->duplicateForShop($shop_id);
+                                    if ($existing_target instanceof Manufacturer && (int) $existing_target->id === (int) $resolved_manufacturer->id) {
+                                        $reused_total++;
+                                    } elseif ((int) $resolved_manufacturer->id > 0) {
+                                        $created_total++;
+                                    }
+                                }
+
                                 $manufacturers_total++;
                             }
 
@@ -139,7 +162,7 @@ class ManufacturersTable
                                 ->body(__('admin/manufacturers/manufacturers.messages.bulk_bind_result', [
                                     'manufacturers_total' => $manufacturers_total,
                                     'shops_total'         => count($shop_ids),
-                                ]))
+                                ]).', created: '.$created_total.', reused: '.$reused_total)
                                 ->success()
                                 ->send();
                         }),
@@ -163,26 +186,13 @@ class ManufacturersTable
 
     private static function resolveManufacturerShopsText(Manufacturer $manufacturer): string
     {
-        $shop_names = ManufacturerShop::query()
-            ->where('manufacturer_id', (int) $manufacturer->id)
-            ->join('shops', 'shops.id', '=', 'manufacturer_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name')
-            ->map(static fn ($shop_name): string => Str::of((string) $shop_name)->squish()->toString())
-            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
-            ->all();
+        return self::resolveDirectShopContext($manufacturer);
+    }
 
-        $shop_names_by_key = [];
-        foreach ($shop_names as $shop_name) {
-            $shop_names_by_key[Str::lower($shop_name)] = $shop_name;
-        }
+    private static function resolveDirectShopContext(Manufacturer $manufacturer): string
+    {
+        $shop_name = Str::trim((string) ($manufacturer->shop?->name ?? ''));
 
-        $shop_names = array_values($shop_names_by_key);
-
-        if ($shop_names === []) {
-            return __('admin/manufacturers/manufacturers.columns.no_shops');
-        }
-
-        return implode(', ', $shop_names);
+        return $shop_name !== '' ? $shop_name : __('admin/default.messages.created');
     }
 }

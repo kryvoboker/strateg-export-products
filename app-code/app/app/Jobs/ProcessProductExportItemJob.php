@@ -23,6 +23,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -74,6 +75,15 @@ class ProcessProductExportItemJob implements ShouldQueue
             }
 
             $request_payload = $this->buildRequestPayload($product, $shop_id);
+            Log::channel('daily')->info('Prepared export payload with shop-scoped catalog entities', [
+                'product_id'        => $product_id,
+                'shop_id'           => $shop_id,
+                'category_ids'      => collect(Arr::get($request_payload, 'categories', []))->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all(),
+                'attribute_ids'     => collect(Arr::get($request_payload, 'attributes', []))->pluck('attribute_id')->map(static fn ($id): int => (int) $id)->values()->all(),
+                'manufacturer_id'   => (int) (Arr::get($request_payload, 'manufacturer_brand.manufacturer_id') ?? 0),
+                'brand_id'          => (int) (Arr::get($request_payload, 'manufacturer_brand.brand_id') ?? 0),
+                'shop_language_ids' => collect(Arr::get($request_payload, 'shop_languages', []))->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all(),
+            ]);
             $response        = $this->sendExportRequest($shop, $request_payload);
 
             if (! $response->successful()) {
@@ -130,10 +140,17 @@ class ProcessProductExportItemJob implements ShouldQueue
             'descriptions',
             'images',
             'categories.descriptions',
-            'productToAttributes',
+            'productToAttributes.attribute',
             'specials',
             'discounts',
         ]);
+
+        if ($this->hasProductManufacturerBrandTable()) {
+            $product->loadMissing([
+                'productToManufacturerBrand.manufacturer.descriptions',
+                'productToManufacturerBrand.brand.descriptions',
+            ]);
+        }
 
         $shop_languages = ShopLanguage::getActiveByShopId($shop_id);
 
@@ -171,8 +188,39 @@ class ProcessProductExportItemJob implements ShouldQueue
             ->values()
             ->all();
 
+        $filtered_categories = $product->categories
+            ->filter(fn ($category): bool => $this->isEntityInShopScope((int) ($category->shop_id ?? 0), $shop_id, 'categories'))
+            ->values();
+
+        $filtered_product_attributes = $product->productToAttributes
+            ->filter(function ($product_to_attribute) use ($shop_id): bool {
+                $attribute = $product_to_attribute->attribute;
+                if (! $attribute instanceof \App\Models\Attributes\Attribute) {
+                    return true;
+                }
+
+                return $this->isEntityInShopScope((int) ($attribute->shop_id ?? 0), $shop_id, 'attributes');
+            })
+            ->values();
+
+        $manufacturer = null;
+        $brand        = null;
+        if ($this->hasProductManufacturerBrandTable()) {
+            $manufacturer = $product->productToManufacturerBrand?->manufacturer;
+            if ($manufacturer instanceof \App\Models\Manufacturers\Manufacturer
+                && ! $this->isEntityInShopScope((int) ($manufacturer->shop_id ?? 0), $shop_id, 'manufacturers')) {
+                $manufacturer = null;
+            }
+
+            $brand = $product->productToManufacturerBrand?->brand;
+            if ($brand instanceof \App\Models\Brands\Brand
+                && ! $this->isEntityInShopScope((int) ($brand->shop_id ?? 0), $shop_id, 'brands')) {
+                $brand = null;
+            }
+        }
+
         $attribute_pairs = [];
-        foreach ($product->productToAttributes as $product_to_attribute) {
+        foreach ($filtered_product_attributes as $product_to_attribute) {
             $attribute_id     = (int) ($product_to_attribute->attribute_id ?? 0);
             $shop_language_id = (int) ($product_to_attribute->shop_language_id ?? 0);
             if ($attribute_id <= 0 || $shop_language_id <= 0) {
@@ -225,6 +273,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                     'sort_order' => $image->sort_order,
                 ])->values()->all(),
             'categories' => $product->categories
+                ->filter(fn ($category): bool => $filtered_categories->contains('id', $category->id))
                 ->map(static function ($category) use ($shop_language_ids, $shop_language_map_by_id): array {
                     $descriptions = $category->descriptions
                         ->filter(static fn ($description): bool => $shop_language_ids === []
@@ -248,26 +297,41 @@ class ProcessProductExportItemJob implements ShouldQueue
 
                     return [
                         'id'           => $category->id,
+                        'shop_id'      => $category->shop_id,
+                        'family_ulid'  => $category->family_ulid,
                         'parent_id'    => $category->parent_id,
                         'name'         => Arr::get($descriptions, '0.name'),
                         'descriptions' => $descriptions,
                     ];
                 })->values()->all(),
-            'attributes' => $product->productToAttributes
+            'attributes' => $filtered_product_attributes
                 ->filter(static fn ($attribute): bool => $shop_language_ids === []
                     || in_array((int) $attribute->shop_language_id, $shop_language_ids, true))
                 ->map(static function ($attribute) use ($attribute_description_map, $shop_language_map_by_id): array {
                     $shop_language_id = (int) $attribute->shop_language_id;
                     $attribute_id     = (int) $attribute->attribute_id;
+                    $attribute_model  = $attribute->attribute;
 
                     return [
                         'attribute_id'       => $attribute_id,
+                        'attribute_shop_id'  => $attribute_model?->shop_id,
+                        'attribute_family_ulid' => $attribute_model?->family_ulid,
                         'attribute_name'     => $attribute_description_map[$attribute_id.':'.$shop_language_id] ?? null,
                         'shop_language_id'   => $shop_language_id,
                         'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
                         'text'               => $attribute->text,
                     ];
                 })->values()->all(),
+            'manufacturer_brand' => [
+                'manufacturer_id'        => $manufacturer?->id,
+                'manufacturer_shop_id'   => $manufacturer?->shop_id,
+                'manufacturer_family_ulid' => $manufacturer?->family_ulid,
+                'manufacturer'           => $manufacturer?->manufacturer_name,
+                'brand_id'               => $brand?->id,
+                'brand_shop_id'          => $brand?->shop_id,
+                'brand_family_ulid'      => $brand?->family_ulid,
+                'brand'                  => $brand?->brand_name,
+            ],
             'seo_urls' => $seo_urls,
             'specials' => $product->specials
                 ->map(static fn ($special): array => [
@@ -287,6 +351,36 @@ class ProcessProductExportItemJob implements ShouldQueue
                     'date_end'      => $discount->date_end,
                 ])->values()->all(),
         ];
+    }
+
+    private function isEntityInShopScope(int $entity_shop_id, int $shop_id, string $table_name): bool
+    {
+        if ($shop_id <= 0 || ! $this->hasCatalogEntityShopScopeColumns($table_name)) {
+            return true;
+        }
+
+        return $entity_shop_id === $shop_id;
+    }
+
+    private function hasCatalogEntityShopScopeColumns(string $table_name): bool
+    {
+        try {
+            $schema_builder = DB::connection()->getSchemaBuilder();
+
+            return $schema_builder->hasColumn($table_name, 'shop_id')
+                && $schema_builder->hasColumn($table_name, 'family_ulid');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function hasProductManufacturerBrandTable(): bool
+    {
+        try {
+            return DB::connection()->getSchemaBuilder()->hasTable('product_to_manufacturer_brand');
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**

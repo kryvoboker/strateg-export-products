@@ -6,14 +6,22 @@ namespace Tests\Unit\Services;
 
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandDescription;
+use App\Models\Categories\Category;
+use App\Models\Categories\CategoryDescription;
+use App\Models\Categories\CategoryProduct;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Products\ProductDescription;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Catalog\ProductShopBindingService;
 use Illuminate\Config\Repository;
-use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -30,8 +38,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             return;
         }
 
-        $container = new Container();
-        Container::setInstance($container);
+        $container = new Application(__DIR__);
         Facade::setFacadeApplication($container);
         $container->instance('config', new Repository([
             'database.db_prefix' => '',
@@ -48,6 +55,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         ]);
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
+        $container->instance('db', self::$capsule->getDatabaseManager());
 
         $schema = self::$capsule->schema();
 
@@ -129,6 +137,58 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             $table->unsignedInteger('category_id');
             $table->timestamps();
         });
+
+        $schema->create('manufacturers', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedSmallInteger('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        $schema->create('manufacturer_descriptions', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('manufacturer_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+            $table->unique(['manufacturer_id', 'shop_language_id']);
+        });
+
+        $schema->create('brands', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedSmallInteger('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        $schema->create('brand_descriptions', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('brand_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+            $table->unique(['brand_id', 'shop_language_id']);
+        });
+
+        $schema->create('product_to_manufacturer_brand', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('product_id');
+            $table->unsignedInteger('manufacturer_id')->nullable();
+            $table->unsignedInteger('brand_id')->nullable();
+            $table->timestamps();
+            $table->unique('product_id');
+        });
+
+        $schema->create('seo_urls', static function ($table): void {
+            $table->increments('id');
+            $table->string('seoable_type');
+            $table->unsignedInteger('seoable_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->string('query_value');
+            $table->string('keyword')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(0);
+            $table->timestamps();
+        });
     }
 
     protected function setUp(): void
@@ -140,8 +200,123 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         ProductToAttribute::query()->delete();
         AttributeDescription::query()->delete();
         Attribute::query()->delete();
+        ProductToManufacturerBrand::query()->delete();
+        ManufacturerDescription::query()->delete();
+        Manufacturer::query()->delete();
+        BrandDescription::query()->delete();
+        Brand::query()->delete();
+        CategoryProduct::query()->delete();
+        CategoryDescription::query()->delete();
+        Category::query()->delete();
         ProductDescription::query()->delete();
         ShopLanguage::query()->delete();
+    }
+
+    public function test_it_applies_default_shop_language_to_category_descriptions_after_binding(): void
+    {
+        $shop_id    = 13;
+        $product_id = 404;
+
+        $default_shop_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $category = Category::query()->create([
+            'parent_id'  => null,
+            'sort_order' => 0,
+            'is_active'  => true,
+        ]);
+
+        CategoryDescription::query()->create([
+            'category_id'       => (int) $category->id,
+            'shop_language_id'  => null,
+            'name'              => 'Board games',
+            'description'       => null,
+            'h1_title'          => 'Board games',
+            'meta_title'        => 'Board games',
+            'meta_description'  => null,
+            'meta_keywords'     => null,
+        ]);
+
+        CategoryProduct::query()->create([
+            'product_id'  => $product_id,
+            'category_id' => (int) $category->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $service->applyDefaultLanguageToProductTranslations($product_id, $shop_id);
+
+        $category_name_for_default_language = CategoryDescription::query()
+            ->where('category_id', (int) $category->id)
+            ->where('shop_language_id', (int) $default_shop_language->id)
+            ->value('name');
+
+        self::assertSame('Board games', (string) $category_name_for_default_language);
+        self::assertSame(0, CategoryDescription::query()->whereNull('shop_language_id')->count());
+    }
+
+    public function test_it_applies_default_shop_language_to_manufacturer_and_brand_descriptions_after_binding(): void
+    {
+        $shop_id    = 12;
+        $product_id = 303;
+
+        $default_shop_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $manufacturer = Manufacturer::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $manufacturer->id,
+            'shop_language_id' => null,
+            'name'             => 'Acme',
+        ]);
+
+        $brand = Brand::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        BrandDescription::query()->create([
+            'brand_id'         => (int) $brand->id,
+            'shop_language_id' => null,
+            'name'             => 'Prime',
+        ]);
+
+        ProductToManufacturerBrand::query()->create([
+            'product_id'      => $product_id,
+            'manufacturer_id' => (int) $manufacturer->id,
+            'brand_id'        => (int) $brand->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $service->applyDefaultLanguageToProductTranslations($product_id, $shop_id);
+
+        $manufacturer_name_for_default_language = ManufacturerDescription::query()
+            ->where('manufacturer_id', (int) $manufacturer->id)
+            ->where('shop_language_id', (int) $default_shop_language->id)
+            ->value('name');
+
+        $brand_name_for_default_language = BrandDescription::query()
+            ->where('brand_id', (int) $brand->id)
+            ->where('shop_language_id', (int) $default_shop_language->id)
+            ->value('name');
+
+        self::assertSame('Acme', (string) $manufacturer_name_for_default_language);
+        self::assertSame('Prime', (string) $brand_name_for_default_language);
+        self::assertSame(0, ManufacturerDescription::query()->whereNull('shop_language_id')->count());
+        self::assertSame(0, BrandDescription::query()->whereNull('shop_language_id')->count());
     }
 
     public function test_it_splits_pipe_attributes_and_translates_to_shop_languages_using_default_source_language(): void

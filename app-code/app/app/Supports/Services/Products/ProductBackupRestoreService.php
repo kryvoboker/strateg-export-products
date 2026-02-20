@@ -134,6 +134,9 @@ class ProductBackupRestoreService
         return $this->restoreFromBackup($backup);
     }
 
+    /**
+     * @throws Throwable
+     */
     public function restoreFromBackup(ProductBackups $backup): ProductBackups
     {
         $product_id = (int) ($backup->backupable_id ?? 0);
@@ -153,7 +156,7 @@ class ProductBackupRestoreService
             throw new RuntimeException('Product not found for restore');
         }
 
-        Log::channel('stack')->info('Starting product restore from backup', [
+        Log::channel('daily')->info('Starting product restore from backup', [
             'backup_id'    => (int) $backup->id,
             'product_id'   => $product_id,
             'restore_mode' => 'sync_no_queue',
@@ -348,7 +351,7 @@ class ProductBackupRestoreService
 
         $restored_backup = $backup->refresh();
 
-        Log::channel('stack')->info('Product restore from backup completed', [
+        Log::channel('daily')->info('Product restore from backup completed', [
             'backup_id'    => (int) $restored_backup->id,
             'product_id'   => $product_id,
             'is_used'      => (bool) $restored_backup->is_used,

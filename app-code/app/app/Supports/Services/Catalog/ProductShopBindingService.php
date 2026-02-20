@@ -8,10 +8,15 @@ use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandDescription;
 use App\Models\Brands\BrandShop;
+use App\Models\Categories\Category;
 use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
 use App\Models\Categories\CategoryShop;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
@@ -29,6 +34,7 @@ use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -37,8 +43,37 @@ use Throwable;
 
 class ProductShopBindingService
 {
+    private const array EMPTY_CATALOG_SYNC_SUMMARY = [
+        'categories_relinked'    => 0,
+        'categories_assigned'    => 0,
+        'categories_created'     => 0,
+        'categories_reused'      => 0,
+        'attributes_relinked'    => 0,
+        'attributes_assigned'    => 0,
+        'attributes_created'     => 0,
+        'attributes_reused'      => 0,
+        'manufacturer_relinked'  => 0,
+        'manufacturers_assigned' => 0,
+        'manufacturers_created'  => 0,
+        'manufacturers_reused'   => 0,
+        'brand_relinked'         => 0,
+        'brands_assigned'        => 0,
+        'brands_created'         => 0,
+        'brands_reused'          => 0,
+    ];
+
     /**
-     * @return array{product_id:int, bound:int, duplicated:int}
+     * @return array{
+     *     product_id:int,
+     *     bound:int,
+     *     duplicated:int,
+     *     catalog_sync_summary:array{
+     *         categories_relinked:int,
+     *         attributes_relinked:int,
+     *         manufacturer_relinked:int,
+     *         brand_relinked:int
+     *     }
+     * }
      *
      * @throws Throwable
      */
@@ -51,9 +86,10 @@ class ProductShopBindingService
         $source_product = Product::query()->find($product_id);
         if ($source_product === null || $shop_id <= 0) {
             return [
-                'product_id' => 0,
-                'bound'      => 0,
-                'duplicated' => 0,
+                'product_id'            => 0,
+                'bound'                 => 0,
+                'duplicated'            => 0,
+                'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
             ];
         }
 
@@ -105,6 +141,7 @@ class ProductShopBindingService
             'products_duplicated' => 0,
             'products_skipped'    => 0,
             'errors'              => 0,
+            ...self::EMPTY_CATALOG_SYNC_SUMMARY,
         ];
 
         foreach ($normalized_product_ids as $product_id) {
@@ -120,6 +157,9 @@ class ProductShopBindingService
                     $bind_result = $this->bindProductToShop($source_product, $shop_id, $product_import_batch_id);
                     $summary['products_bound'] += $bind_result['bound'];
                     $summary['products_duplicated'] += $bind_result['duplicated'];
+                    foreach (self::EMPTY_CATALOG_SYNC_SUMMARY as $summary_key => $default_value) {
+                        $summary[$summary_key] += (int) ($bind_result['catalog_sync_summary'][$summary_key] ?? $default_value);
+                    }
 
                     $target_product_id = $bind_result['product_id'] ?? 0;
                     if ($product_import_batch_id > 0 && $target_product_id > 0) {
@@ -144,7 +184,17 @@ class ProductShopBindingService
     }
 
     /**
-     * @return array{product_id:int, bound: int, duplicated: int}
+     * @return array{
+     *     product_id:int,
+     *     bound:int,
+     *     duplicated:int,
+     *     catalog_sync_summary:array{
+     *         categories_relinked:int,
+     *         attributes_relinked:int,
+     *         manufacturer_relinked:int,
+     *         brand_relinked:int
+     *     }
+     * }
      *
      * @throws Throwable
      */
@@ -152,8 +202,10 @@ class ProductShopBindingService
     {
         if ($shop_id <= 0) {
             return [
-                'product_id' => (int) $source_product->id,
-                'bound'      => 0, 'duplicated' => 0,
+                'product_id'            => (int) $source_product->id,
+                'bound'                 => 0,
+                'duplicated'            => 0,
+                'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
             ];
         }
 
@@ -164,7 +216,12 @@ class ProductShopBindingService
                 $shop_name         = (string) (Shop::query()->whereKey($shop_id)->value('name') ?? $shop_id);
                 $resolved_batch_id = $this->resolveProductImportBatchId($source_product, $product_import_batch_id);
                 if ($resolved_batch_id <= 0) {
-                    return ['product_id' => (int) $source_product->id, 'bound' => 0, 'duplicated' => 0];
+                    return [
+                        'product_id'            => (int) $source_product->id,
+                        'bound'                 => 0,
+                        'duplicated'            => 0,
+                        'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
+                    ];
                 }
 
                 $family_ulid                     = $this->ensureProductFamilyUlid($source_product);
@@ -183,9 +240,10 @@ class ProductShopBindingService
                         ->update(['product_import_batch_id' => $resolved_batch_id]);
 
                     return [
-                        'product_id' => $already_bound_family_product_id,
-                        'bound'      => 0,
-                        'duplicated' => 0,
+                        'product_id'            => $already_bound_family_product_id,
+                        'bound'                 => 0,
+                        'duplicated'            => 0,
+                        'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
                     ];
                 }
 
@@ -208,9 +266,10 @@ class ProductShopBindingService
                     }
 
                     return [
-                        'product_id' => (int) $source_product->id,
-                        'bound'      => 0,
-                        'duplicated' => 0,
+                        'product_id'            => (int) $source_product->id,
+                        'bound'                 => 0,
+                        'duplicated'            => 0,
+                        'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
                     ];
                 }
 
@@ -231,22 +290,70 @@ class ProductShopBindingService
                         'marked_to_shop' => $shop_name,
                     ]);
 
+                    $catalog_sync_summary = $this->ensureShopScopedCatalogEntitiesForProduct($source_product->id, $shop_id);
                     $this->ensureShopLinksForProduct($source_product->id, $shop_id);
 
-                    return ['product_id' => (int) $source_product->id, 'bound' => 1, 'duplicated' => 0];
+                    return [
+                        'product_id'            => (int) $source_product->id,
+                        'bound'                 => 1,
+                        'duplicated'            => 0,
+                        'catalog_sync_summary'  => $catalog_sync_summary,
+                    ];
                 }
 
                 $duplicated_product = $this->duplicateProductWithRelationsForShop($source_product, $shop_id, $shop_name, $resolved_batch_id);
+                $catalog_sync_summary = $this->ensureShopScopedCatalogEntitiesForProduct((int) $duplicated_product->id, $shop_id);
                 $this->ensureShopLinksForProduct($duplicated_product->id, $shop_id);
 
-                return ['product_id' => (int) $duplicated_product->id, 'bound' => 1, 'duplicated' => 1];
+                return [
+                    'product_id'            => (int) $duplicated_product->id,
+                    'bound'                 => 1,
+                    'duplicated'            => 1,
+                    'catalog_sync_summary'  => $catalog_sync_summary,
+                ];
             }),
         );
     }
 
     /**
-     * @param  callable():array{product_id:int, bound: int, duplicated: int}  $binding_callback
-     * @return array{product_id:int, bound: int, duplicated: int}
+     * @param  callable():array{
+     *     product_id:int,
+     *     bound:int,
+     *     duplicated:int,
+     *     catalog_sync_summary:array{
+     *         categories_relinked:int,
+     *         categories_created:int,
+     *         categories_reused:int,
+     *         attributes_relinked:int,
+     *         attributes_created:int,
+     *         attributes_reused:int,
+     *         manufacturer_relinked:int,
+     *         manufacturers_created:int,
+     *         manufacturers_reused:int,
+     *         brand_relinked:int,
+     *         brands_created:int,
+     *         brands_reused:int
+     *     }
+     * }  $binding_callback
+     * @return array{
+     *     product_id:int,
+     *     bound:int,
+     *     duplicated:int,
+     *     catalog_sync_summary:array{
+     *         categories_relinked:int,
+     *         categories_created:int,
+     *         categories_reused:int,
+     *         attributes_relinked:int,
+     *         attributes_created:int,
+     *         attributes_reused:int,
+     *         manufacturer_relinked:int,
+     *         manufacturers_created:int,
+     *         manufacturers_reused:int,
+     *         brand_relinked:int,
+     *         brands_created:int,
+     *         brands_reused:int
+     *     }
+     * }
      */
     private function runBindingWithFamilyLock(Product $source_product, int $shop_id, callable $binding_callback): array
     {
@@ -263,9 +370,10 @@ class ProductShopBindingService
                 });
         } catch (LockTimeoutException $exception) {
             return [
-                'product_id' => (int) $source_product->id,
-                'bound'      => 0,
-                'duplicated' => 0,
+                'product_id'            => (int) $source_product->id,
+                'bound'                 => 0,
+                'duplicated'            => 0,
+                'catalog_sync_summary'  => self::EMPTY_CATALOG_SYNC_SUMMARY,
             ];
         }
     }
@@ -509,27 +617,555 @@ class ProductShopBindingService
         return $duplicated_product;
     }
 
+    private function ensureShopScopedCatalogEntitiesForProduct(int $product_id, int $shop_id): array
+    {
+        if ($product_id <= 0 || $shop_id <= 0) {
+            return self::EMPTY_CATALOG_SYNC_SUMMARY;
+        }
+
+        if (! $this->hasProductShopBinding($product_id, $shop_id)) {
+            Log::channel('stack')->warning('Catalog entity relink skipped because product is not bound to shop', [
+                'product_id' => $product_id,
+                'shop_id'    => $shop_id,
+            ]);
+
+            return self::EMPTY_CATALOG_SYNC_SUMMARY;
+        }
+
+        $category_summary           = $this->relinkProductCategoriesToShopScope($product_id, $shop_id);
+        $attribute_summary          = $this->relinkProductAttributesToShopScope($product_id, $shop_id);
+        $manufacturer_brand_summary = $this->relinkProductManufacturerBrandToShopScope($product_id, $shop_id);
+
+        return [
+            'categories_relinked'   => $category_summary['relinked'],
+            'categories_assigned'   => $category_summary['assigned'],
+            'categories_created'    => $category_summary['created'],
+            'categories_reused'     => $category_summary['reused'],
+            'attributes_relinked'   => $attribute_summary['relinked'],
+            'attributes_assigned'   => $attribute_summary['assigned'],
+            'attributes_created'    => $attribute_summary['created'],
+            'attributes_reused'     => $attribute_summary['reused'],
+            'manufacturer_relinked' => $manufacturer_brand_summary['manufacturer_relinked'],
+            'manufacturers_assigned' => $manufacturer_brand_summary['manufacturers_assigned'],
+            'manufacturers_created' => $manufacturer_brand_summary['manufacturers_created'],
+            'manufacturers_reused'  => $manufacturer_brand_summary['manufacturers_reused'],
+            'brand_relinked'        => $manufacturer_brand_summary['brand_relinked'],
+            'brands_assigned'       => $manufacturer_brand_summary['brands_assigned'],
+            'brands_created'        => $manufacturer_brand_summary['brands_created'],
+            'brands_reused'         => $manufacturer_brand_summary['brands_reused'],
+        ];
+    }
+
+    /**
+     * @return array{relinked:int,assigned:int,created:int,reused:int}
+     */
+    private function relinkProductCategoriesToShopScope(int $product_id, int $shop_id): array
+    {
+        if (! $this->hasCatalogEntityShopScopeColumns('categories')) {
+            return [
+                'relinked' => 0,
+                'assigned' => 0,
+                'created'  => 0,
+                'reused'   => 0,
+            ];
+        }
+
+        $category_rows = CategoryProduct::query()
+            ->where('product_id', $product_id)
+            ->orderBy('id')
+            ->get();
+
+        $category_map = [];
+
+        $summary = [
+            'relinked' => 0,
+            'assigned' => 0,
+            'created'  => 0,
+            'reused'   => 0,
+        ];
+
+        foreach ($category_rows as $category_row) {
+            $source_category_id = (int) ($category_row->category_id ?? 0);
+            if ($source_category_id <= 0) {
+                continue;
+            }
+
+            $source_category = Category::query()->find($source_category_id);
+            if (! $source_category instanceof Category) {
+                continue;
+            }
+            $source_shop_id_before = (int) ($source_category->shop_id ?? 0);
+
+            $source_family_ulid = Str::trim((string) ($source_category->family_ulid ?? ''));
+            $existing_target_category = $source_family_ulid !== ''
+                ? Category::findByFamilyAndShop($source_family_ulid, $shop_id)
+                : null;
+
+            $target_category_id = $this->resolveShopScopedCategoryId($source_category_id, $shop_id, $category_map);
+            if ($target_category_id <= 0 || $target_category_id === $source_category_id) {
+                $assigned_to_shop = $source_shop_id_before <= 0
+                    && (int) (Category::query()->whereKey($source_category_id)->value('shop_id') ?? 0) === $shop_id;
+                if ($assigned_to_shop) {
+                    $summary['assigned']++;
+                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        'strategy'       => 'assign',
+                        'entity_type'    => 'category',
+                        'entity_id'      => $source_category_id,
+                        'target_shop_id' => $shop_id,
+                    ]);
+                }
+
+                continue;
+            }
+
+            $existing_target_row = CategoryProduct::query()
+                ->where('product_id', $product_id)
+                ->where('category_id', $target_category_id)
+                ->first();
+
+            if ($existing_target_row instanceof CategoryProduct) {
+                $category_row->delete();
+
+                continue;
+            }
+
+            $category_row->update([
+                'category_id' => $target_category_id,
+            ]);
+            $summary['relinked']++;
+
+            if ($existing_target_category instanceof Category && (int) $existing_target_category->id === $target_category_id) {
+                $summary['reused']++;
+                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    'strategy'       => 'reuse',
+                    'entity_type'    => 'category',
+                    'entity_id'      => $source_category_id,
+                    'target_shop_id' => $shop_id,
+                    'target_id'      => $target_category_id,
+                ]);
+            } else {
+                $summary['created']++;
+                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    'strategy'       => 'duplicate',
+                    'entity_type'    => 'category',
+                    'entity_id'      => $source_category_id,
+                    'target_shop_id' => $shop_id,
+                    'target_id'      => $target_category_id,
+                ]);
+            }
+
+            Log::channel('daily')->info('Product category relinked to shop-scoped category', [
+                'product_id'         => $product_id,
+                'shop_id'            => $shop_id,
+                'source_category_id' => $source_category_id,
+                'target_category_id' => $target_category_id,
+                'is_reused'          => $existing_target_category instanceof Category && (int) $existing_target_category->id === $target_category_id,
+            ]);
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param  array<int, int>  $category_map
+     */
+    private function resolveShopScopedCategoryId(int $category_id, int $shop_id, array &$category_map): int
+    {
+        if (array_key_exists($category_id, $category_map)) {
+            return $category_map[$category_id];
+        }
+
+        $category = Category::query()->find($category_id);
+        if (! $category instanceof Category) {
+            return 0;
+        }
+
+        if ((int) ($category->shop_id ?? 0) === $shop_id) {
+            $category_map[$category_id] = (int) $category->id;
+
+            return (int) $category->id;
+        }
+
+        $target_parent_id = null;
+        $parent_id        = (int) ($category->parent_id ?? 0);
+        if ($parent_id > 0) {
+            $resolved_parent_id = $this->resolveShopScopedCategoryId($parent_id, $shop_id, $category_map);
+            $target_parent_id   = $resolved_parent_id > 0 ? $resolved_parent_id : null;
+        }
+
+        $target_category = $category->duplicateForShop($shop_id, $target_parent_id);
+        $category_map[$category_id] = (int) $target_category->id;
+
+        return (int) $target_category->id;
+    }
+
+    /**
+     * @return array{relinked:int,assigned:int,created:int,reused:int}
+     */
+    private function relinkProductAttributesToShopScope(int $product_id, int $shop_id): array
+    {
+        if (! $this->hasCatalogEntityShopScopeColumns('attributes')) {
+            return [
+                'relinked' => 0,
+                'assigned' => 0,
+                'created'  => 0,
+                'reused'   => 0,
+            ];
+        }
+
+        $attribute_rows = ProductToAttribute::query()
+            ->where('product_id', $product_id)
+            ->orderBy('id')
+            ->get();
+
+        $summary = [
+            'relinked' => 0,
+            'assigned' => 0,
+            'created'  => 0,
+            'reused'   => 0,
+        ];
+
+        foreach ($attribute_rows as $attribute_row) {
+            $source_attribute_id = (int) ($attribute_row->attribute_id ?? 0);
+            if ($source_attribute_id <= 0) {
+                continue;
+            }
+
+            $source_attribute = Attribute::query()->find($source_attribute_id);
+            if (! $source_attribute instanceof Attribute) {
+                continue;
+            }
+            $source_shop_id_before = (int) ($source_attribute->shop_id ?? 0);
+
+            $source_family_ulid = Str::trim((string) ($source_attribute->family_ulid ?? ''));
+            $existing_target_attribute = $source_family_ulid !== ''
+                ? Attribute::findByFamilyAndShop($source_family_ulid, $shop_id)
+                : null;
+
+            $target_attribute    = $source_attribute->duplicateForShop($shop_id);
+            $target_attribute_id = (int) $target_attribute->id;
+
+            if ($target_attribute_id <= 0 || $target_attribute_id === $source_attribute_id) {
+                $assigned_to_shop = $source_shop_id_before <= 0
+                    && (int) ($target_attribute->shop_id ?? 0) === $shop_id;
+                if ($assigned_to_shop) {
+                    $summary['assigned']++;
+                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        'strategy'       => 'assign',
+                        'entity_type'    => 'attribute',
+                        'entity_id'      => $source_attribute_id,
+                        'target_shop_id' => $shop_id,
+                    ]);
+                }
+
+                continue;
+            }
+
+            $existing_target_row = ProductToAttribute::query()
+                ->where('product_id', $product_id)
+                ->where('attribute_id', $target_attribute_id)
+                ->where(function (Builder $query) use ($attribute_row): void {
+                    if ($attribute_row->shop_language_id === null) {
+                        $query->whereNull('shop_language_id');
+
+                        return;
+                    }
+
+                    $query->where('shop_language_id', (int) $attribute_row->shop_language_id);
+                })
+                ->first();
+
+            if ($existing_target_row instanceof ProductToAttribute) {
+                if (Str::trim((string) ($existing_target_row->text ?? '')) === '' && Str::trim((string) ($attribute_row->text ?? '')) !== '') {
+                    $existing_target_row->update([
+                        'text' => $attribute_row->text,
+                    ]);
+                }
+
+                $attribute_row->delete();
+
+                continue;
+            }
+
+            $attribute_row->update([
+                'attribute_id' => $target_attribute_id,
+            ]);
+            $summary['relinked']++;
+
+            if ($existing_target_attribute instanceof Attribute && (int) $existing_target_attribute->id === $target_attribute_id) {
+                $summary['reused']++;
+                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    'strategy'       => 'reuse',
+                    'entity_type'    => 'attribute',
+                    'entity_id'      => $source_attribute_id,
+                    'target_shop_id' => $shop_id,
+                    'target_id'      => $target_attribute_id,
+                ]);
+            } else {
+                $summary['created']++;
+                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    'strategy'       => 'duplicate',
+                    'entity_type'    => 'attribute',
+                    'entity_id'      => $source_attribute_id,
+                    'target_shop_id' => $shop_id,
+                    'target_id'      => $target_attribute_id,
+                ]);
+            }
+
+            Log::channel('daily')->info('Product attribute relinked to shop-scoped attribute', [
+                'product_id'          => $product_id,
+                'shop_id'             => $shop_id,
+                'source_attribute_id' => $source_attribute_id,
+                'target_attribute_id' => $target_attribute_id,
+                'is_reused'           => $existing_target_attribute instanceof Attribute && (int) $existing_target_attribute->id === $target_attribute_id,
+            ]);
+        }
+
+        return $summary;
+    }
+
+    private function relinkProductManufacturerBrandToShopScope(int $product_id, int $shop_id): array
+    {
+        if (! $this->hasProductManufacturerBrandTable()) {
+            return [
+                'manufacturer_relinked' => 0,
+                'manufacturers_assigned' => 0,
+                'manufacturers_created' => 0,
+                'manufacturers_reused'  => 0,
+                'brand_relinked'        => 0,
+                'brands_assigned'       => 0,
+                'brands_created'        => 0,
+                'brands_reused'         => 0,
+            ];
+        }
+
+        $binding = ProductToManufacturerBrand::query()
+            ->where('product_id', $product_id)
+            ->first();
+
+        if (! $binding instanceof ProductToManufacturerBrand) {
+            return [
+                'manufacturer_relinked' => 0,
+                'manufacturers_assigned' => 0,
+                'manufacturers_created' => 0,
+                'manufacturers_reused'  => 0,
+                'brand_relinked'        => 0,
+                'brands_assigned'       => 0,
+                'brands_created'        => 0,
+                'brands_reused'         => 0,
+            ];
+        }
+
+        $updates = [];
+        $manufacturer_relinked = 0;
+        $manufacturers_assigned = 0;
+        $manufacturers_created = 0;
+        $manufacturers_reused  = 0;
+        $brand_relinked        = 0;
+        $brands_assigned       = 0;
+        $brands_created        = 0;
+        $brands_reused         = 0;
+
+        $manufacturer_id = (int) ($binding->manufacturer_id ?? 0);
+        if ($manufacturer_id > 0 && $this->hasCatalogEntityShopScopeColumns('manufacturers')) {
+            $manufacturer = Manufacturer::query()->find($manufacturer_id);
+            if ($manufacturer instanceof Manufacturer) {
+                $source_shop_id_before = (int) ($manufacturer->shop_id ?? 0);
+                $source_family_ulid = Str::trim((string) ($manufacturer->family_ulid ?? ''));
+                $existing_target_manufacturer = $source_family_ulid !== ''
+                    ? Manufacturer::findByFamilyAndShop($source_family_ulid, $shop_id)
+                    : null;
+
+                $target_manufacturer_id = (int) $manufacturer->duplicateForShop($shop_id)->id;
+                $updates['manufacturer_id'] = $target_manufacturer_id;
+                if ($target_manufacturer_id > 0 && $target_manufacturer_id !== $manufacturer_id) {
+                    $manufacturer_relinked++;
+                    if ($existing_target_manufacturer instanceof Manufacturer && (int) $existing_target_manufacturer->id === $target_manufacturer_id) {
+                        $manufacturers_reused++;
+                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                            'strategy'       => 'reuse',
+                            'entity_type'    => 'manufacturer',
+                            'entity_id'      => $manufacturer_id,
+                            'target_shop_id' => $shop_id,
+                            'target_id'      => $target_manufacturer_id,
+                        ]);
+                    } else {
+                        $manufacturers_created++;
+                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                            'strategy'       => 'duplicate',
+                            'entity_type'    => 'manufacturer',
+                            'entity_id'      => $manufacturer_id,
+                            'target_shop_id' => $shop_id,
+                            'target_id'      => $target_manufacturer_id,
+                        ]);
+                    }
+                } elseif ($target_manufacturer_id > 0 && $source_shop_id_before <= 0) {
+                    $manufacturers_assigned++;
+                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        'strategy'       => 'assign',
+                        'entity_type'    => 'manufacturer',
+                        'entity_id'      => $manufacturer_id,
+                        'target_shop_id' => $shop_id,
+                    ]);
+                }
+            }
+        }
+
+        $brand_id = (int) ($binding->brand_id ?? 0);
+        if ($brand_id > 0 && $this->hasCatalogEntityShopScopeColumns('brands')) {
+            $brand = Brand::query()->find($brand_id);
+            if ($brand instanceof Brand) {
+                $source_shop_id_before = (int) ($brand->shop_id ?? 0);
+                $source_family_ulid = Str::trim((string) ($brand->family_ulid ?? ''));
+                $existing_target_brand = $source_family_ulid !== ''
+                    ? Brand::findByFamilyAndShop($source_family_ulid, $shop_id)
+                    : null;
+
+                $target_brand_id = (int) $brand->duplicateForShop($shop_id)->id;
+                $updates['brand_id'] = $target_brand_id;
+                if ($target_brand_id > 0 && $target_brand_id !== $brand_id) {
+                    $brand_relinked++;
+                    if ($existing_target_brand instanceof Brand && (int) $existing_target_brand->id === $target_brand_id) {
+                        $brands_reused++;
+                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                            'strategy'       => 'reuse',
+                            'entity_type'    => 'brand',
+                            'entity_id'      => $brand_id,
+                            'target_shop_id' => $shop_id,
+                            'target_id'      => $target_brand_id,
+                        ]);
+                    } else {
+                        $brands_created++;
+                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                            'strategy'       => 'duplicate',
+                            'entity_type'    => 'brand',
+                            'entity_id'      => $brand_id,
+                            'target_shop_id' => $shop_id,
+                            'target_id'      => $target_brand_id,
+                        ]);
+                    }
+                } elseif ($target_brand_id > 0 && $source_shop_id_before <= 0) {
+                    $brands_assigned++;
+                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        'strategy'       => 'assign',
+                        'entity_type'    => 'brand',
+                        'entity_id'      => $brand_id,
+                        'target_shop_id' => $shop_id,
+                    ]);
+                }
+            }
+        }
+
+        if ($updates !== []) {
+            $binding->update($updates);
+
+            Log::channel('daily')->info('Product manufacturer/brand relinked to shop-scoped entities', [
+                'product_id' => $product_id,
+                'shop_id'    => $shop_id,
+                'updates'    => $updates,
+            ]);
+        }
+
+        return [
+            'manufacturer_relinked' => $manufacturer_relinked,
+            'manufacturers_assigned' => $manufacturers_assigned,
+            'manufacturers_created' => $manufacturers_created,
+            'manufacturers_reused'  => $manufacturers_reused,
+            'brand_relinked'        => $brand_relinked,
+            'brands_assigned'       => $brands_assigned,
+            'brands_created'        => $brands_created,
+            'brands_reused'         => $brands_reused,
+        ];
+    }
+
+    private function hasCatalogEntityShopScopeColumns(string $table_name): bool
+    {
+        try {
+            $schema_builder = match ($table_name) {
+                'categories'    => new Category()->getConnection()->getSchemaBuilder(),
+                'attributes'    => new Attribute()->getConnection()->getSchemaBuilder(),
+                'manufacturers' => new Manufacturer()->getConnection()->getSchemaBuilder(),
+                'brands'        => new Brand()->getConnection()->getSchemaBuilder(),
+                default         => DB::connection()->getSchemaBuilder(),
+            };
+
+            return $schema_builder->hasColumn($table_name, 'shop_id')
+                && $schema_builder->hasColumn($table_name, 'family_ulid');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     private function ensureShopLinksForProduct(int $product_id, int $shop_id): void
     {
+        if (! $this->hasProductShopBinding($product_id, $shop_id)) {
+            Log::channel('stack')->warning('Catalog external mapping skipped because product is not bound to shop', [
+                'product_id' => $product_id,
+                'shop_id'    => $shop_id,
+            ]);
+
+            return;
+        }
+
         $category_ids = CategoryProduct::getUniqueCategoryIdsByProductId($product_id);
 
         foreach ($category_ids as $category_id) {
-            CategoryShop::query()->firstOrCreate([
+            $category = Category::query()->find($category_id);
+            if (! $category instanceof Category || ! $this->isEntityOwnedByShop($category->shop_id, $shop_id, 'categories')) {
+                Log::channel('daily')->warning('[FIX] Skipping category external mapping due to shop scope mismatch', [
+                    'product_id'   => $product_id,
+                    'shop_id'      => $shop_id,
+                    'category_id'  => $category_id,
+                    'category_shop_id' => $category?->shop_id,
+                ]);
+
+                continue;
+            }
+
+            $category_shop = CategoryShop::query()->firstOrCreate([
                 'category_id' => $category_id,
                 'shop_id'     => $shop_id,
             ], [
                 'external_category_id' => null,
+            ]);
+
+            Log::channel('daily')->info('[FIX] Category external mapping row ensured', [
+                'product_id'         => $product_id,
+                'shop_id'            => $shop_id,
+                'category_id'        => $category_id,
+                'mapping_created'    => $category_shop->wasRecentlyCreated,
+                'external_category_id' => $category_shop->external_category_id,
             ]);
         }
 
         $attribute_ids = ProductToAttribute::getUniqueAttributeIdsByProductId($product_id);
 
         foreach ($attribute_ids as $attribute_id) {
-            AttributeShop::query()->firstOrCreate([
+            $attribute = Attribute::query()->find($attribute_id);
+            if (! $attribute instanceof Attribute || ! $this->isEntityOwnedByShop($attribute->shop_id, $shop_id, 'attributes')) {
+                Log::channel('daily')->warning('[FIX] Skipping attribute external mapping due to shop scope mismatch', [
+                    'product_id'      => $product_id,
+                    'shop_id'         => $shop_id,
+                    'attribute_id'    => $attribute_id,
+                    'attribute_shop_id' => $attribute?->shop_id,
+                ]);
+
+                continue;
+            }
+
+            $attribute_shop = AttributeShop::query()->firstOrCreate([
                 'attribute_id' => $attribute_id,
                 'shop_id'      => $shop_id,
             ], [
                 'external_attribute_id' => null,
+            ]);
+
+            Log::channel('daily')->info('[FIX] Attribute external mapping row ensured', [
+                'product_id'            => $product_id,
+                'shop_id'               => $shop_id,
+                'attribute_id'          => $attribute_id,
+                'mapping_created'       => $attribute_shop->wasRecentlyCreated,
+                'external_attribute_id' => $attribute_shop->external_attribute_id,
             ]);
         }
 
@@ -540,7 +1176,16 @@ class ProductShopBindingService
 
             $manufacturer_id = (int) ($manufacturer_brand_binding?->manufacturer_id ?? 0);
             if ($manufacturer_id > 0 && $this->hasManufacturerShopTable()) {
-                ManufacturerShop::query()->firstOrCreate(
+                $manufacturer = Manufacturer::query()->find($manufacturer_id);
+                if (! $manufacturer instanceof Manufacturer || ! $this->isEntityOwnedByShop($manufacturer->shop_id, $shop_id, 'manufacturers')) {
+                    Log::channel('daily')->warning('[FIX] Skipping manufacturer external mapping due to shop scope mismatch', [
+                        'product_id'            => $product_id,
+                        'shop_id'               => $shop_id,
+                        'manufacturer_id'       => $manufacturer_id,
+                        'manufacturer_shop_id'  => $manufacturer?->shop_id,
+                    ]);
+                } else {
+                    $manufacturer_shop = ManufacturerShop::query()->firstOrCreate(
                     [
                         'manufacturer_id' => $manufacturer_id,
                         'shop_id'         => $shop_id,
@@ -549,11 +1194,29 @@ class ProductShopBindingService
                         'external_manufacturer_id' => null,
                     ]
                 );
+
+                    Log::channel('daily')->info('[FIX] Manufacturer external mapping row ensured', [
+                        'product_id'               => $product_id,
+                        'shop_id'                  => $shop_id,
+                        'manufacturer_id'          => $manufacturer_id,
+                        'mapping_created'          => $manufacturer_shop->wasRecentlyCreated,
+                        'external_manufacturer_id' => $manufacturer_shop->external_manufacturer_id,
+                    ]);
+                }
             }
 
             $brand_id = (int) ($manufacturer_brand_binding?->brand_id ?? 0);
             if ($brand_id > 0 && $this->hasBrandShopTable()) {
-                BrandShop::query()->firstOrCreate(
+                $brand = Brand::query()->find($brand_id);
+                if (! $brand instanceof Brand || ! $this->isEntityOwnedByShop($brand->shop_id, $shop_id, 'brands')) {
+                    Log::channel('daily')->warning('[FIX] Skipping brand external mapping due to shop scope mismatch', [
+                        'product_id'      => $product_id,
+                        'shop_id'         => $shop_id,
+                        'brand_id'        => $brand_id,
+                        'brand_shop_id'   => $brand?->shop_id,
+                    ]);
+                } else {
+                    $brand_shop = BrandShop::query()->firstOrCreate(
                     [
                         'brand_id' => $brand_id,
                         'shop_id'  => $shop_id,
@@ -562,59 +1225,99 @@ class ProductShopBindingService
                         'external_brand_id' => null,
                     ]
                 );
+
+                    Log::channel('daily')->info('[FIX] Brand external mapping row ensured', [
+                        'product_id'         => $product_id,
+                        'shop_id'            => $shop_id,
+                        'brand_id'           => $brand_id,
+                        'mapping_created'    => $brand_shop->wasRecentlyCreated,
+                        'external_brand_id'  => $brand_shop->external_brand_id,
+                    ]);
+                }
             }
         }
     }
 
+    private function isEntityOwnedByShop(?int $entity_shop_id, int $shop_id, string $table_name): bool
+    {
+        if ($shop_id <= 0) {
+            return false;
+        }
+
+        if (! $this->hasCatalogEntityShopScopeColumns($table_name)) {
+            return true;
+        }
+
+        return (int) $entity_shop_id === $shop_id;
+    }
+
     private function hasProductManufacturerBrandTable(): bool
     {
-        static $has_table = null;
-
-        if (is_bool($has_table)) {
-            return $has_table;
-        }
-
         try {
-            $has_table = DB::connection()->getSchemaBuilder()->hasTable('product_to_manufacturer_brand');
+            $model = new ProductToManufacturerBrand();
+
+            return $model->getConnection()
+                ->getSchemaBuilder()
+                ->hasTable($model->getTable());
         } catch (Throwable) {
-            $has_table = false;
+            return false;
+        }
+    }
+
+    private function hasProductShopBinding(int $product_id, int $shop_id): bool
+    {
+        if ($product_id <= 0 || $shop_id <= 0) {
+            return false;
         }
 
-        return $has_table;
+        return ProductShop::query()
+            ->where('product_id', $product_id)
+            ->where('shop_id', $shop_id)
+            ->exists();
     }
 
     private function hasManufacturerShopTable(): bool
     {
-        static $has_table = null;
-
-        if (is_bool($has_table)) {
-            return $has_table;
-        }
-
         try {
-            $has_table = DB::connection()->getSchemaBuilder()->hasTable('manufacturer_shop');
-        } catch (Throwable) {
-            $has_table = false;
-        }
+            $model = new ManufacturerShop();
 
-        return $has_table;
+            return $model->getConnection()
+                ->getSchemaBuilder()
+                ->hasTable($model->getTable());
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function hasBrandShopTable(): bool
     {
-        static $has_table = null;
-
-        if (is_bool($has_table)) {
-            return $has_table;
-        }
-
         try {
-            $has_table = DB::connection()->getSchemaBuilder()->hasTable('brand_shop');
-        } catch (Throwable) {
-            $has_table = false;
-        }
+            $model = new BrandShop();
 
-        return $has_table;
+            return $model->getConnection()
+                ->getSchemaBuilder()
+                ->hasTable($model->getTable());
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function hasManufacturerDescriptionsTable(): bool
+    {
+        try {
+            return DB::connection()->getSchemaBuilder()->hasTable('manufacturer_descriptions');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function hasBrandDescriptionsTable(): bool
+    {
+        try {
+            return DB::connection()->getSchemaBuilder()->hasTable('brand_descriptions');
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function resolveProductImportBatchId(Product $source_product, int $product_import_batch_id): int
@@ -663,6 +1366,8 @@ class ProductShopBindingService
         $this->syncSeoUrlsLanguage($product_id, $default_shop_language_id);
         $this->syncCategoryDescriptionsLanguage($product_id, $default_shop_language_id);
         $this->syncAttributeDescriptionsLanguage($product_id, $default_shop_language_id);
+        $this->syncManufacturerDescriptionsLanguage($product_id, $default_shop_language_id);
+        $this->syncBrandDescriptionsLanguage($product_id, $default_shop_language_id);
     }
 
     /**
@@ -862,6 +1567,98 @@ class ProductShopBindingService
                 ->first();
 
             if ($existing_default_row instanceof AttributeDescription) {
+                $existing_default_row->update([
+                    'name' => $existing_default_row->name ?? $null_language_row->name,
+                ]);
+
+                $null_language_row->delete();
+
+                continue;
+            }
+
+            $null_language_row->update([
+                'shop_language_id' => $default_shop_language_id,
+            ]);
+        }
+    }
+
+    private function syncManufacturerDescriptionsLanguage(int $product_id, int $default_shop_language_id): void
+    {
+        try {
+            $manufacturer_id = (int) (ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->value('manufacturer_id') ?? 0);
+        } catch (Throwable) {
+            return;
+        }
+
+        if ($manufacturer_id <= 0) {
+            return;
+        }
+
+        try {
+            $null_language_rows = ManufacturerDescription::query()
+                ->where('manufacturer_id', $manufacturer_id)
+                ->whereNull('shop_language_id')
+                ->orderBy('id')
+                ->get();
+        } catch (Throwable) {
+            return;
+        }
+
+        foreach ($null_language_rows as $null_language_row) {
+            $existing_default_row = ManufacturerDescription::query()
+                ->where('manufacturer_id', $manufacturer_id)
+                ->where('shop_language_id', $default_shop_language_id)
+                ->first();
+
+            if ($existing_default_row instanceof ManufacturerDescription) {
+                $existing_default_row->update([
+                    'name' => $existing_default_row->name ?? $null_language_row->name,
+                ]);
+
+                $null_language_row->delete();
+
+                continue;
+            }
+
+            $null_language_row->update([
+                'shop_language_id' => $default_shop_language_id,
+            ]);
+        }
+    }
+
+    private function syncBrandDescriptionsLanguage(int $product_id, int $default_shop_language_id): void
+    {
+        try {
+            $brand_id = (int) (ProductToManufacturerBrand::query()
+                ->where('product_id', $product_id)
+                ->value('brand_id') ?? 0);
+        } catch (Throwable) {
+            return;
+        }
+
+        if ($brand_id <= 0) {
+            return;
+        }
+
+        try {
+            $null_language_rows = BrandDescription::query()
+                ->where('brand_id', $brand_id)
+                ->whereNull('shop_language_id')
+                ->orderBy('id')
+                ->get();
+        } catch (Throwable) {
+            return;
+        }
+
+        foreach ($null_language_rows as $null_language_row) {
+            $existing_default_row = BrandDescription::query()
+                ->where('brand_id', $brand_id)
+                ->where('shop_language_id', $default_shop_language_id)
+                ->first();
+
+            if ($existing_default_row instanceof BrandDescription) {
                 $existing_default_row->update([
                     'name' => $existing_default_row->name ?? $null_language_row->name,
                 ]);

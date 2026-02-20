@@ -8,6 +8,7 @@ use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
+use App\Models\Products\Updates\ProductBackups;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Supports\Services\Products\ProductBackupRestoreService;
@@ -150,7 +151,7 @@ class ProcessCatalogProductRestoreBatchJob implements ShouldQueue
                     );
 
                     if ($backup === null) {
-                        $raw_backup = \App\Models\Products\Updates\ProductBackups::getLatestExternalSnapshotForProductShop(
+                        $raw_backup = ProductBackups::getLatestExternalSnapshotForProductShop(
                             $product_id,
                             $shop_id,
                             $external_product_id
@@ -244,7 +245,7 @@ class ProcessCatalogProductRestoreBatchJob implements ShouldQueue
             ],
         ]);
 
-        Log::channel('stack')->info('Catalog products restore batch prepared', $summary);
+        Log::channel('daily')->info('Catalog products restore batch prepared', $summary);
     }
 
     private function createFailedRestoreItem(ProductUpdateBatch $batch, int $product_id, int $shop_id, string $error_message): void

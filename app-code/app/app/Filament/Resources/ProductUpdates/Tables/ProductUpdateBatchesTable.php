@@ -439,7 +439,7 @@ class ProductUpdateBatchesTable
             ],
         ]);
 
-        Log::channel('stack')->info('Product update batch marked as processing', [
+        Log::channel('daily')->info('Product update batch marked as processing', [
             'batch_id' => $batch_id,
         ]);
     }

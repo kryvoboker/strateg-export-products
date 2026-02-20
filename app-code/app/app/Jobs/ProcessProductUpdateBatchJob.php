@@ -42,6 +42,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use Revolution\Google\Sheets\Facades\Sheets;
 use RuntimeException;
 use Throwable;
@@ -985,7 +986,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         }
 
         $default_shop_language_id = $this->resolveDefaultShopLanguageId($resolved_shop_id);
-        $category_id              = $this->resolveOrCreateCategoryIdByPath($category_segments, $default_shop_language_id);
+        $category_id              = $this->resolveOrCreateCategoryIdByPath($category_segments, $default_shop_language_id, $resolved_shop_id);
 
         if ($category_id <= 0) {
             return;
@@ -1061,7 +1062,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                 continue;
             }
 
-            $attribute_id = $this->resolveOrCreateAttributeIdByName($attribute_name_part, $default_shop_language_id);
+            $attribute_id = $this->resolveOrCreateAttributeIdByName($attribute_name_part, $default_shop_language_id, $resolved_shop_id);
             if ($attribute_id <= 0) {
                 continue;
             }
@@ -1132,7 +1133,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             } elseif ($manufacturer_action === 'set') {
                 $manufacturer_name = Str::trim((string) ($manufacturer_instruction['value'] ?? ''));
                 $manufacturer_id   = $manufacturer_name !== ''
-                    ? $this->resolveOrCreateManufacturerIdByName($manufacturer_name, $default_shop_language_id)
+                    ? $this->resolveOrCreateManufacturerIdByName($manufacturer_name, $default_shop_language_id, $resolved_shop_id)
                     : 0;
             }
         }
@@ -1144,7 +1145,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             } elseif ($brand_action === 'set') {
                 $brand_name = Str::trim((string) ($brand_instruction['value'] ?? ''));
                 $brand_id   = $brand_name !== ''
-                    ? $this->resolveOrCreateBrandIdByName($brand_name, $default_shop_language_id)
+                    ? $this->resolveOrCreateBrandIdByName($brand_name, $default_shop_language_id, $resolved_shop_id)
                     : 0;
             }
         }
@@ -1426,7 +1427,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
     /**
      * @param  list<string>  $category_path
      */
-    private function resolveOrCreateCategoryIdByPath(array $category_path, int $shop_language_id): int
+    private function resolveOrCreateCategoryIdByPath(array $category_path, int $shop_language_id, int $shop_id = 0): int
     {
         $category_path = array_values(array_filter(
             array_map(static fn ($segment): string => Str::trim((string) $segment), $category_path),
@@ -1444,12 +1445,18 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
 
             if ($existing_category_id === null) {
                 $category = Category::query()->create([
+                    'shop_id'    => $shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('categories') ? $shop_id : null,
                     'parent_id'  => $parent_category_id,
                     'sort_order' => 0,
                     'is_active'  => true,
                 ]);
 
                 $existing_category_id = (int) $category->id;
+            } elseif ($shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('categories')) {
+                $existing_category = Category::query()->find((int) $existing_category_id);
+                if ($existing_category instanceof Category) {
+                    $existing_category_id = (int) $existing_category->duplicateForShop($shop_id, $parent_category_id)->id;
+                }
             }
 
             CategoryDescription::ensureDefaultDescription(
@@ -1464,7 +1471,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         return (int) $parent_category_id;
     }
 
-    private function resolveOrCreateAttributeIdByName(string $attribute_name, int $shop_language_id): int
+    private function resolveOrCreateAttributeIdByName(string $attribute_name, int $shop_language_id, int $shop_id = 0): int
     {
         $clean_attribute_name = Str::trim($attribute_name);
         if ($clean_attribute_name === '') {
@@ -1478,11 +1485,17 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
 
         if ($attribute_id <= 0) {
             $attribute = Attribute::query()->create([
+                'shop_id'    => $shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('attributes') ? $shop_id : null,
                 'sort_order' => 1,
                 'is_active'  => true,
             ]);
 
             $attribute_id = (int) $attribute->id;
+        } elseif ($shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('attributes')) {
+            $attribute = Attribute::query()->find($attribute_id);
+            if ($attribute instanceof Attribute) {
+                $attribute_id = (int) $attribute->duplicateForShop($shop_id)->id;
+            }
         }
 
         AttributeDescription::upsertName(
@@ -1494,14 +1507,14 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         return $attribute_id;
     }
 
-    private function resolveOrCreateManufacturerIdByName(string $manufacturer_name, int $shop_language_id): int
+    private function resolveOrCreateManufacturerIdByName(string $manufacturer_name, int $shop_language_id, int $shop_id = 0): int
     {
         $clean_name = Str::trim($manufacturer_name);
         if ($clean_name === '') {
             return 0;
         }
 
-        $cache_key = Str::lower($clean_name).':'.$shop_language_id;
+        $cache_key = Str::lower($clean_name).':'.$shop_language_id.':'.$shop_id;
         if (array_key_exists($cache_key, $this->manufacturer_id_cache_by_name)) {
             return $this->manufacturer_id_cache_by_name[$cache_key];
         }
@@ -1509,11 +1522,17 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         $manufacturer_id = ManufacturerDescription::findManufacturerIdByNameForLanguage($clean_name, $shop_language_id);
         if ($manufacturer_id <= 0) {
             $manufacturer = Manufacturer::query()->create([
+                'shop_id'    => $shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('manufacturers') ? $shop_id : null,
                 'sort_order' => 1,
                 'is_active'  => true,
             ]);
 
             $manufacturer_id = (int) $manufacturer->id;
+        } elseif ($shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('manufacturers')) {
+            $manufacturer = Manufacturer::query()->find($manufacturer_id);
+            if ($manufacturer instanceof Manufacturer) {
+                $manufacturer_id = (int) $manufacturer->duplicateForShop($shop_id)->id;
+            }
         }
 
         ManufacturerDescription::upsertName($manufacturer_id, $shop_language_id, $clean_name);
@@ -1522,14 +1541,14 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         return $manufacturer_id;
     }
 
-    private function resolveOrCreateBrandIdByName(string $brand_name, int $shop_language_id): int
+    private function resolveOrCreateBrandIdByName(string $brand_name, int $shop_language_id, int $shop_id = 0): int
     {
         $clean_name = Str::trim($brand_name);
         if ($clean_name === '') {
             return 0;
         }
 
-        $cache_key = Str::lower($clean_name).':'.$shop_language_id;
+        $cache_key = Str::lower($clean_name).':'.$shop_language_id.':'.$shop_id;
         if (array_key_exists($cache_key, $this->brand_id_cache_by_name)) {
             return $this->brand_id_cache_by_name[$cache_key];
         }
@@ -1537,11 +1556,17 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         $brand_id = BrandDescription::findBrandIdByNameForLanguage($clean_name, $shop_language_id);
         if ($brand_id <= 0) {
             $brand = Brand::query()->create([
+                'shop_id'    => $shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('brands') ? $shop_id : null,
                 'sort_order' => 1,
                 'is_active'  => true,
             ]);
 
             $brand_id = (int) $brand->id;
+        } elseif ($shop_id > 0 && $this->hasCatalogEntityShopScopeColumns('brands')) {
+            $brand = Brand::query()->find($brand_id);
+            if ($brand instanceof Brand) {
+                $brand_id = (int) $brand->duplicateForShop($shop_id)->id;
+            }
         }
 
         BrandDescription::upsertName($brand_id, $shop_language_id, $clean_name);
@@ -1571,7 +1596,7 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
 
         if (is_numeric($raw_value)) {
             try {
-                return \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $raw_value)
+                return Date::excelToDateTimeObject((float) $raw_value)
                     ->format('Y-m-d H:i:s');
             } catch (Throwable) {
                 return null;
@@ -1579,6 +1604,18 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         }
 
         return $raw_value;
+    }
+
+    private function hasCatalogEntityShopScopeColumns(string $table_name): bool
+    {
+        try {
+            $schema_builder = DB::connection()->getSchemaBuilder();
+
+            return $schema_builder->hasColumn($table_name, 'shop_id')
+                && $schema_builder->hasColumn($table_name, 'family_ulid');
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function normalizeBooleanValue(mixed $value): bool

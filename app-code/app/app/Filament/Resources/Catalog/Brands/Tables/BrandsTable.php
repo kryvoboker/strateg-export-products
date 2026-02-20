@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Brands\Tables;
 
 use App\Models\Brands\Brand;
-use App\Models\Brands\BrandShop;
 use App\Models\Shops\Shop;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -33,7 +32,7 @@ class BrandsTable
                     'descriptions' => static fn ($description_query) => $description_query
                         ->orderByRaw('shop_language_id IS NULL DESC')
                         ->orderBy('id'),
-                    'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
+                    'shop',
                 ])
                 ->orderBy('sort_order')
                 ->orderBy('id'))
@@ -56,6 +55,15 @@ class BrandsTable
                     ->label(__('admin/brands/brands.columns.shops'))
                     ->state(static fn (Brand $record): string => self::resolveBrandShopsText($record))
                     ->wrap(),
+                TextColumn::make('shop_context')
+                    ->label('Shop Scope')
+                    ->state(static fn (Brand $record): string => self::resolveDirectShopContext($record))
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('family_ulid')
+                    ->label('Family ULID')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->copyable(),
                 IconColumn::make('is_active')
                     ->label(__('admin/default.columns.is_active'))
                     ->boolean()
@@ -74,7 +82,7 @@ class BrandsTable
                             return $query;
                         }
 
-                        return $query->whereHas('shops', static fn (Builder $shop_query): Builder => $shop_query->where('shops.id', $shop_id));
+                        return $query->where('shop_id', $shop_id);
                     }),
                 SelectFilter::make('is_active')
                     ->label(__('admin/brands/brands.filters.status'))
@@ -125,12 +133,27 @@ class BrandsTable
                             }
 
                             $brands_total = 0;
+                            $created_total = 0;
+                            $reused_total  = 0;
                             foreach ($records as $record) {
                                 if (! $record instanceof Brand) {
                                     continue;
                                 }
 
-                                $record->shops()->syncWithoutDetaching($shop_ids);
+                                foreach ($shop_ids as $shop_id) {
+                                    $source_family_ulid = Str::trim((string) ($record->family_ulid ?? ''));
+                                    $existing_target = $source_family_ulid !== ''
+                                        ? Brand::findByFamilyAndShop($source_family_ulid, $shop_id)
+                                        : null;
+
+                                    $resolved_brand = $record->duplicateForShop($shop_id);
+                                    if ($existing_target instanceof Brand && (int) $existing_target->id === (int) $resolved_brand->id) {
+                                        $reused_total++;
+                                    } elseif ((int) $resolved_brand->id > 0) {
+                                        $created_total++;
+                                    }
+                                }
+
                                 $brands_total++;
                             }
 
@@ -139,7 +162,7 @@ class BrandsTable
                                 ->body(__('admin/brands/brands.messages.bulk_bind_result', [
                                     'brands_total' => $brands_total,
                                     'shops_total'  => count($shop_ids),
-                                ]))
+                                ]).', created: '.$created_total.', reused: '.$reused_total)
                                 ->success()
                                 ->send();
                         }),
@@ -163,26 +186,13 @@ class BrandsTable
 
     private static function resolveBrandShopsText(Brand $brand): string
     {
-        $shop_names = BrandShop::query()
-            ->where('brand_id', (int) $brand->id)
-            ->join('shops', 'shops.id', '=', 'brand_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name')
-            ->map(static fn ($shop_name): string => Str::of((string) $shop_name)->squish()->toString())
-            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
-            ->all();
+        return self::resolveDirectShopContext($brand);
+    }
 
-        $shop_names_by_key = [];
-        foreach ($shop_names as $shop_name) {
-            $shop_names_by_key[Str::lower($shop_name)] = $shop_name;
-        }
+    private static function resolveDirectShopContext(Brand $brand): string
+    {
+        $shop_name = Str::trim((string) ($brand->shop?->name ?? ''));
 
-        $shop_names = array_values($shop_names_by_key);
-
-        if ($shop_names === []) {
-            return __('admin/brands/brands.columns.no_shops');
-        }
-
-        return implode(', ', $shop_names);
+        return $shop_name !== '' ? $shop_name : __('admin/default.messages.created');
     }
 }

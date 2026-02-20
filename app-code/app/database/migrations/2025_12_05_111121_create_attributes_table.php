@@ -14,10 +14,20 @@ return new class() extends Migration
         Schema::create('attributes', function (Blueprint $table) {
             $table->id();
 
+            $table->ulid('family_ulid')->nullable();
+
+            $table->foreignId('shop_id')
+                ->nullable()
+                ->constrained()
+                ->cascadeOnUpdate()
+                ->nullOnDelete();
+
             $table->boolean('is_active')->nullable(false)->default(false);
             $table->smallInteger('sort_order')->nullable(false)->default(1);
 
             $table->timestamps();
+
+            $table->index(['shop_id', 'family_ulid']);
         });
     }
 

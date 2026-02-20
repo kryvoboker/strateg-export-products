@@ -443,6 +443,106 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         ]);
     }
 
+    public function test_it_creates_shop_scoped_catalog_entities_for_different_shops(): void
+    {
+        Schema::getConnection()->table('shop_languages')->insert([
+            [
+                'id'         => 1,
+                'shop_id'    => 10,
+                'code'       => 'uk',
+                'name'       => 'Ukrainian',
+                'is_active'  => true,
+                'is_default' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id'         => 2,
+                'shop_id'    => 20,
+                'code'       => 'uk',
+                'name'       => 'Ukrainian',
+                'is_active'  => true,
+                'is_default' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $job = new ProcessProductUpdateBatchJob(1);
+
+        $attribute_shop_10 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateAttributeIdByName', [
+            'Color',
+            1,
+            10,
+        ]);
+        $attribute_shop_20 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateAttributeIdByName', [
+            'Color',
+            2,
+            20,
+        ]);
+
+        self::assertNotSame($attribute_shop_10, $attribute_shop_20);
+        self::assertSame(2, Schema::getConnection()->table('attributes')->count());
+
+        $manufacturer_shop_10 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateManufacturerIdByName', [
+            'Strateg Manufacturer',
+            1,
+            10,
+        ]);
+        $manufacturer_shop_20 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateManufacturerIdByName', [
+            'Strateg Manufacturer',
+            2,
+            20,
+        ]);
+
+        self::assertNotSame($manufacturer_shop_10, $manufacturer_shop_20);
+        self::assertSame(2, Schema::getConnection()->table('manufacturers')->count());
+
+        $brand_shop_10 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateBrandIdByName', [
+            'Strateg Brand',
+            1,
+            10,
+        ]);
+        $brand_shop_20 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateBrandIdByName', [
+            'Strateg Brand',
+            2,
+            20,
+        ]);
+
+        self::assertNotSame($brand_shop_10, $brand_shop_20);
+        self::assertSame(2, Schema::getConnection()->table('brands')->count());
+
+        $leaf_shop_10 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateCategoryIdByPath', [
+            ['Root', 'Child'],
+            1,
+            10,
+        ]);
+        $leaf_shop_20 = (int) $this->invokePrivateMethod($job, 'resolveOrCreateCategoryIdByPath', [
+            ['Root', 'Child'],
+            2,
+            20,
+        ]);
+
+        self::assertNotSame($leaf_shop_10, $leaf_shop_20);
+        self::assertSame(4, Schema::getConnection()->table('categories')->count());
+
+        $attribute_family_shop_10 = (string) (Schema::getConnection()->table('attributes')->where('id', $attribute_shop_10)->value('family_ulid') ?? '');
+        self::assertNotSame('', $attribute_family_shop_10);
+
+        $manufacturer_family_shop_10 = (string) (Schema::getConnection()->table('manufacturers')->where('id', $manufacturer_shop_10)->value('family_ulid') ?? '');
+        self::assertNotSame('', $manufacturer_family_shop_10);
+
+        $brand_family_shop_10 = (string) (Schema::getConnection()->table('brands')->where('id', $brand_shop_10)->value('family_ulid') ?? '');
+        self::assertNotSame('', $brand_family_shop_10);
+
+        self::assertSame(10, (int) (Schema::getConnection()->table('attributes')->where('id', $attribute_shop_10)->value('shop_id') ?? 0));
+        self::assertSame(20, (int) (Schema::getConnection()->table('attributes')->where('id', $attribute_shop_20)->value('shop_id') ?? 0));
+        self::assertSame(10, (int) (Schema::getConnection()->table('manufacturers')->where('id', $manufacturer_shop_10)->value('shop_id') ?? 0));
+        self::assertSame(20, (int) (Schema::getConnection()->table('manufacturers')->where('id', $manufacturer_shop_20)->value('shop_id') ?? 0));
+        self::assertSame(10, (int) (Schema::getConnection()->table('brands')->where('id', $brand_shop_10)->value('shop_id') ?? 0));
+        self::assertSame(20, (int) (Schema::getConnection()->table('brands')->where('id', $brand_shop_20)->value('shop_id') ?? 0));
+    }
+
     /**
      * @param  array<int, mixed>  $arguments
      */
@@ -459,6 +559,13 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
         Schema::dropIfExists('product_discounts');
         Schema::dropIfExists('product_specials');
         Schema::dropIfExists('seo_urls');
+        Schema::dropIfExists('brand_shop');
+        Schema::dropIfExists('manufacturer_shop');
+        Schema::dropIfExists('product_to_manufacturer_brand');
+        Schema::dropIfExists('brand_descriptions');
+        Schema::dropIfExists('brands');
+        Schema::dropIfExists('manufacturer_descriptions');
+        Schema::dropIfExists('manufacturers');
         Schema::dropIfExists('product_to_attributes');
         Schema::dropIfExists('attribute_descriptions');
         Schema::dropIfExists('attributes');
@@ -520,6 +627,8 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
 
         Schema::create('categories', static function (Blueprint $table): void {
             $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->integer('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
@@ -548,6 +657,8 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
 
         Schema::create('attributes', static function (Blueprint $table): void {
             $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
             $table->integer('sort_order')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -567,6 +678,64 @@ class ProcessProductUpdateBatchJobLocalCreateOnMissingTest extends TestCase
             $table->unsignedBigInteger('attribute_id')->nullable();
             $table->unsignedBigInteger('shop_language_id')->nullable();
             $table->text('text')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('manufacturers', static function (Blueprint $table): void {
+            $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->integer('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('manufacturer_descriptions', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('manufacturer_id');
+            $table->unsignedBigInteger('shop_language_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('brands', static function (Blueprint $table): void {
+            $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->integer('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('brand_descriptions', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('brand_id');
+            $table->unsignedBigInteger('shop_language_id')->nullable();
+            $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('product_to_manufacturer_brand', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('manufacturer_id')->nullable();
+            $table->unsignedBigInteger('brand_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('manufacturer_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('manufacturer_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_manufacturer_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('brand_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('brand_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_brand_id')->nullable();
             $table->timestamps();
         });
 

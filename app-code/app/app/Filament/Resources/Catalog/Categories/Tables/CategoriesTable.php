@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Categories\Tables;
 
 use App\Models\Categories\Category;
-use App\Models\Categories\CategoryShop;
 use App\Models\Shops\Shop;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -37,7 +36,7 @@ class CategoriesTable
                     'descriptions' => static fn ($description_query) => $description_query
                         ->orderByRaw('shop_language_id IS NULL DESC')
                         ->orderBy('id'),
-                    'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
+                    'shop',
                 ])->withCount('children');
 
                 if ($selected_parent_category_id > 0) {
@@ -77,6 +76,17 @@ class CategoriesTable
                     ->state(static fn (Category $record): string => self::resolveCategoryShopsText($record))
                     ->wrap(),
 
+                TextColumn::make('shop_context')
+                    ->label('Shop Scope')
+                    ->state(static fn (Category $record): string => self::resolveDirectShopContext($record))
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('family_ulid')
+                    ->label('Family ULID')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->copyable(),
+
                 IconColumn::make('is_active')
                     ->label(__('admin/default.columns.is_active'))
                     ->boolean()
@@ -105,7 +115,7 @@ class CategoriesTable
                             return $query;
                         }
 
-                        return $query->whereHas('shops', static fn (Builder $shop_query): Builder => $shop_query->where('shops.id', $shop_id));
+                        return $query->where('shop_id', $shop_id);
                     }),
                 SelectFilter::make('is_active')
                     ->label(__('admin/categories/categories.filters.status'))
@@ -185,12 +195,22 @@ class CategoriesTable
                             }
 
                             $categories_total = 0;
+                            $created_total    = 0;
+                            $reused_total     = 0;
                             foreach ($records as $record) {
                                 if (! $record instanceof Category) {
                                     continue;
                                 }
 
-                                $record->shops()->syncWithoutDetaching($shop_ids);
+                                foreach ($shop_ids as $shop_id) {
+                                    $resolved_category = self::duplicateCategoryTreeForShop($record, $shop_id);
+                                    if ((int) $resolved_category->id === (int) $record->id) {
+                                        $reused_total++;
+                                    } else {
+                                        $created_total++;
+                                    }
+                                }
+
                                 $categories_total++;
                             }
 
@@ -199,7 +219,7 @@ class CategoriesTable
                                 ->body(__('admin/categories/categories.messages.bulk_bind_result', [
                                     'categories_total' => $categories_total,
                                     'shops_total'      => count($shop_ids),
-                                ]))
+                                ]).', created: '.$created_total.', reused: '.$reused_total)
                                 ->success()
                                 ->send();
                         }),
@@ -235,27 +255,14 @@ class CategoriesTable
 
     private static function resolveCategoryShopsText(Category $category): string
     {
-        $shop_names = CategoryShop::query()
-            ->where('category_id', (int) $category->id)
-            ->join('shops', 'shops.id', '=', 'category_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name')
-            ->map(static fn ($shop_name): string => Str::of((string) $shop_name)->squish()->toString())
-            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
-            ->all();
+        return self::resolveDirectShopContext($category);
+    }
 
-        $shop_names_by_key = [];
-        foreach ($shop_names as $shop_name) {
-            $shop_names_by_key[Str::lower($shop_name)] = $shop_name;
-        }
+    private static function resolveDirectShopContext(Category $category): string
+    {
+        $shop_name = Str::trim((string) ($category->shop?->name ?? ''));
 
-        $shop_names = array_values($shop_names_by_key);
-
-        if ($shop_names === []) {
-            return __('admin/categories/categories.columns.no_shops');
-        }
-
-        return implode(', ', $shop_names);
+        return $shop_name !== '' ? $shop_name : __('admin/default.messages.created');
     }
 
     private static function renderChildrenTreeHtml(int $root_category_id): string
@@ -269,7 +276,6 @@ class CategoriesTable
                 'descriptions' => static fn ($description_query) => $description_query
                     ->orderByRaw('shop_language_id IS NULL DESC')
                     ->orderBy('id'),
-                'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
             ])
             ->where('parent_id', $root_category_id)
             ->orderBy('sort_order')
@@ -301,13 +307,12 @@ class CategoriesTable
 
             $child_categories = Category::query()
                 ->with([
-                    'descriptions' => static fn ($description_query) => $description_query
-                        ->orderByRaw('shop_language_id IS NULL DESC')
-                        ->orderBy('id'),
-                    'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
-                ])
-                ->where('parent_id', (int) $category->id)
-                ->orderBy('sort_order')
+                'descriptions' => static fn ($description_query) => $description_query
+                    ->orderByRaw('shop_language_id IS NULL DESC')
+                    ->orderBy('id'),
+            ])
+            ->where('parent_id', (int) $category->id)
+            ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get()
                 ->all();
@@ -365,5 +370,23 @@ class CategoriesTable
         }
 
         return $category_ids;
+    }
+
+    private static function duplicateCategoryTreeForShop(Category $category, int $shop_id): Category
+    {
+        if ($shop_id <= 0) {
+            return $category;
+        }
+
+        $parent_id        = (int) ($category->parent_id ?? 0);
+        $target_parent_id = null;
+        if ($parent_id > 0) {
+            $parent = Category::query()->find($parent_id);
+            if ($parent instanceof Category) {
+                $target_parent_id = (int) self::duplicateCategoryTreeForShop($parent, $shop_id)->id;
+            }
+        }
+
+        return $category->duplicateForShop($shop_id, $target_parent_id);
     }
 }

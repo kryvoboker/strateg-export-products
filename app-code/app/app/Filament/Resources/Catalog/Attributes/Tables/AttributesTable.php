@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Attributes\Tables;
 
 use App\Models\Attributes\Attribute;
-use App\Models\Attributes\AttributeShop;
 use App\Models\Shops\Shop;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -33,7 +32,7 @@ class AttributesTable
                     'descriptions' => static fn ($description_query) => $description_query
                         ->orderByRaw('shop_language_id IS NULL DESC')
                         ->orderBy('id'),
-                    'shops' => static fn ($shop_query) => $shop_query->orderBy('name'),
+                    'shop',
                 ])
                 ->orderBy('sort_order')
                 ->orderBy('id'))
@@ -61,6 +60,17 @@ class AttributesTable
                     ->state(static fn (Attribute $record): string => self::resolveAttributeShopsText($record))
                     ->wrap(),
 
+                TextColumn::make('shop_context')
+                    ->label('Shop Scope')
+                    ->state(static fn (Attribute $record): string => self::resolveDirectShopContext($record))
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('family_ulid')
+                    ->label('Family ULID')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->copyable(),
+
                 IconColumn::make('is_active')
                     ->label(__('admin/default.columns.is_active'))
                     ->boolean()
@@ -84,7 +94,7 @@ class AttributesTable
                             return $query;
                         }
 
-                        return $query->whereHas('shops', static fn (Builder $shop_query): Builder => $shop_query->where('shops.id', $shop_id));
+                        return $query->where('shop_id', $shop_id);
                     }),
                 SelectFilter::make('is_active')
                     ->label(__('admin/attributes/attributes.filters.status'))
@@ -143,12 +153,27 @@ class AttributesTable
                             }
 
                             $attributes_total = 0;
+                            $created_total    = 0;
+                            $reused_total     = 0;
                             foreach ($records as $record) {
                                 if (! $record instanceof Attribute) {
                                     continue;
                                 }
 
-                                $record->shops()->syncWithoutDetaching($shop_ids);
+                                foreach ($shop_ids as $shop_id) {
+                                    $source_family_ulid = Str::trim((string) ($record->family_ulid ?? ''));
+                                    $existing_target = $source_family_ulid !== ''
+                                        ? Attribute::findByFamilyAndShop($source_family_ulid, $shop_id)
+                                        : null;
+
+                                    $resolved_attribute = $record->duplicateForShop($shop_id);
+                                    if ($existing_target instanceof Attribute && (int) $existing_target->id === (int) $resolved_attribute->id) {
+                                        $reused_total++;
+                                    } elseif ((int) $resolved_attribute->id > 0) {
+                                        $created_total++;
+                                    }
+                                }
+
                                 $attributes_total++;
                             }
 
@@ -157,7 +182,7 @@ class AttributesTable
                                 ->body(__('admin/attributes/attributes.messages.bulk_bind_result', [
                                     'attributes_total' => $attributes_total,
                                     'shops_total'      => count($shop_ids),
-                                ]))
+                                ]).', created: '.$created_total.', reused: '.$reused_total)
                                 ->success()
                                 ->send();
                         }),
@@ -193,26 +218,13 @@ class AttributesTable
 
     private static function resolveAttributeShopsText(Attribute $attribute): string
     {
-        $shop_names = AttributeShop::query()
-            ->where('attribute_id', (int) $attribute->id)
-            ->join('shops', 'shops.id', '=', 'attribute_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name')
-            ->map(static fn ($shop_name): string => Str::of((string) $shop_name)->squish()->toString())
-            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
-            ->all();
+        return self::resolveDirectShopContext($attribute);
+    }
 
-        $shop_names_by_key = [];
-        foreach ($shop_names as $shop_name) {
-            $shop_names_by_key[Str::lower($shop_name)] = $shop_name;
-        }
+    private static function resolveDirectShopContext(Attribute $attribute): string
+    {
+        $shop_name = Str::trim((string) ($attribute->shop?->name ?? ''));
 
-        $shop_names = array_values($shop_names_by_key);
-
-        if ($shop_names === []) {
-            return __('admin/attributes/attributes.columns.no_shops');
-        }
-
-        return implode(', ', $shop_names);
+        return $shop_name !== '' ? $shop_name : __('admin/default.messages.created');
     }
 }

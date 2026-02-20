@@ -11,6 +11,7 @@ use App\Models\Shops\ShopLanguage;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
@@ -22,7 +23,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 {
     private static ?Capsule $capsule = null;
 
-    private static ?Container $container = null;
+    private static ?Application $container = null;
 
     public static function setUpBeforeClass(): void
     {
@@ -41,7 +42,7 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         self::$capsule->setAsGlobal();
         self::$capsule->bootEloquent();
 
-        self::$container = new Container();
+        self::$container = new Application(__DIR__);
         Container::setInstance(self::$container);
         Facade::setFacadeApplication(self::$container);
         self::$container->instance('config', new Repository([
@@ -57,6 +58,8 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
 
         $schema->create('categories', static function ($table): void {
             $table->increments('id');
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedInteger('parent_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(false);
@@ -174,6 +177,57 @@ class ProcessProductImportBatchJobCategoryTreeTest extends TestCase
         $another_leaf = Category::query()->findOrFail($another_leaf_category_id);
         self::assertSame($mid_category->id, (int) $another_leaf->parent_id);
         self::assertSame('Lighting', CategoryDescription::query()->where('category_id', $another_leaf->id)->value('name'));
+    }
+
+    public function test_it_resolves_global_category_and_ignores_shop_scoped_duplicate_on_import(): void
+    {
+        $global_root = Category::query()->create([
+            'family_ulid' => '01HGLOBALROOT000000000000001',
+            'shop_id'     => null,
+            'parent_id'   => null,
+            'sort_order'  => 0,
+            'is_active'   => true,
+        ]);
+
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $global_root->id,
+            'shop_language_id' => null,
+            'name'             => 'Root',
+            'description'      => null,
+            'h1_title'         => 'Root',
+            'meta_title'       => 'Root',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+        ]);
+
+        $shop_scoped_root = Category::query()->create([
+            'family_ulid' => '01HGLOBALROOT000000000000001',
+            'shop_id'     => 55,
+            'parent_id'   => null,
+            'sort_order'  => 0,
+            'is_active'   => true,
+        ]);
+
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $shop_scoped_root->id,
+            'shop_language_id' => null,
+            'name'             => 'Root',
+            'description'      => null,
+            'h1_title'         => 'Root',
+            'meta_title'       => 'Root',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+        ]);
+
+        $job = new ProcessProductImportBatchJob(1);
+
+        $resolved_root_id = (int) $this->invokePrivateMethod(
+            $job,
+            'resolveOrCreateCategoryIdByPath',
+            [['Root']]
+        );
+
+        self::assertSame((int) $global_root->id, $resolved_root_id);
     }
 
     /**

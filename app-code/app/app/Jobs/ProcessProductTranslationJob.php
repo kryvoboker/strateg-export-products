@@ -36,6 +36,8 @@ class ProcessProductTranslationJob implements ShouldQueue
             Log::channel('stack')->error('Product translation job failed', [
                 'product_id' => $this->product_id,
                 'message'    => $exception->getMessage(),
+                'file'       => $exception->getFile(),
+                'line'       => $exception->getLine(),
             ]);
 
             throw $exception;

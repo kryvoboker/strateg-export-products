@@ -52,11 +52,15 @@ class ProductUpdateItemsRelationManager extends RelationManager
             ->poll('5s')
             ->recordTitleAttribute('id')
             ->defaultSort('id', 'desc')
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with([
-                'product.descriptions',
-                'product.productToManufacturerBrand.manufacturer.descriptions',
-                'product.productToManufacturerBrand.brand.descriptions',
-            ])->where('product_update_batch_id', (int) $this->getTypedOwnerRecord()->id))
+            ->modifyQueryUsing(
+                fn (Builder $query): Builder => $query->with([
+                    'product.descriptions',
+                    'product.productToManufacturerBrand.manufacturer.descriptions',
+                    'product.productToManufacturerBrand.brand.descriptions',
+                ])
+                /** @phpstan-ignore-next-line */
+                ->where('product_update_batch_id', (int) $this->getOwnerRecord()->id)
+            )
             ->columns([
                 TextColumn::make('id')->label('ID')->sortable(),
                 TextColumn::make('status')
