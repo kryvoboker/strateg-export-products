@@ -151,18 +151,18 @@ class ProcessCatalogProductRestoreBatchJob implements ShouldQueue
                     );
 
                     if ($backup === null) {
-                        $raw_backup = ProductBackups::getLatestExternalSnapshotForProductShop(
+                        $raw_backup = ProductBackups::getLatestUnusedExternalSnapshotForProductShop(
                             $product_id,
                             $shop_id,
                             $external_product_id
                         );
 
                         if ($raw_backup === null) {
-                            $this->createFailedRestoreItem($batch, $product_id, $shop_id, 'External backup is missing for restore');
+                            $this->createFailedRestoreItem($batch, $product_id, $shop_id, 'External unused backup is missing for restore');
                             $summary['skipped_without_backup']++;
                             $summary['failed_created']++;
                         } else {
-                            $this->createFailedRestoreItem($batch, $product_id, $shop_id, 'External backup payload is invalid for restore');
+                            $this->createFailedRestoreItem($batch, $product_id, $shop_id, 'External unused backup payload is invalid for restore');
                             $summary['skipped_invalid_backup']++;
                             $summary['failed_created']++;
                         }
@@ -250,7 +250,7 @@ class ProcessCatalogProductRestoreBatchJob implements ShouldQueue
 
     private function createFailedRestoreItem(ProductUpdateBatch $batch, int $product_id, int $shop_id, string $error_message): void
     {
-        Log::channel('stack')->error('Catalog product restore skipped', [
+        Log::channel('daily')->warning('Catalog product restore skipped', [
             'batch_id'   => (int) $batch->id,
             'product_id' => $product_id,
             'shop_id'    => $shop_id,

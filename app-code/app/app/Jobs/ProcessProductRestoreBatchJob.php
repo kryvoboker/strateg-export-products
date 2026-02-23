@@ -75,10 +75,10 @@ class ProcessProductRestoreBatchJob implements ShouldQueue
 
             $processed_product_ids[] = $product_id;
 
-            if (! ProductBackups::hasLocalSnapshotForProduct($product_id)) {
+            if (! ProductBackups::hasUnusedLocalSnapshotForProduct($product_id)) {
                 $summary['items_skipped_no_backup']++;
 
-                Log::channel('stack')->warning('Bulk product restore skipped: no local backup found', [
+                Log::channel('daily')->warning('Bulk product restore skipped: no available unused local backup found', [
                     'product_import_item_id'  => (int) $item->id,
                     'product_import_batch_id' => (int) ($item->product_import_batch_id ?? 0),
                     'product_id'              => $product_id,
@@ -92,7 +92,7 @@ class ProcessProductRestoreBatchJob implements ShouldQueue
             if (! $backup instanceof ProductBackups) {
                 $summary['items_skipped_invalid_backup']++;
 
-                Log::channel('stack')->error('Bulk product restore skipped: backup payload is invalid', [
+                Log::channel('daily')->warning('Bulk product restore skipped: no valid unused local backup found', [
                     'product_import_item_id'  => (int) $item->id,
                     'product_import_batch_id' => (int) ($item->product_import_batch_id ?? 0),
                     'product_id'              => $product_id,

@@ -215,7 +215,7 @@ class ProcessCatalogProductRestoreItemJobTest extends TestCase
         $update_item->refresh();
 
         self::assertSame(ProductUpdateItemsStatusEnum::FAILED->value, (string) $update_item->status);
-        self::assertStringContainsString('Valid external backup', (string) $update_item->error_message);
+        self::assertStringContainsString('Valid unused external backup', (string) $update_item->error_message);
 
         Http::assertNothingSent();
     }

@@ -25,6 +25,63 @@ class ProcessProductRestoreBatchJobTest extends TestCase
 
     public function test_it_restores_only_products_with_valid_backups_and_skips_others(): void
     {
+        $fake_logger = new class
+        {
+            /**
+             * @var array<int, array{channel:string,level:string,message:string,context:array<string,mixed>}>
+             */
+            public array $records = [];
+
+            private string $current_channel = 'stack';
+
+            public function channel(string $name): self
+            {
+                $this->current_channel = $name;
+
+                return $this;
+            }
+
+            /**
+             * @param  array<string, mixed>  $context
+             */
+            public function warning(string $message, array $context = []): void
+            {
+                $this->records[] = [
+                    'channel' => $this->current_channel,
+                    'level'   => 'warning',
+                    'message' => $message,
+                    'context' => $context,
+                ];
+            }
+
+            /**
+             * @param  array<string, mixed>  $context
+             */
+            public function info(string $message, array $context = []): void
+            {
+                $this->records[] = [
+                    'channel' => $this->current_channel,
+                    'level'   => 'info',
+                    'message' => $message,
+                    'context' => $context,
+                ];
+            }
+
+            /**
+             * @param  array<string, mixed>  $context
+             */
+            public function error(string $message, array $context = []): void
+            {
+                $this->records[] = [
+                    'channel' => $this->current_channel,
+                    'level'   => 'error',
+                    'message' => $message,
+                    'context' => $context,
+                ];
+            }
+        };
+        $this->app->instance('log', $fake_logger);
+
         $product_with_valid_backup = Product::query()->create([
             'product_import_item_id' => 1,
             'family_ulid'            => '01HFAMILYULID00000000000111',
@@ -148,6 +205,13 @@ class ProcessProductRestoreBatchJobTest extends TestCase
 
         self::assertSame('MODEL-OLD-3', (string) $product_with_invalid_backup->model);
         self::assertFalse((bool) $invalid_backup->is_used);
+
+        $has_daily_skip_warning = collect($fake_logger->records)->contains(static function (array $record): bool {
+            return $record['channel'] === 'daily'
+                && $record['level'] === 'warning'
+                && str_contains($record['message'], 'Bulk product restore skipped: no available unused local backup found');
+        });
+        self::assertTrue($has_daily_skip_warning);
     }
 
     private function recreateSchema(): void

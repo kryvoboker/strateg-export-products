@@ -99,7 +99,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
             );
 
             if ($backup === null) {
-                throw new RuntimeException('Valid external backup for product/shop not found');
+                throw new RuntimeException('Valid unused external backup for product/shop not found');
             }
 
             $backup_payload = is_array($backup->payload) ? $backup->payload : [];

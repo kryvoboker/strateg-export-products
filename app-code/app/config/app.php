@@ -90,6 +90,7 @@ return [
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     'ai_translation_enabled' => (bool) env('AI_TRANSLATION_ENABLED', true),
+    'product_backups_max_per_scope' => (int) env('PRODUCT_BACKUPS_MAX_PER_SCOPE', 15),
 
     /*
     |--------------------------------------------------------------------------

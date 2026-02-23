@@ -27,7 +27,6 @@ use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
-use App\Models\Products\Updates\ProductBackups;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
@@ -1210,11 +1209,7 @@ class ProductsTable
                 continue;
             }
 
-            $backup = ProductBackups::getLatestExternalSnapshotForProductShop($product_id, $shop_id, $external_product_id);
-            if (
-                $backup instanceof ProductBackups
-                && $restore_service->isExternalBackupPayloadValid($backup->payload)
-            ) {
+            if ($restore_service->hasValidLatestExternalSnapshotForProductShop($product_id, $shop_id, $external_product_id)) {
                 return true;
             }
         }

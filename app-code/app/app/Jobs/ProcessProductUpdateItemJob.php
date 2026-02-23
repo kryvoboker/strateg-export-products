@@ -111,7 +111,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 throw new RuntimeException('Backup payload does not contain valid product id');
             }
 
-            ProductBackups::createUsingBackupForProduct($product_id, [
+            $created_backup = ProductBackups::createUsingBackupForProduct($product_id, [
                 'shop_id'             => $shop_id,
                 'external_product_id' => $external_product_id,
                 'backup_product_id'   => $backup_product_id,
@@ -150,6 +150,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                     'request_payload'   => $request_payload,
                     'response_status'   => $response->status(),
                     'response_body'     => $this->truncateResponseBody($response->body()),
+                    'backup_id'         => (int) $created_backup->id,
                     'backup_product_id' => $backup_product_id,
                 ],
             ]);
@@ -166,6 +167,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                         'request_payload'   => $request_payload,
                         'response_status'   => $response->status(),
                         'response_body'     => $this->truncateResponseBody($response->body()),
+                        'backup_id'         => (int) $created_backup->id,
                         'backup_product_id' => $backup_product_id,
                     ],
                 ]);

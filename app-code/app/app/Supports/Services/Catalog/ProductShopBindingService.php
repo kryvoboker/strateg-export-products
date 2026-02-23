@@ -707,7 +707,7 @@ class ProductShopBindingService
                     && (int) (Category::query()->whereKey($source_category_id)->value('shop_id') ?? 0) === $shop_id;
                 if ($assigned_to_shop) {
                     $summary['assigned']++;
-                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    Log::channel('daily')->info('Catalog binding strategy resolved', [
                         'strategy'       => 'assign',
                         'entity_type'    => 'category',
                         'entity_id'      => $source_category_id,
@@ -736,7 +736,7 @@ class ProductShopBindingService
 
             if ($existing_target_category instanceof Category && (int) $existing_target_category->id === $target_category_id) {
                 $summary['reused']++;
-                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                Log::channel('daily')->info('Catalog binding strategy resolved', [
                     'strategy'       => 'reuse',
                     'entity_type'    => 'category',
                     'entity_id'      => $source_category_id,
@@ -745,7 +745,7 @@ class ProductShopBindingService
                 ]);
             } else {
                 $summary['created']++;
-                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                Log::channel('daily')->info('Catalog binding strategy resolved', [
                     'strategy'       => 'duplicate',
                     'entity_type'    => 'category',
                     'entity_id'      => $source_category_id,
@@ -850,7 +850,7 @@ class ProductShopBindingService
                     && (int) ($target_attribute->shop_id ?? 0) === $shop_id;
                 if ($assigned_to_shop) {
                     $summary['assigned']++;
-                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    Log::channel('daily')->info('Catalog binding strategy resolved', [
                         'strategy'       => 'assign',
                         'entity_type'    => 'attribute',
                         'entity_id'      => $source_attribute_id,
@@ -894,7 +894,7 @@ class ProductShopBindingService
 
             if ($existing_target_attribute instanceof Attribute && (int) $existing_target_attribute->id === $target_attribute_id) {
                 $summary['reused']++;
-                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                Log::channel('daily')->info('Catalog binding strategy resolved', [
                     'strategy'       => 'reuse',
                     'entity_type'    => 'attribute',
                     'entity_id'      => $source_attribute_id,
@@ -903,7 +903,7 @@ class ProductShopBindingService
                 ]);
             } else {
                 $summary['created']++;
-                Log::channel('stack')->info('Catalog binding strategy resolved', [
+                Log::channel('daily')->info('Catalog binding strategy resolved', [
                     'strategy'       => 'duplicate',
                     'entity_type'    => 'attribute',
                     'entity_id'      => $source_attribute_id,
@@ -982,7 +982,7 @@ class ProductShopBindingService
                     $manufacturer_relinked++;
                     if ($existing_target_manufacturer instanceof Manufacturer && (int) $existing_target_manufacturer->id === $target_manufacturer_id) {
                         $manufacturers_reused++;
-                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        Log::channel('daily')->info('Catalog binding strategy resolved', [
                             'strategy'       => 'reuse',
                             'entity_type'    => 'manufacturer',
                             'entity_id'      => $manufacturer_id,
@@ -991,7 +991,7 @@ class ProductShopBindingService
                         ]);
                     } else {
                         $manufacturers_created++;
-                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        Log::channel('daily')->info('Catalog binding strategy resolved', [
                             'strategy'       => 'duplicate',
                             'entity_type'    => 'manufacturer',
                             'entity_id'      => $manufacturer_id,
@@ -1001,7 +1001,7 @@ class ProductShopBindingService
                     }
                 } elseif ($target_manufacturer_id > 0 && $source_shop_id_before <= 0) {
                     $manufacturers_assigned++;
-                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    Log::channel('daily')->info('Catalog binding strategy resolved', [
                         'strategy'       => 'assign',
                         'entity_type'    => 'manufacturer',
                         'entity_id'      => $manufacturer_id,
@@ -1027,7 +1027,7 @@ class ProductShopBindingService
                     $brand_relinked++;
                     if ($existing_target_brand instanceof Brand && (int) $existing_target_brand->id === $target_brand_id) {
                         $brands_reused++;
-                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        Log::channel('daily')->info('Catalog binding strategy resolved', [
                             'strategy'       => 'reuse',
                             'entity_type'    => 'brand',
                             'entity_id'      => $brand_id,
@@ -1036,7 +1036,7 @@ class ProductShopBindingService
                         ]);
                     } else {
                         $brands_created++;
-                        Log::channel('stack')->info('Catalog binding strategy resolved', [
+                        Log::channel('daily')->info('Catalog binding strategy resolved', [
                             'strategy'       => 'duplicate',
                             'entity_type'    => 'brand',
                             'entity_id'      => $brand_id,
@@ -1046,7 +1046,7 @@ class ProductShopBindingService
                     }
                 } elseif ($target_brand_id > 0 && $source_shop_id_before <= 0) {
                     $brands_assigned++;
-                    Log::channel('stack')->info('Catalog binding strategy resolved', [
+                    Log::channel('daily')->info('Catalog binding strategy resolved', [
                         'strategy'       => 'assign',
                         'entity_type'    => 'brand',
                         'entity_id'      => $brand_id,

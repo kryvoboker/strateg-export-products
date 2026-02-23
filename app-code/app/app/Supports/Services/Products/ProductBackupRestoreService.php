@@ -29,18 +29,32 @@ class ProductBackupRestoreService
 
     public function resolveLatestValidLocalSnapshotForProduct(int $product_id): ?ProductBackups
     {
-        $backup = ProductBackups::getLatestLocalSnapshotForProduct($product_id);
-
-        if (! $backup instanceof ProductBackups) {
+        if ($product_id <= 0) {
             return null;
         }
 
-        $reason = '';
-        if (! $this->isBackupPayloadValid($backup->payload, $reason)) {
-            return null;
+        $candidate_backups = ProductBackups::query()
+            ->localProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->where('is_used', false)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($candidate_backups as $backup) {
+            $reason = '';
+            if ($this->isBackupPayloadValid($backup->payload, $reason)) {
+                return $backup;
+            }
+
+            Log::channel('daily')->warning('Skipping local backup due to invalid payload', [
+                'backup_id'   => (int) $backup->id,
+                'product_id'  => $product_id,
+                'is_used'     => (bool) $backup->is_used,
+                'error_msg'   => $reason,
+            ]);
         }
 
-        return $backup;
+        return null;
     }
 
     public function isBackupPayloadValid(mixed $payload, ?string &$reason = null): bool
@@ -105,22 +119,41 @@ class ProductBackupRestoreService
         int $shop_id,
         ?int $external_product_id = null
     ): ?ProductBackups {
-        $backup = ProductBackups::getLatestExternalSnapshotForProductShop(
-            $product_id,
-            $shop_id,
-            $external_product_id
-        );
-
-        if (! $backup instanceof ProductBackups) {
+        if ($product_id <= 0 || $shop_id <= 0) {
             return null;
         }
 
-        $reason = '';
-        if (! $this->isExternalBackupPayloadValid($backup->payload, $reason)) {
-            return null;
+        $candidate_backups_query = ProductBackups::query()
+            ->externalProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->where('shop_id', $shop_id)
+            ->where('is_used', false);
+
+        if ($external_product_id !== null && $external_product_id > 0) {
+            $candidate_backups_query->where('external_product_id', (string) $external_product_id);
         }
 
-        return $backup;
+        $candidate_backups = $candidate_backups_query
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($candidate_backups as $backup) {
+            $reason = '';
+            if ($this->isExternalBackupPayloadValid($backup->payload, $reason)) {
+                return $backup;
+            }
+
+            Log::channel('daily')->warning('Skipping external backup due to invalid payload', [
+                'backup_id'           => (int) $backup->id,
+                'product_id'          => $product_id,
+                'shop_id'             => $shop_id,
+                'external_product_id' => $external_product_id,
+                'is_used'             => (bool) $backup->is_used,
+                'error_msg'           => $reason,
+            ]);
+        }
+
+        return null;
     }
 
     public function restoreLatestSnapshotForProduct(int $product_id): ProductBackups
