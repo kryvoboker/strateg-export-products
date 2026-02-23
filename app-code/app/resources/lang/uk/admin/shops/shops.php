@@ -15,6 +15,7 @@ return [
         'part_api_url_export_prods'  => 'Частина API URL для експорту товарів',
         'part_api_url_restore_prods' => 'Частина API URL для відновлення товарів',
         'part_api_url_update_prods'  => 'Частина API URL для оновлення товарів',
+        'part_api_url_delete_prods'  => 'Частина API URL для видалення товарів',
         'api_token'                  => 'API Токен',
         'options'                    => 'Опції',
         'add_option'                 => 'Додати опцію',
@@ -37,6 +38,7 @@ return [
         'part_api_url_export_prods'  => 'Частина URL для API запитів. Необхідно для вивантаження товарів в інтернет-магазин',
         'part_api_url_restore_prods' => 'Частина URL для API запитів. Необхідно для відновлення товарів в інтернет-магазині',
         'part_api_url_update_prods'  => 'Частина URL для API запитів. Необхідно для оновлення товарів в інтернет-магазині',
+        'part_api_url_delete_prods'  => 'Частина URL для API запитів. Необхідно для видалення товарів в інтернет-магазині',
         'api_token'                  => 'Токен для авторизації API запитів',
     ],
 ];

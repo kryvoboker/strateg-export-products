@@ -7,7 +7,7 @@ namespace Tests\Feature\Jobs;
 use App\Jobs\ProcessProductRestoreBatchJob;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
-use App\Models\Products\Updates\ProductBackups;
+use App\Models\Products\ProductBackups;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;

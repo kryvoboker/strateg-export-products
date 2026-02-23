@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Models\Products\Imports\ProductImportItem;
-use App\Models\Products\Updates\ProductBackups;
+use App\Models\Products\ProductBackups;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;

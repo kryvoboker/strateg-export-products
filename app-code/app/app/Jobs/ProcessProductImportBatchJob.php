@@ -44,6 +44,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Revolution\Google\Sheets\Facades\Sheets;
 use RuntimeException;
 use Throwable;
 
@@ -70,6 +73,72 @@ class ProcessProductImportBatchJob implements ShouldQueue
         'Seo Url'           => 'seo_urls',
         'Special'           => 'specials',
         'Discount'          => 'discounts',
+    ];
+
+    private const int MAX_ROWS_PER_FILE = 500;
+
+    private const array REQUIRED_HEADERS = [
+        'Product' => [
+            'Product Id',
+            'Model',
+            'SKU',
+            'EAN',
+            'Quantity',
+            'Minimum',
+            'Image',
+            'Price',
+            'Manufacturer',
+            'Brand',
+            'Is Active',
+            'Date Available',
+            'Date Added',
+        ],
+        'Description' => [
+            'Product Id',
+            'Name',
+            'Description',
+            'Meta Title',
+            'Meta Description',
+            'Meta Keywords',
+        ],
+        'Image' => [
+            'Product Id',
+            'Image',
+            'Sort Order',
+        ],
+        'Product Category' => [
+            'Product Id',
+            'Category Name',
+        ],
+        'Product Attribute' => [
+            'Product Id',
+            'Attribute Name',
+            'Attribute Text',
+        ],
+        'Seo Url' => [
+            'Product Id',
+            'Query Key',
+            'Query Value',
+            'Keyword',
+            'Sort Order',
+        ],
+        'Special' => [
+            'Product Id',
+            'User Group Id',
+            'Price',
+            'Priority',
+            'Date Start',
+            'Date End',
+        ],
+        'Discount' => [
+            'Product Id',
+            'User Group Id',
+            'Quantity',
+            'Price',
+            'Priority',
+            'Date Start',
+            'Date End',
+        ],
     ];
 
     /**
@@ -115,15 +184,22 @@ class ProcessProductImportBatchJob implements ShouldQueue
             return;
         }
 
+        $processing_options = [
+            ...($batch->options ?? []),
+            'prepare_started_at' => now()->toDateTimeString(),
+            'last_error'         => null,
+        ];
+
+        if ($batch->source_type === ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value) {
+            $processing_options['export_state']      = 'processing';
+            $processing_options['export_started_at'] = now()->toDateTimeString();
+        }
+
         $batch->update([
             'status'      => ProductImportBatchesStatusEnum::PROCESSING->value,
             'started_at'  => now(),
             'finished_at' => null,
-            'options'     => [
-                ...($batch->options ?? []),
-                'prepare_started_at' => now()->toDateTimeString(),
-                'last_error'         => null,
-            ],
+            'options'     => $processing_options,
         ]);
 
         Log::channel('daily')->info('Product import batch started with optional shop_id auto-binding support', [
@@ -199,23 +275,127 @@ class ProcessProductImportBatchJob implements ShouldQueue
      */
     private function prepareItemsFromGoogleSheetsBatch(ProductImportBatch $batch): array
     {
-        $options        = $batch->options ?? [];
-        $exported_files = Arr::get($options, 'exported_files', []);
-
-        if (!is_array($exported_files) || $exported_files === []) {
-            throw new RuntimeException('Google Sheets exported files are missing');
-        }
-
-        $source_paths = array_values(array_filter(
-            array_map(static fn($path) => Str::trim((string)$path), $exported_files),
-            static fn($path) => $path !== ''
-        ));
-
-        if ($source_paths === []) {
-            throw new RuntimeException('Google Sheets exported files are empty');
-        }
+        $source_paths = $this->resolveGoogleSheetExportedFiles($batch);
 
         return $this->prepareItemsFromExcelSources($source_paths);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveGoogleSheetExportedFiles(ProductImportBatch $batch): array
+    {
+        $options = $batch->options ?? [];
+
+        $source_paths = array_values(array_filter(
+            array_map(static fn ($path): string => Str::trim((string) $path), Arr::wrap(Arr::get($options, 'exported_files', []))),
+            static fn (string $path): bool => $path !== '',
+        ));
+
+        $existing_source_paths = array_values(array_filter(
+            $source_paths,
+            static fn (string $path): bool => Storage::exists($path),
+        ));
+
+        if ($existing_source_paths !== []) {
+            if ($existing_source_paths !== $source_paths) {
+                Log::channel('daily')->warning('Some Google Sheets exported files are missing, using existing ones only', [
+                    'batch_id'         => (int) $batch->id,
+                    'requested_files'  => $source_paths,
+                    'existing_files'   => $existing_source_paths,
+                    'missing_files'    => array_values(array_diff($source_paths, $existing_source_paths)),
+                ]);
+            }
+
+            return $existing_source_paths;
+        }
+
+        $spreadsheet_id = Str::trim((string) Arr::get($options, 'spreadsheet_id', ''));
+
+        if ($spreadsheet_id === '') {
+            throw new RuntimeException('Google Sheets spreadsheet_id is missing');
+        }
+
+        Log::channel('daily')->info('Google Sheets async export started for import batch', [
+            'batch_id'       => (int) $batch->id,
+            'spreadsheet_id' => $spreadsheet_id,
+        ]);
+
+        $all_sheets_rows = $this->fetchGoogleSheetsRows($spreadsheet_id);
+        [$source_path, $exported_files] = $this->storeGoogleSheetsAsExcelFiles($spreadsheet_id, $all_sheets_rows);
+
+        $batch->update([
+            'source_path' => $source_path,
+            'options'     => [
+                ...$options,
+                'exported_files'     => $exported_files,
+                'export_state'       => 'exported',
+                'export_finished_at' => now()->toDateTimeString(),
+            ],
+        ]);
+
+        Log::channel('daily')->info('Google Sheets async export finished for import batch', [
+            'batch_id'       => (int) $batch->id,
+            'spreadsheet_id' => $spreadsheet_id,
+            'source_path'    => $source_path,
+            'chunks_count'   => count($exported_files),
+            'exported_files' => $exported_files,
+        ]);
+
+        return $exported_files;
+    }
+
+    /**
+     * @return array<string, list<array<int, string>>>
+     */
+    private function fetchGoogleSheetsRows(string $spreadsheet_id): array
+    {
+        try {
+            $sheet_names = array_values(Sheets::spreadsheet($spreadsheet_id)->sheetList());
+        } catch (Throwable $exception) {
+            Log::channel('stack')->error('Failed to fetch Google Sheets sheet list for import batch', [
+                'batch_id'       => $this->batch_id,
+                'spreadsheet_id' => $spreadsheet_id,
+                'error_msg'      => $exception->getMessage(),
+                'file'           => $exception->getFile(),
+                'line'           => $exception->getLine(),
+            ]);
+
+            throw new RuntimeException('Failed to fetch Google Sheets sheet list', 0, $exception);
+        }
+
+        $this->validateRequiredSheetNames($sheet_names);
+
+        $all_sheets_rows = [];
+
+        foreach ($sheet_names as $sheet_name) {
+            try {
+                $rows = Sheets::spreadsheet($spreadsheet_id)
+                    ->sheet($sheet_name)
+                    ->all();
+            } catch (Throwable $exception) {
+                Log::channel('stack')->error('Failed to fetch Google Sheets rows for import batch', [
+                    'batch_id'       => $this->batch_id,
+                    'spreadsheet_id' => $spreadsheet_id,
+                    'sheet_name'     => $sheet_name,
+                    'error_msg'      => $exception->getMessage(),
+                    'file'           => $exception->getFile(),
+                    'line'           => $exception->getLine(),
+                ]);
+
+                throw new RuntimeException("Failed to fetch Google Sheets rows for sheet: {$sheet_name}", 0, $exception);
+            }
+
+            $all_sheets_rows[$sheet_name] = $this->normalizeRows($rows);
+        }
+
+        $this->validateRequiredHeadersFromRows($all_sheets_rows);
+
+        if (! $this->hasDataRows($all_sheets_rows['Product'] ?? [])) {
+            throw new RuntimeException('Google Sheets Product sheet has no data rows');
+        }
+
+        return $all_sheets_rows;
     }
 
     /**
@@ -1619,6 +1799,173 @@ class ProcessProductImportBatchJob implements ShouldQueue
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @param  list<string>  $sheet_names
+     */
+    private function validateRequiredSheetNames(array $sheet_names): void
+    {
+        $missing_sheets = array_values(array_diff(self::REQUIRED_SHEETS, $sheet_names));
+
+        if ($missing_sheets === []) {
+            return;
+        }
+
+        throw new RuntimeException('Missing required sheet(s): '.implode(', ', $missing_sheets));
+    }
+
+    /**
+     * @param  array<string, list<array<int, string>>>  $all_sheets_rows
+     */
+    private function validateRequiredHeadersFromRows(array $all_sheets_rows): void
+    {
+        foreach (self::REQUIRED_HEADERS as $sheet_name => $required_headers) {
+            $rows = $all_sheets_rows[$sheet_name] ?? [];
+
+            if ($rows === []) {
+                throw new RuntimeException("Sheet is empty: {$sheet_name}");
+            }
+
+            $header            = $rows[0] ?? [];
+            $normalized_header = array_map(fn ($cell): string => $this->normalizeHeaderKey((string) $cell), $header);
+            $missing_headers   = [];
+
+            foreach ($required_headers as $required_header) {
+                if (! $this->isHeaderPresent($required_header, $normalized_header)) {
+                    $missing_headers[] = $required_header;
+                }
+            }
+
+            if ($missing_headers !== []) {
+                throw new RuntimeException("Missing required columns in sheet {$sheet_name}: ".implode(', ', $missing_headers));
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $normalized_header
+     */
+    private function isHeaderPresent(string $required_header, array $normalized_header): bool
+    {
+        $normalized_required_header = $this->normalizeHeaderKey($required_header);
+
+        if ($normalized_required_header === 'attribute_text') {
+            return in_array('attribute_text', $normalized_header, true)
+                || in_array('attibute_text', $normalized_header, true);
+        }
+
+        return in_array($normalized_required_header, $normalized_header, true);
+    }
+
+    /**
+     * @param  list<array<int, string>>  $rows
+     */
+    private function hasDataRows(array $rows): bool
+    {
+        if (count($rows) <= 1) {
+            return false;
+        }
+
+        $data_rows = array_slice($rows, 1);
+
+        foreach ($data_rows as $row) {
+            foreach ($row as $cell) {
+                if (Str::trim((string) $cell) !== '') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, list<array<int, string>>>  $all_sheets_rows
+     * @return array{0: string, 1: list<string>}
+     */
+    private function storeGoogleSheetsAsExcelFiles(string $spreadsheet_id, array $all_sheets_rows): array
+    {
+        $chunk_count = 1;
+
+        foreach ($all_sheets_rows as $rows) {
+            $data_row_count = max(count($rows) - 1, 0);
+            $chunk_count    = max($chunk_count, (int) ceil($data_row_count / self::MAX_ROWS_PER_FILE));
+        }
+
+        $now             = now();
+        $year_month_path = sprintf('upload/excel/%s/%s', $now->format('Y'), $now->format('m'));
+        $timestamp       = $now->format('Ymd_His');
+        $suffix          = Str::replaceMatches('/[^a-zA-Z0-9_-]/', '', $spreadsheet_id) ?: 'sheet';
+        $base_folder     = sprintf('%s/google_sheet_%s_%s', $year_month_path, $timestamp, $suffix);
+        $single_file     = sprintf('%s/google_sheet_%s_%s.xlsx', $year_month_path, $timestamp, $suffix);
+
+        $exported_files = [];
+
+        if ($chunk_count > 1) {
+            Storage::makeDirectory($base_folder);
+
+            for ($chunk_index = 1; $chunk_index <= $chunk_count; $chunk_index++) {
+                $file_path = sprintf('%s/part_%02d.xlsx', $base_folder, $chunk_index);
+                $this->writeChunkToExcelFile($file_path, $all_sheets_rows, $chunk_index);
+                $exported_files[] = $file_path;
+            }
+
+            return [$base_folder, $exported_files];
+        }
+
+        $this->writeChunkToExcelFile($single_file, $all_sheets_rows, 1);
+        $exported_files[] = $single_file;
+
+        return [$single_file, $exported_files];
+    }
+
+    /**
+     * @param  array<string, list<array<int, string>>>  $all_sheets_rows
+     */
+    private function writeChunkToExcelFile(string $file_path, array $all_sheets_rows, int $chunk_index): void
+    {
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->removeSheetByIndex(0);
+
+        $start_offset = ($chunk_index - 1) * self::MAX_ROWS_PER_FILE;
+
+        foreach ($all_sheets_rows as $sheet_name => $rows) {
+            $worksheet = new Worksheet($spreadsheet, $this->sanitizeSheetTitle($sheet_name));
+            $spreadsheet->addSheet($worksheet);
+
+            $header      = $rows[0] ?? [];
+            $data_rows   = array_slice($rows, 1);
+            $data_chunk  = array_slice($data_rows, $start_offset, self::MAX_ROWS_PER_FILE);
+            $rows_to_put = [];
+
+            if ($header !== []) {
+                $rows_to_put[] = $header;
+            }
+
+            if ($data_chunk !== []) {
+                $rows_to_put = [...$rows_to_put, ...$data_chunk];
+            }
+
+            if ($rows_to_put !== []) {
+                $worksheet->fromArray($rows_to_put, null, 'A1', true);
+            }
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+        Storage::makeDirectory(dirname($file_path));
+        IOFactory::createWriter($spreadsheet, 'Xlsx')->save(Storage::path($file_path));
+        $spreadsheet->disconnectWorksheets();
+
+        unset($spreadsheet);
+    }
+
+    private function sanitizeSheetTitle(string $sheet_title): string
+    {
+        $sanitized_sheet_title = Str::replaceMatches('~[:\\\\/?*\\[\\]]~', '_', Str::trim($sheet_title));
+        $sanitized_sheet_title = $sanitized_sheet_title === '' ? 'Sheet' : $sanitized_sheet_title;
+
+        return Str::substr($sanitized_sheet_title, 0, 31);
     }
 
     /**

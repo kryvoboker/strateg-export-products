@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Models;
 
 use App\Models\Products\Product;
-use App\Models\Products\Updates\ProductBackups;
-use Illuminate\Container\Container;
+use App\Models\Products\ProductBackups;
 use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;

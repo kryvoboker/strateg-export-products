@@ -3,9 +3,10 @@
 return [
     // Menu items
     'menu'         => [
-        'item_shops'   => 'Магазини',
-        'item_catalog' => 'Каталог',
-        'item_users'   => 'Користувачі',
+        'item_shops'              => 'Магазини',
+        'item_catalog'            => 'Каталог',
+        'item_users'              => 'Користувачі',
+        'item_product_management' => 'Менеджмент товарів',
     ],
 
     // Messages

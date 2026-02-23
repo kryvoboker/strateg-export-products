@@ -23,6 +23,7 @@ return new class() extends Migration
             $table->string('part_api_url_export_prods')->nullable();
             $table->string('part_api_url_update_prods')->nullable();
             $table->string('part_api_url_restore_prods')->nullable();
+            $table->string('part_api_url_delete_prods')->nullable();
             $table->boolean('is_active')->default(true);
             $table->json('options')->nullable();
 

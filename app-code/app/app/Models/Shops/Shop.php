@@ -30,6 +30,7 @@ class Shop extends Model
         'part_api_url_export_prods',
         'part_api_url_update_prods',
         'part_api_url_restore_prods',
+        'part_api_url_delete_prods',
         'is_active',
         'options',
     ];

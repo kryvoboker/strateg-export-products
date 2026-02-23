@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace App\Models\Products\Updates;
+namespace App\Models\Products;
 
-use App\Models\Products\Product;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;

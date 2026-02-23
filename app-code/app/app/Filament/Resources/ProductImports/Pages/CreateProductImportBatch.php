@@ -18,9 +18,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use Revolution\Google\Sheets\Facades\Sheets;
 use Throwable;
 
 class CreateProductImportBatch extends CreateRecord
@@ -35,8 +32,6 @@ class CreateProductImportBatch extends CreateRecord
         'Special',
         'Discount',
     ];
-
-    private const int MAX_ROWS_PER_FILE = 500;
 
     private const array REQUIRED_HEADERS = [
         'Product' => [
@@ -170,9 +165,7 @@ class CreateProductImportBatch extends CreateRecord
      */
     private function createBatchFromGoogleSheets(array $data): ProductImportBatch
     {
-        $exported_files = [];
-        $source_path    = '';
-        $sheets_url     = Str::trim((string) ($data['sheets_url'] ?? ''));
+        $sheets_url = Str::trim((string) ($data['sheets_url'] ?? ''));
 
         if ($sheets_url === '' || validate_url($sheets_url) === false) {
             $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.google_sheet_url_required'));
@@ -184,47 +177,11 @@ class CreateProductImportBatch extends CreateRecord
             $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.google_sheet_url_invalid'));
         }
 
-        try {
-            $sheet_names = array_values(Sheets::spreadsheet($extract_spreadsheet_id)->sheetList());
-            $this->validateRequiredSheetNames($sheet_names);
-
-            $all_sheets_rows = [];
-
-            foreach ($sheet_names as $sheet_name) {
-                $rows = Sheets::spreadsheet($extract_spreadsheet_id)
-                    ->sheet($sheet_name)
-                    ->all();
-
-                $all_sheets_rows[$sheet_name] = $this->normalizeRows($rows);
-            }
-
-            $this->validateRequiredHeadersFromRows($all_sheets_rows);
-
-            if (! $this->hasDataRows($all_sheets_rows['Product'] ?? [])) {
-                $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.product_sheet_has_no_data'));
-            }
-
-            [$source_path, $exported_files] = $this->storeGoogleSheetsAsExcelFiles(
-                spreadsheetId: $extract_spreadsheet_id,
-                allSheetsRows: $all_sheets_rows
-            );
-        } catch (Halt $e) {
-            throw $e;
-        } catch (Throwable $e) {
-            Log::channel('stack')->error($e->getMessage(), [
-                'current_file'   => __FILE__,
-                'file'           => $e->getFile(),
-                'line'           => $e->getLine(),
-            ]);
-
-            $this->sendDangerAndHalt(__('admin/product_imports/batches.errors.google_sheet_fetch_failed'));
-        }
-
         $batch = ProductImportBatch::query()->create([
             'user_id'         => $this->resolveUserId(),
             'source_type'     => ProductImportBatchesSourceTypeEnum::GOOGLE_SHEET->value,
             'source_name'     => __('admin/product_imports/batches.source_names.google_sheets', ['id' => $extract_spreadsheet_id]),
-            'source_path'     => $source_path,
+            'source_path'     => null,
             'status'          => ProductImportBatchesStatusEnum::NEW->value,
             'total_items'     => 0,
             'processed_items' => 0,
@@ -233,7 +190,7 @@ class CreateProductImportBatch extends CreateRecord
                 'input_mode'       => 'google_sheets',
                 'google_sheet_url' => $sheets_url,
                 'spreadsheet_id'   => $extract_spreadsheet_id,
-                'exported_files'   => $exported_files,
+                'export_state'     => 'pending',
             ],
         ]);
 
@@ -420,104 +377,6 @@ class CreateProductImportBatch extends CreateRecord
         $spreadsheet->disconnectWorksheets();
 
         unset($spreadsheet);
-    }
-
-    /**
-     * @param  array<string, list<array<int, mixed>>>  $allSheetsRows
-     * @return array{0: string, 1: list<string>}
-     */
-    private function storeGoogleSheetsAsExcelFiles(string $spreadsheetId, array $allSheetsRows): array
-    {
-        $chunk_count = 1;
-
-        foreach ($allSheetsRows as $rows) {
-            $data_row_count = max(count($rows) - 1, 0);
-            $chunk_count    = max($chunk_count, (int) ceil($data_row_count / self::MAX_ROWS_PER_FILE));
-        }
-
-        $now             = now();
-        $year_month_path = sprintf('upload/excel/%s/%s', $now->format('Y'), $now->format('m'));
-        $timestamp       = $now->format('Ymd_His');
-        $suffix          = Str::replaceMatches('/[^a-zA-Z0-9_-]/', '', $spreadsheetId) ?: 'sheet';
-
-        $base_folder_path = sprintf('%s/google_sheet_%s_%s', $year_month_path, $timestamp, $suffix);
-        $single_file_path = sprintf('%s/google_sheet_%s_%s.xlsx', $year_month_path, $timestamp, $suffix);
-
-        $exported_files = [];
-
-        if ($chunk_count > 1) {
-            Storage::makeDirectory($base_folder_path);
-
-            for ($chunk_index = 1; $chunk_index <= $chunk_count; $chunk_index++) {
-                $file_path = sprintf('%s/part_%02d.xlsx', $base_folder_path, $chunk_index);
-
-                $this->writeChunkToExcelFile($file_path, $allSheetsRows, $chunk_index);
-
-                $exported_files[] = $file_path;
-            }
-
-            return [$base_folder_path, $exported_files];
-        }
-
-        $this->writeChunkToExcelFile($single_file_path, $allSheetsRows, 1);
-
-        $exported_files[] = $single_file_path;
-
-        return [$single_file_path, $exported_files];
-    }
-
-    /**
-     * @param  array<string, list<array<int, mixed>>>  $all_sheets_rows
-     */
-    private function writeChunkToExcelFile(string $file_path, array $all_sheets_rows, int $chunk_index): void
-    {
-        $spreadsheet = new Spreadsheet();
-        $spreadsheet->removeSheetByIndex(0);
-
-        $start_offset = ($chunk_index - 1) * self::MAX_ROWS_PER_FILE;
-
-        foreach ($all_sheets_rows as $sheet_name => $rows) {
-            $worksheet = new Worksheet($spreadsheet, $this->sanitizeSheetTitle($sheet_name));
-            $spreadsheet->addSheet($worksheet);
-
-            $header     = $rows[0] ?? [];
-            $dataRows   = array_slice($rows, 1);
-            $data_chunk = array_slice($dataRows, $start_offset, self::MAX_ROWS_PER_FILE);
-
-            $rows_to_write = [];
-
-            if ($header !== []) {
-                $rows_to_write[] = $header;
-            }
-
-            if ($data_chunk !== []) {
-                $rows_to_write = [...$rows_to_write, ...$data_chunk];
-            }
-
-            if ($rows_to_write !== []) {
-                $worksheet->fromArray($rows_to_write, null, 'A1', true);
-            }
-        }
-
-        $spreadsheet->setActiveSheetIndex(0);
-
-        Storage::makeDirectory(dirname($file_path));
-
-        $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
-
-        $writer->save(Storage::path($file_path));
-
-        $spreadsheet->disconnectWorksheets();
-
-        unset($spreadsheet);
-    }
-
-    private function sanitizeSheetTitle(string $sheetTitle): string
-    {
-        $sanitized = Str::replaceMatches('~[:\\\\/?*\\[\\]]~', '_', Str::trim($sheetTitle));
-        $sanitized = $sanitized === '' ? 'Sheet' : $sanitized;
-
-        return Str::substr($sanitized, 0, 31);
     }
 
     /**

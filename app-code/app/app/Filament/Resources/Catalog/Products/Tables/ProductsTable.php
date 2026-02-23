@@ -31,6 +31,7 @@ use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
 use App\Supports\Services\Products\ProductBackupRestoreService;
+use App\Supports\Services\Products\ProductDeleteQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -360,6 +361,45 @@ class ProductsTable
                             ->success()
                             ->send();
                     }),
+                Action::make('deleteProductFromShops')
+                    ->label(__('admin/products/products.actions.delete_product_from_shops'))
+                    ->icon(Heroicon::Trash)
+                    ->color('danger')
+                    ->visible(static fn (Product $record): bool => self::hasAnyExternalBinding($record))
+                    ->schema([
+                        Select::make('shop_ids')
+                            ->label(__('admin/products/products.filters.shop'))
+                            ->options(fn (Product $record): array => self::resolveDeletableShopOptions($record))
+                            ->multiple()
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                    ])
+                    ->action(function (Product $record, array $data): void {
+                        $shop_ids = collect($data['shop_ids'] ?? [])
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($shop_ids === []) {
+                            Notification::make()
+                                ->title(__('admin/products/products.messages.select_shops_required'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $summary = self::queueDeleteForSelectedProducts(new Collection([$record]), $shop_ids);
+
+                        Notification::make()
+                            ->title(__('admin/products/products.messages.item_delete_queued'))
+                            ->body(__('admin/products/products.messages.item_delete_result', $summary))
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make(),
             ])
             ->toolbarActions([
@@ -528,6 +568,50 @@ class ProductsTable
                             Notification::make()
                                 ->title(__('admin/products/products.messages.bulk_restore_queued'))
                                 ->body(__('admin/products/products.messages.bulk_restore_result', $summary))
+                                ->success()
+                                ->send();
+                        }),
+                    BulkAction::make('deleteProductsFromShops')
+                        ->label(__('admin/products/products.actions.delete_products_from_shops'))
+                        ->icon(Heroicon::Trash)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->schema([
+                            Select::make('shop_ids')
+                                ->label(__('admin/products/products.filters.shop'))
+                                ->options(fn (): array => Shop::query()
+                                    ->where('is_active', true)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray())
+                                ->multiple()
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $shop_ids = collect($data['shop_ids'] ?? [])
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            if ($shop_ids === []) {
+                                Notification::make()
+                                    ->title(__('admin/products/products.messages.select_shops_required'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $summary = self::queueDeleteForSelectedProducts($records, $shop_ids);
+
+                            Notification::make()
+                                ->title(__('admin/products/products.messages.bulk_delete_queued'))
+                                ->body(__('admin/products/products.messages.bulk_delete_result', $summary))
                                 ->success()
                                 ->send();
                         }),
@@ -901,6 +985,52 @@ class ProductsTable
         asort($options);
 
         return $options;
+    }
+
+    /**
+     * @param  list<int>  $shop_ids
+     * @return array<string, int>
+     */
+    private static function queueDeleteForSelectedProducts(Collection $records, array $shop_ids): array
+    {
+        $product_ids = $records
+            ->filter(static fn ($record): bool => $record instanceof Product)
+            ->map(static fn (Product $record): int => (int) $record->id)
+            ->filter(static fn (int $product_id): bool => $product_id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        return app(ProductDeleteQueueService::class)->queueForProductIdsAndShopIds(
+            $product_ids,
+            $shop_ids,
+            'catalog_products',
+            is_numeric(auth()->id()) ? (int) auth()->id() : null
+        );
+    }
+
+    private static function hasAnyExternalBinding(Product $product): bool
+    {
+        return ProductShop::query()
+            ->where('product_id', (int) $product->id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->exists();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function resolveDeletableShopOptions(Product $product): array
+    {
+        return ProductShop::query()
+            ->where('product_id', (int) $product->id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
+            ->orderBy('shops.name')
+            ->pluck('shops.name', 'product_shop.shop_id')
+            ->toArray();
     }
 
     /**

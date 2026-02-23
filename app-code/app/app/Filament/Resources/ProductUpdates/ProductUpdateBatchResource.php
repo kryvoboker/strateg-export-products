@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ProductUpdates;
 
+use App\Filament\Navigation\AdminNavigationGroupEnum;
 use App\Filament\Resources\ProductUpdates\Pages\CreateProductUpdateBatch;
 use App\Filament\Resources\ProductUpdates\Pages\ListProductUpdateBatches;
 use App\Filament\Resources\ProductUpdates\Pages\ViewProductUpdateBatch;
@@ -22,6 +23,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use UnitEnum;
 
 class ProductUpdateBatchResource extends Resource
 {
@@ -32,6 +34,9 @@ class ProductUpdateBatchResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::ArrowPathRoundedSquare;
 
     protected static ?string $recordTitleAttribute = 'source_name';
+
+    protected static string|null|UnitEnum $navigationGroup = AdminNavigationGroupEnum::ProductManagement;
+    protected static ?int                 $navigationSort  = 1;
 
     public static function form(Schema $schema): Schema
     {

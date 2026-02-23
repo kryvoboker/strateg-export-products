@@ -42,9 +42,11 @@ return [
         'export_products_to_shops'  => 'Масово вигрузити товари в магазини',
         'update_product_to_shops'   => 'Оновити товар в магазинах',
         'restore_product_in_shops'  => 'Відновити товар в магазинах',
+        'delete_product_from_shops' => 'Видалити товар з магазинів',
         'update_product_via_api'    => 'Оновити по API в інтернет-магазині',
         'update_products_to_shops'  => 'Масово оновити товари в магазинах',
         'restore_products_in_shops' => 'Масово відновити товари в магазинах',
+        'delete_products_from_shops'=> 'Масово видалити товари з магазинів',
     ],
 
     'statuses' => [
@@ -67,6 +69,10 @@ return [
         'item_restore_result'    => 'Товарів: :products_total; магазинів: :shops_total; задач відновлення в черзі: :restore_batches_queued; помилок: :errors.',
         'bulk_restore_queued'    => 'Відновлення товарів поставлено в чергу.',
         'bulk_restore_result'    => 'Товарів: :products_total; магазинів: :shops_total; задач відновлення в черзі: :restore_batches_queued; помилок: :errors.',
+        'item_delete_queued'     => 'Видалення товару поставлено в чергу.',
+        'item_delete_result'     => 'Товарів: :products_total; магазинів: :shops_total; задач видалення створено: :deletes_queued; уже failed: :already_failed; уже в черзі/видалено: :already_queued_or_deleted; не привʼязані: :skipped_not_bound; без external_product_id: :skipped_without_external_id; помилок: :errors.',
+        'bulk_delete_queued'     => 'Видалення товарів поставлено в чергу.',
+        'bulk_delete_result'     => 'Товарів: :products_total; магазинів: :shops_total; задач видалення створено: :deletes_queued; уже failed: :already_failed; уже в черзі/видалено: :already_queued_or_deleted; не привʼязані: :skipped_not_bound; без external_product_id: :skipped_without_external_id; помилок: :errors.',
     ],
 
     'api_update' => [

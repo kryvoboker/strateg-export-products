@@ -12,6 +12,7 @@ use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
+use App\Supports\Services\Products\ProductDeleteQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -273,6 +274,51 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             ->success()
                             ->send();
                     }),
+                Action::make('deleteProductFromShops')
+                    ->label(__('admin/product_deletes/batches.actions.delete_product_from_shop'))
+                    ->icon(Heroicon::Trash)
+                    ->color('danger')
+                    ->visible(fn (ProductUpdateItem $record): bool => $this->hasExternalProductIdForRecord($record))
+                    ->schema([
+                        Select::make('shop_ids')
+                            ->label(__('admin/product_imports/batches.filters.shop'))
+                            ->options(fn (ProductUpdateItem $record): array => $this->resolveDeleteShopOptionsForRecord($record))
+                            ->multiple()
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                    ])
+                    ->action(function (ProductUpdateItem $record, array $data): void {
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $shop_ids = collect($data['shop_ids'] ?? [])
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($product_id <= 0 || $shop_ids === []) {
+                            Notification::make()
+                                ->title(__('admin/product_updates/batches.messages.bulk_update_no_shops'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $summary = app(ProductDeleteQueueService::class)->queueForProductIdsAndShopIds(
+                            [$product_id],
+                            $shop_ids,
+                            'product_update_items',
+                            is_numeric(auth()->id()) ? (int) auth()->id() : null
+                        );
+
+                        Notification::make()
+                            ->title(__('admin/product_deletes/batches.messages.item_delete_queued'))
+                            ->body(__('admin/product_deletes/batches.messages.item_delete_result', $summary))
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -355,6 +401,65 @@ class ProductUpdateItemsRelationManager extends RelationManager
                                 ->body(__('admin/product_updates/batches.messages.bulk_retry_result', [
                                     'failed_found' => $failed_found,
                                     'queued'       => $queued,
+                                ]))
+                                ->success()
+                                ->send();
+                        }),
+                    BulkAction::make('deleteProductsFromShops')
+                        ->label(__('admin/product_deletes/batches.actions.delete_products_from_shops'))
+                        ->icon(Heroicon::Trash)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->schema([
+                            Select::make('shop_ids')
+                                ->label(__('admin/product_imports/batches.filters.shop'))
+                                ->options(fn (): array => Shop::query()
+                                    ->where('is_active', true)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray())
+                                ->multiple()
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                        ])
+                        ->action(function ($records, array $data): void {
+                            $shop_ids = collect($data['shop_ids'] ?? [])
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+                            $product_ids = collect($records)
+                                ->filter(static fn ($record): bool => $record instanceof ProductUpdateItem)
+                                ->map(static fn (ProductUpdateItem $record): int => (int) ($record->product_id ?? 0))
+                                ->filter(static fn (int $product_id): bool => $product_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            if ($shop_ids === [] || $product_ids === []) {
+                                Notification::make()
+                                    ->title(__('admin/product_updates/batches.messages.bulk_update_no_shops'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $summary = app(ProductDeleteQueueService::class)->queueForProductIdsAndShopIds(
+                                $product_ids,
+                                $shop_ids,
+                                'product_update_items',
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null
+                            );
+
+                            Notification::make()
+                                ->title(__('admin/product_deletes/batches.messages.bulk_delete_queued'))
+                                ->body(__('admin/product_deletes/batches.messages.bulk_delete_items_result', [
+                                    ...$summary,
+                                    'items_total' => count($product_ids),
                                 ]))
                                 ->success()
                                 ->send();
@@ -763,6 +868,40 @@ class ProductUpdateItemsRelationManager extends RelationManager
                 'update_finished_at' => null,
             ],
         ]);
+    }
+
+    private function hasExternalProductIdForRecord(ProductUpdateItem $record): bool
+    {
+        $product_id = (int) ($record->product_id ?? 0);
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        return ProductShop::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->exists();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveDeleteShopOptionsForRecord(ProductUpdateItem $record): array
+    {
+        $product_id = (int) ($record->product_id ?? 0);
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return ProductShop::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
+            ->orderBy('shops.name')
+            ->pluck('shops.name', 'product_shop.shop_id')
+            ->toArray();
     }
 
     private function getTypedOwnerRecord(): ProductUpdateBatch

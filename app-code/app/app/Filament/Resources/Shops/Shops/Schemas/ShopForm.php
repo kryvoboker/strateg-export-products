@@ -73,6 +73,14 @@ class ShopForm
                 ]),
 
                 self::getTextFormField([
+                    'field_name'  => 'part_api_url_delete_prods',
+                    'label'       => __('admin/shops/shops.labels.part_api_url_delete_prods'),
+                    'helper_text' => __('admin/shops/shops.helpers.part_api_url_delete_prods'),
+                    'placeholder' => '/delete/products',
+                    'required'    => false,
+                ]),
+
+                self::getTextFormField([
                     'field_name'  => 'part_api_url_login',
                     'label'       => __('admin/shops/shops.labels.part_api_url_login'),
                     'helper_text' => __('admin/shops/shops.helpers.part_api_url_login'),

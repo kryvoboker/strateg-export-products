@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Jobs;
 
-use App\Enums\Product\Export\ProductExportItemsStatusEnum;
-use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
-use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
-use App\Jobs\ProcessProductUpdateItemJob;
-use App\Models\Products\Exports\ProductExportItem;
+use App\Enums\Product\Delete\ProductDeleteBatchesStatusEnum;
+use App\Enums\Product\Delete\ProductDeleteItemsStatusEnum;
+use App\Jobs\ProcessProductDeleteItemJob;
+use App\Models\Products\Deletes\ProductDeleteBatch;
+use App\Models\Products\Deletes\ProductDeleteItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductBackups;
 use App\Models\Products\ProductShop;
-use App\Models\Products\Updates\ProductUpdateBatch;
-use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request;
@@ -21,7 +19,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
-class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
+class ProcessProductDeleteItemJobTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -30,20 +28,70 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
         $this->recreateSchema();
     }
 
-    public function test_it_stops_update_flow_when_backup_request_fails(): void
+    public function test_it_fails_delete_when_backup_payload_is_invalid(): void
     {
         Http::preventStrayRequests();
         Http::fake([
-            'shop.example.test/api/backup' => Http::response(['error' => 'backup failed'], 500),
-            'shop.example.test/api/update' => Http::response(['status' => 'ok'], 200),
+            'shop.example.test/api/backup' => Http::response(['status' => 'ok'], 200),
+            'shop.example.test/api/delete' => Http::response(['status' => 'ok'], 200),
         ]);
 
-        $batch = ProductUpdateBatch::query()->create([
+        [$delete_item] = $this->seedDeleteItem();
+
+        (new ProcessProductDeleteItemJob((int) $delete_item->id))->handle(app(\App\Supports\Services\Products\ProductDeleteQueueService::class));
+
+        $delete_item->refresh();
+
+        self::assertSame(ProductDeleteItemsStatusEnum::FAILED->value, (string) $delete_item->status);
+        self::assertStringContainsString('Backup payload does not contain valid product id', (string) $delete_item->error_message);
+        self::assertSame(0, ProductBackups::query()->count());
+
+        Http::assertSentCount(1);
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/backup'));
+        Http::assertNotSent(static fn (Request $request): bool => str_contains($request->url(), '/api/delete'));
+    }
+
+    public function test_it_deletes_product_when_backup_payload_is_valid(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'shop.example.test/api/backup' => Http::response(['product_id' => 777, 'name' => 'Test'], 200),
+            'shop.example.test/api/delete' => Http::response(['status' => 'ok'], 200),
+        ]);
+
+        [$delete_item, $batch] = $this->seedDeleteItem();
+
+        (new ProcessProductDeleteItemJob((int) $delete_item->id))->handle(app(\App\Supports\Services\Products\ProductDeleteQueueService::class));
+
+        $delete_item->refresh();
+        $batch->refresh();
+
+        self::assertSame(ProductDeleteItemsStatusEnum::DELETED->value, (string) $delete_item->status);
+        self::assertNull($delete_item->error_message);
+        self::assertSame(ProductDeleteBatchesStatusEnum::COMPLETED->value, (string) $batch->status);
+
+        $backup = ProductBackups::query()->first();
+        self::assertInstanceOf(ProductBackups::class, $backup);
+        self::assertSame((int) $delete_item->product_id, (int) $backup->backupable_id);
+        self::assertSame('external_api', (string) $backup->backup_source);
+        self::assertSame('external_product_snapshot', (string) $backup->backup_kind);
+
+        Http::assertSentCount(2);
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/backup'));
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/delete'));
+    }
+
+    /**
+     * @return array{0: ProductDeleteItem, 1: ProductDeleteBatch}
+     */
+    private function seedDeleteItem(): array
+    {
+        $batch = ProductDeleteBatch::query()->create([
             'user_id'         => null,
-            'source_type'     => 'excel_file',
-            'source_name'     => 'test.xlsx',
-            'source_path'     => '/tmp/test.xlsx',
-            'status'          => ProductUpdateBatchesStatusEnum::NEW->value,
+            'source_type'     => 'Excel File',
+            'source_name'     => 'delete.xlsx',
+            'source_path'     => '/tmp/delete.xlsx',
+            'status'          => ProductDeleteBatchesStatusEnum::PROCESSING->value,
             'total_items'     => 1,
             'processed_items' => 0,
             'failed_items'    => 0,
@@ -57,20 +105,23 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             'api_url'                   => null,
             'api_token'                 => null,
             'part_api_url_login'        => null,
-            'part_api_url_export_prods' => '/api/update',
+            'part_api_url_export_prods' => null,
+            'part_api_url_update_prods' => null,
+            'part_api_url_restore_prods'=> null,
+            'part_api_url_delete_prods' => '/api/delete',
             'is_active'                 => true,
             'options'                   => [
                 'part_api_url_backup_prods' => '/api/backup',
-                'part_api_url_update_prods' => '/api/update',
                 'api_timeout'               => 10,
             ],
         ]);
 
         $product = Product::query()->create([
             'product_import_item_id' => 1,
-            'model'                  => 'MODEL-1',
-            'sku'                    => 'SKU-1',
-            'ean'                    => 'EAN-1',
+            'family_ulid'            => '01K3MTKP37TZCVQKEVJ47X5NBH',
+            'model'                  => 'MODEL-DELETE-1',
+            'sku'                    => 'SKU-DELETE-1',
+            'ean'                    => 'EAN-DELETE-1',
             'quantity'               => 5,
             'minimum'                => 1,
             'image'                  => null,
@@ -87,53 +138,27 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             'external_product_id'     => 333,
         ]);
 
-        $update_item = ProductUpdateItem::query()->create([
-            'product_update_batch_id' => (int) $batch->id,
+        $item = ProductDeleteItem::query()->create([
+            'product_delete_batch_id' => (int) $batch->id,
             'product_id'              => (int) $product->id,
             'payload'                 => [
-                'operation'           => 'update',
+                'operation'           => 'delete',
                 'shop_id'             => (int) $shop->id,
-                'update_instructions' => [
-                    'Product' => [
-                        'fields' => [
-                            'sku' => ['action' => 'set', 'value' => 'SKU-UPDATED'],
-                        ],
-                    ],
-                ],
+                'external_product_id' => 333,
             ],
-            'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
+            'status'        => ProductDeleteItemsStatusEnum::PROCESSING->value,
             'error_message' => null,
             'processed_at'  => null,
         ]);
 
-        (new ProcessProductUpdateItemJob((int) $update_item->id))->handle();
-
-        $update_item->refresh();
-
-        self::assertSame(ProductUpdateItemsStatusEnum::FAILED->value, $update_item->status);
-        self::assertStringContainsString('Backup API failed', (string) $update_item->error_message);
-        self::assertSame(0, ProductBackups::query()->count());
-        self::assertSame(1, ProductExportItem::query()->count());
-
-        $product_export_item = ProductExportItem::query()->first();
-        self::assertInstanceOf(ProductExportItem::class, $product_export_item);
-        self::assertSame(ProductUpdateBatch::class, (string) $product_export_item->batchable_type);
-        self::assertSame((int) $batch->id, (int) $product_export_item->batchable_id);
-        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $product_export_item->status);
-        self::assertStringContainsString('Backup API failed', (string) $product_export_item->error_message);
-
-        Http::assertSentCount(1);
-        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/backup'));
-        Http::assertNotSent(static fn (Request $request): bool => str_contains($request->url(), '/api/update'));
-
+        return [$item, $batch];
     }
 
     private function recreateSchema(): void
     {
         Schema::dropIfExists('product_backups');
-        Schema::dropIfExists('product_update_items');
-        Schema::dropIfExists('product_update_batches');
-        Schema::dropIfExists('product_export_items');
+        Schema::dropIfExists('product_delete_items');
+        Schema::dropIfExists('product_delete_batches');
         Schema::dropIfExists('product_shop');
         Schema::dropIfExists('products');
         Schema::dropIfExists('shops');
@@ -147,6 +172,9 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             $table->string('api_token', 500)->nullable();
             $table->string('part_api_url_login')->nullable();
             $table->string('part_api_url_export_prods')->nullable();
+            $table->string('part_api_url_update_prods')->nullable();
+            $table->string('part_api_url_restore_prods')->nullable();
+            $table->string('part_api_url_delete_prods')->nullable();
             $table->boolean('is_active')->default(true);
             $table->json('options')->nullable();
             $table->timestamps();
@@ -155,6 +183,7 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
         Schema::create('products', static function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('product_import_item_id')->nullable();
+            $table->char('family_ulid', 26)->nullable();
             $table->string('marked_to_shop')->nullable();
             $table->string('model')->nullable();
             $table->string('sku')->nullable();
@@ -178,13 +207,13 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             $table->timestamps();
         });
 
-        Schema::create('product_update_batches', static function (Blueprint $table): void {
+        Schema::create('product_delete_batches', static function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
-            $table->string('source_type', 100)->default('excel_file');
+            $table->string('source_type', 100)->nullable();
             $table->string('source_name', 2000)->nullable();
             $table->string('source_path')->nullable();
-            $table->string('status', 100)->default('new');
+            $table->string('status', 100)->nullable();
             $table->unsignedInteger('total_items')->default(0);
             $table->unsignedInteger('processed_items')->default(0);
             $table->unsignedInteger('failed_items')->default(0);
@@ -194,21 +223,9 @@ class ProcessProductUpdateItemJobBackupFlowTest extends TestCase
             $table->timestamps();
         });
 
-        Schema::create('product_update_items', static function (Blueprint $table): void {
+        Schema::create('product_delete_items', static function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('product_update_batch_id');
-            $table->unsignedBigInteger('product_id')->nullable();
-            $table->json('payload')->nullable();
-            $table->string('status', 100)->nullable()->default('new');
-            $table->text('error_message')->nullable();
-            $table->timestamp('processed_at')->nullable();
-            $table->timestamps();
-        });
-
-        Schema::create('product_export_items', static function (Blueprint $table): void {
-            $table->id();
-            $table->string('batchable_type');
-            $table->unsignedBigInteger('batchable_id');
+            $table->unsignedBigInteger('product_delete_batch_id');
             $table->unsignedBigInteger('product_id')->nullable();
             $table->json('payload')->nullable();
             $table->string('status', 100)->nullable();

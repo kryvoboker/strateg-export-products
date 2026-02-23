@@ -25,6 +25,7 @@ use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
+use App\Models\Products\ProductBackups;
 use App\Models\Products\ProductDescription;
 use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductImage;
@@ -32,11 +33,11 @@ use App\Models\Products\ProductShop;
 use App\Models\Products\ProductSpecial;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Products\ProductToManufacturerBrand;
-use App\Models\Products\Updates\ProductBackups;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Products\ProductBackupRestoreService;
+use App\Supports\Services\Products\ProductDeleteQueueService;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -59,7 +60,6 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -822,6 +822,51 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->success()
                             ->send();
                     }),
+                Action::make('deleteProductFromShops')
+                    ->label(__('admin/product_deletes/batches.actions.delete_product_from_shop'))
+                    ->icon(Heroicon::Trash)
+                    ->color('danger')
+                    ->visible(fn (ProductImportItem $record): bool => $this->hasExternalProductIdForRecord($record))
+                    ->schema([
+                        Select::make('shop_ids')
+                            ->label(__('admin/product_imports/batches.filters.shop'))
+                            ->options(fn (ProductImportItem $record): array => $this->resolveDeleteShopOptionsForRecord($record))
+                            ->multiple()
+                            ->required()
+                            ->searchable()
+                            ->preload(),
+                    ])
+                    ->action(function (ProductImportItem $record, array $data): void {
+                        $product_id = (int) ($record->product_id ?? 0);
+                        $shop_ids = collect($data['shop_ids'] ?? [])
+                            ->map(static fn ($shop_id): int => (int) $shop_id)
+                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($product_id <= 0 || $shop_ids === []) {
+                            Notification::make()
+                                ->title(__('admin/product_imports/batches.messages.bulk_bind_no_shops'))
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        $summary = app(ProductDeleteQueueService::class)->queueForProductIdsAndShopIds(
+                            [$product_id],
+                            $shop_ids,
+                            'product_import_items',
+                            is_numeric(auth()->id()) ? (int) auth()->id() : null
+                        );
+
+                        Notification::make()
+                            ->title(__('admin/product_deletes/batches.messages.item_delete_queued'))
+                            ->body(__('admin/product_deletes/batches.messages.item_delete_result', $summary))
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -857,6 +902,65 @@ class ProductImportItemsRelationManager extends RelationManager
                                 ->title(__('admin/product_imports/batches.messages.restore_products_bulk_queued'))
                                 ->body(__('admin/product_imports/batches.messages.restore_products_bulk_result', [
                                     'items_selected' => count($record_ids),
+                                ]))
+                                ->success()
+                                ->send();
+                        }),
+                    BulkAction::make('deleteProductsFromShops')
+                        ->label(__('admin/product_deletes/batches.actions.delete_products_from_shops'))
+                        ->icon(Heroicon::Trash)
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->schema([
+                            Select::make('shop_ids')
+                                ->label(__('admin/product_imports/batches.filters.shop'))
+                                ->options(fn (): array => Shop::query()
+                                    ->where('is_active', true)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->toArray())
+                                ->multiple()
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                        ])
+                        ->action(function ($records, array $data): void {
+                            $shop_ids = collect($data['shop_ids'] ?? [])
+                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+                            $product_ids = collect($records)
+                                ->filter(static fn ($record): bool => $record instanceof ProductImportItem)
+                                ->map(static fn (ProductImportItem $record): int => (int) ($record->product_id ?? 0))
+                                ->filter(static fn (int $product_id): bool => $product_id > 0)
+                                ->unique()
+                                ->values()
+                                ->all();
+
+                            if ($shop_ids === [] || $product_ids === []) {
+                                Notification::make()
+                                    ->title(__('admin/product_imports/batches.messages.bulk_bind_no_shops'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            $summary = app(ProductDeleteQueueService::class)->queueForProductIdsAndShopIds(
+                                $product_ids,
+                                $shop_ids,
+                                'product_import_items',
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null
+                            );
+
+                            Notification::make()
+                                ->title(__('admin/product_deletes/batches.messages.bulk_delete_queued'))
+                                ->body(__('admin/product_deletes/batches.messages.bulk_delete_items_result', [
+                                    ...$summary,
+                                    'items_total' => count($product_ids),
                                 ]))
                                 ->success()
                                 ->send();
@@ -3207,6 +3311,40 @@ class ProductImportItemsRelationManager extends RelationManager
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
+    }
+
+    private function hasExternalProductIdForRecord(ProductImportItem $record): bool
+    {
+        $product_id = (int) ($record->product_id ?? 0);
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        return ProductShop::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->exists();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveDeleteShopOptionsForRecord(ProductImportItem $record): array
+    {
+        $product_id = (int) ($record->product_id ?? 0);
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return ProductShop::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
+            ->orderBy('shops.name')
+            ->pluck('shops.name', 'product_shop.shop_id')
+            ->toArray();
     }
 
     private function getTypedOwnerRecord(): ProductImportBatch
