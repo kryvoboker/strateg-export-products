@@ -121,8 +121,10 @@ class ProductForm
                                 Toggle::make('is_active')
                                     ->label(__('admin/product_imports/batches.product_edit.fields.is_active')),
                                 DateTimePicker::make('date_available')
+                                    ->format(config('app.datetime_format'))
                                     ->label(__('admin/product_imports/batches.product_edit.fields.date_available')),
                                 DateTimePicker::make('date_added')
+                                    ->format(config('app.datetime_format'))
                                     ->label(__('admin/product_imports/batches.product_edit.fields.date_added')),
                             ])
                             ->columns(3),
@@ -225,8 +227,10 @@ class ProductForm
                                             ->numeric()
                                             ->default(1),
                                         DateTimePicker::make('date_start')
+                                            ->format(config('app.datetime_format'))
                                             ->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
                                         DateTimePicker::make('date_end')
+                                            ->format(config('app.datetime_format'))
                                             ->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
                                     ])
                                     ->columns(3),
@@ -246,8 +250,10 @@ class ProductForm
                                             ->numeric()
                                             ->default(1),
                                         DateTimePicker::make('date_start')
+                                            ->format(config('app.datetime_format'))
                                             ->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
                                         DateTimePicker::make('date_end')
+                                            ->format(config('app.datetime_format'))
                                             ->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
                                     ])
                                     ->columns(3),

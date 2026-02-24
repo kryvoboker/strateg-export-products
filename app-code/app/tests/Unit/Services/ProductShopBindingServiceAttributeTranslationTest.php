@@ -14,11 +14,12 @@ use App\Models\Categories\CategoryProduct;
 use App\Models\Manufacturers\Manufacturer;
 use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Products\ProductDescription;
-use App\Models\Products\ProductToManufacturerBrand;
+use App\Models\Products\ProductShop;
 use App\Models\Products\ProductToAttribute;
+use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
-use App\Supports\Services\Catalog\ProductShopBindingService;
+use App\Supports\Services\Products\ProductShopBindingService;
 use Illuminate\Config\Repository;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Foundation\Application;
@@ -179,11 +180,22 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             $table->unique('product_id');
         });
 
+        $schema->create('product_shop', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('product_id');
+            $table->unsignedInteger('shop_id');
+            $table->unsignedInteger('product_import_batch_id')->nullable();
+            $table->string('external_product_id')->nullable();
+            $table->timestamps();
+            $table->unique(['product_id', 'shop_id']);
+        });
+
         $schema->create('seo_urls', static function ($table): void {
             $table->increments('id');
             $table->string('seoable_type');
             $table->unsignedInteger('seoable_id');
             $table->unsignedInteger('shop_language_id')->nullable();
+            $table->string('query_key')->nullable();
             $table->string('query_value');
             $table->string('keyword')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
@@ -198,6 +210,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         app('config')->set('app.ai_translation_enabled', true);
 
         ProductToAttribute::query()->delete();
+        ProductShop::query()->delete();
         AttributeDescription::query()->delete();
         Attribute::query()->delete();
         ProductToManufacturerBrand::query()->delete();
@@ -502,6 +515,161 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             ->value('text');
 
         self::assertSame('translated-to-uk-Red', (string) $uk_attribute_text);
+    }
+
+    public function test_it_creates_manufacturer_and_brand_descriptions_for_all_active_shop_languages(): void
+    {
+        app('config')->set('app.ai_translation_enabled', false);
+
+        $product_id = 999;
+
+        $shop_one_uk = ShopLanguage::query()->create([
+            'shop_id'    => 50,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+        $shop_one_en = ShopLanguage::query()->create([
+            'shop_id'    => 50,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+        $shop_two_uk = ShopLanguage::query()->create([
+            'shop_id'    => 60,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+        $shop_two_de = ShopLanguage::query()->create([
+            'shop_id'    => 60,
+            'code'       => 'de',
+            'name'       => 'Deutsch',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        $manufacturer = Manufacturer::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        $brand = Brand::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $manufacturer->id,
+            'shop_language_id' => (int) $shop_one_uk->id,
+            'name'             => 'Acme',
+        ]);
+        BrandDescription::query()->create([
+            'brand_id'         => (int) $brand->id,
+            'shop_language_id' => (int) $shop_one_uk->id,
+            'name'             => 'Prime',
+        ]);
+
+        ProductToManufacturerBrand::query()->create([
+            'product_id'      => $product_id,
+            'manufacturer_id' => (int) $manufacturer->id,
+            'brand_id'        => (int) $brand->id,
+        ]);
+        ProductShop::query()->create([
+            'product_id' => $product_id,
+            'shop_id'    => 50,
+        ]);
+        ProductShop::query()->create([
+            'product_id' => $product_id,
+            'shop_id'    => 60,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $this->invokePrivateMethod($service, 'synchronizeManufacturerDescriptionsForShopLanguages', [$product_id, 50]);
+        $this->invokePrivateMethod($service, 'synchronizeBrandDescriptionsForShopLanguages', [$product_id, 50]);
+        $this->invokePrivateMethod($service, 'synchronizeManufacturerDescriptionsForShopLanguages', [$product_id, 60]);
+        $this->invokePrivateMethod($service, 'synchronizeBrandDescriptionsForShopLanguages', [$product_id, 60]);
+
+        $manufacturer_rows = ManufacturerDescription::query()
+            ->where('manufacturer_id', (int) $manufacturer->id)
+            ->orderBy('shop_language_id')
+            ->get();
+
+        $brand_rows = BrandDescription::query()
+            ->where('brand_id', (int) $brand->id)
+            ->orderBy('shop_language_id')
+            ->get();
+
+        $expected_language_ids = [
+            (int) $shop_one_uk->id,
+            (int) $shop_one_en->id,
+            (int) $shop_two_uk->id,
+            (int) $shop_two_de->id,
+        ];
+
+        self::assertSame($expected_language_ids, $manufacturer_rows->pluck('shop_language_id')->map(static fn ($id): int => (int) $id)->all());
+        self::assertSame($expected_language_ids, $brand_rows->pluck('shop_language_id')->map(static fn ($id): int => (int) $id)->all());
+
+        self::assertSame('Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_one_uk->id)?->name);
+        self::assertSame('translated-to-en-Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
+        self::assertSame('Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_two_uk->id)?->name);
+        self::assertSame('translated-to-de-Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
+
+        self::assertSame('Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_one_uk->id)?->name);
+        self::assertSame('translated-to-en-Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
+        self::assertSame('Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_two_uk->id)?->name);
+        self::assertSame('translated-to-de-Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
+
+        self::assertSame(
+            (int) $manufacturer_rows->count(),
+            (int) $manufacturer_rows->pluck('shop_language_id')->unique()->count()
+        );
+        self::assertSame(
+            (int) $brand_rows->count(),
+            (int) $brand_rows->pluck('shop_language_id')->unique()->count()
+        );
+    }
+
+    public function test_it_skips_manufacturer_and_brand_language_sync_when_no_active_languages(): void
+    {
+        $product_id = 1001;
+
+        $manufacturer = Manufacturer::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        $brand = Brand::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $manufacturer->id,
+            'shop_language_id' => null,
+            'name'             => 'Acme',
+        ]);
+        BrandDescription::query()->create([
+            'brand_id'         => (int) $brand->id,
+            'shop_language_id' => null,
+            'name'             => 'Prime',
+        ]);
+
+        ProductToManufacturerBrand::query()->create([
+            'product_id'      => $product_id,
+            'manufacturer_id' => (int) $manufacturer->id,
+            'brand_id'        => (int) $brand->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $this->invokePrivateMethod($service, 'synchronizeManufacturerDescriptionsForShopLanguages', [$product_id, 77]);
+        $this->invokePrivateMethod($service, 'synchronizeBrandDescriptionsForShopLanguages', [$product_id, 77]);
+
+        self::assertSame(1, ManufacturerDescription::query()->where('manufacturer_id', (int) $manufacturer->id)->count());
+        self::assertSame(1, BrandDescription::query()->where('brand_id', (int) $brand->id)->count());
+        self::assertNotNull(ManufacturerDescription::query()->where('manufacturer_id', (int) $manufacturer->id)->whereNull('shop_language_id')->first());
+        self::assertNotNull(BrandDescription::query()->where('brand_id', (int) $brand->id)->whereNull('shop_language_id')->first());
     }
 
     /**

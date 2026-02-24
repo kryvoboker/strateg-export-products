@@ -14,8 +14,8 @@ class ProcessProductShopBindingUniqueDispatchTest extends TestCase
     {
         Queue::fake();
 
-        ProcessProductShopBindingJob::dispatch(10, 2);
-        ProcessProductShopBindingJob::dispatch(10, 2);
+        ProcessProductShopBindingJob::dispatch(10, [2, 3]);
+        ProcessProductShopBindingJob::dispatch(10, [3, 2]);
 
         Queue::assertPushed(ProcessProductShopBindingJob::class, 1);
     }
@@ -24,9 +24,9 @@ class ProcessProductShopBindingUniqueDispatchTest extends TestCase
     {
         Queue::fake();
 
-        ProcessProductShopBindingJob::dispatch(10, 2);
-        ProcessProductShopBindingJob::dispatch(10, 3);
-        ProcessProductShopBindingJob::dispatch(11, 2);
+        ProcessProductShopBindingJob::dispatch(10, [2, 3]);
+        ProcessProductShopBindingJob::dispatch(10, [2, 4]);
+        ProcessProductShopBindingJob::dispatch(11, [2, 3]);
 
         Queue::assertPushed(ProcessProductShopBindingJob::class, 3);
     }

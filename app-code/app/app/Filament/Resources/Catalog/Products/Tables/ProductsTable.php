@@ -1466,13 +1466,14 @@ class ProductsTable
 
                 ProcessProductShopBindingJob::dispatch(
                     (int) $record->id,
-                    (int) $shop_id,
+                    $shop_ids,
                     $product_import_batch_id,
                     $source_payload,
                     auth()->id()
                 );
 
                 $summary['jobs_queued']++;
+                break;
             }
         }
 

@@ -106,8 +106,12 @@ class ProductImportBatchForm
                                                 TextInput::make('quantity')->label('Кількість')->numeric()->default(1),
                                                 TextInput::make('price')->label('Ціна')->numeric()->default(0),
                                                 TextInput::make('priority')->label('Пріоритет')->numeric()->default(1),
-                                                DateTimePicker::make('date_start')->label('Початок'),
-                                                DateTimePicker::make('date_end')->label('Завершення'),
+                                                DateTimePicker::make('date_start')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label('Початок'),
+                                                DateTimePicker::make('date_end')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label('Завершення'),
                                             ])->columns(3),
                                     ]),
 
@@ -118,8 +122,12 @@ class ProductImportBatchForm
                                                 TextInput::make('user_group_id')->label('Група користувачів')->numeric()->default(1),
                                                 TextInput::make('price')->label('Ціна')->numeric()->default(0),
                                                 TextInput::make('priority')->label('Пріоритет')->numeric()->default(1),
-                                                DateTimePicker::make('date_start')->label('Початок'),
-                                                DateTimePicker::make('date_end')->label('Завершення'),
+                                                DateTimePicker::make('date_start')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label('Початок'),
+                                                DateTimePicker::make('date_end')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label('Завершення'),
                                             ])->columns(3),
                                     ]),
 

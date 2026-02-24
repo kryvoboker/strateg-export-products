@@ -6,11 +6,17 @@ namespace App\Jobs;
 
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
+use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
+use App\Models\Brands\Brand;
+use App\Models\Categories\Category;
+use App\Models\Manufacturers\Manufacturer;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
+use App\Models\Products\ProductSpecial;
+use App\Models\Products\ProductToAttribute;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
@@ -195,7 +201,7 @@ class ProcessProductExportItemJob implements ShouldQueue
         $filtered_product_attributes = $product->productToAttributes
             ->filter(function ($product_to_attribute) use ($shop_id): bool {
                 $attribute = $product_to_attribute->attribute;
-                if (! $attribute instanceof \App\Models\Attributes\Attribute) {
+                if (! $attribute instanceof Attribute) {
                     return true;
                 }
 
@@ -207,13 +213,13 @@ class ProcessProductExportItemJob implements ShouldQueue
         $brand        = null;
         if ($this->hasProductManufacturerBrandTable()) {
             $manufacturer = $product->productToManufacturerBrand?->manufacturer;
-            if ($manufacturer instanceof \App\Models\Manufacturers\Manufacturer
+            if ($manufacturer instanceof Manufacturer
                 && ! $this->isEntityInShopScope((int) ($manufacturer->shop_id ?? 0), $shop_id, 'manufacturers')) {
                 $manufacturer = null;
             }
 
             $brand = $product->productToManufacturerBrand?->brand;
-            if ($brand instanceof \App\Models\Brands\Brand
+            if ($brand instanceof Brand
                 && ! $this->isEntityInShopScope((int) ($brand->shop_id ?? 0), $shop_id, 'brands')) {
                 $brand = null;
             }
@@ -274,7 +280,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                 ])->values()->all(),
             'categories' => $product->categories
                 ->filter(fn ($category): bool => $filtered_categories->contains('id', $category->id))
-                ->map(static function ($category) use ($shop_language_ids, $shop_language_map_by_id): array {
+                ->map(static function (Category $category) use ($shop_language_ids, $shop_language_map_by_id): array {
                     $descriptions = $category->descriptions
                         ->filter(static fn ($description): bool => $shop_language_ids === []
                             || in_array((int) $description->shop_language_id, $shop_language_ids, true))
@@ -305,9 +311,9 @@ class ProcessProductExportItemJob implements ShouldQueue
                     ];
                 })->values()->all(),
             'attributes' => $filtered_product_attributes
-                ->filter(static fn ($attribute): bool => $shop_language_ids === []
+                ->filter(static fn (ProductToAttribute $attribute): bool => $shop_language_ids === []
                     || in_array((int) $attribute->shop_language_id, $shop_language_ids, true))
-                ->map(static function ($attribute) use ($attribute_description_map, $shop_language_map_by_id): array {
+                ->map(static function (ProductToAttribute $attribute) use ($attribute_description_map, $shop_language_map_by_id): array {
                     $shop_language_id = (int) $attribute->shop_language_id;
                     $attribute_id     = (int) $attribute->attribute_id;
                     $attribute_model  = $attribute->attribute;
@@ -334,7 +340,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             ],
             'seo_urls' => $seo_urls,
             'specials' => $product->specials
-                ->map(static fn ($special): array => [
+                ->map(static fn (ProductSpecial $special): array => [
                     'user_group_id' => $special->user_group_id,
                     'price'         => $special->price,
                     'priority'      => $special->priority,
@@ -738,13 +744,13 @@ class ProcessProductExportItemJob implements ShouldQueue
         }
 
         $status_counters    = ProductExportItem::getBatchableStatusCounters(ProductImportBatch::class, $batchable_id);
-        $total_export_items = (int) ($status_counters['total'] ?? 0);
+        $total_export_items = $status_counters['total'] ?? 0;
         if ($total_export_items <= 0) {
             return;
         }
-        $processing_count = (int) ($status_counters['processing'] ?? 0);
-        $failed_count     = (int) ($status_counters['failed'] ?? 0);
-        $exported_count   = (int) ($status_counters['exported'] ?? 0);
+        $processing_count = $status_counters['processing'] ?? 0;
+        $failed_count     = $status_counters['failed'] ?? 0;
+        $exported_count   = $status_counters['exported'] ?? 0;
 
         if ($processing_count > 0) {
             $batch->update([

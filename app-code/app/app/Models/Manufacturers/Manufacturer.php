@@ -28,10 +28,6 @@ class Manufacturer extends Model
     protected static function booted(): void
     {
         static::creating(function (self $manufacturer): void {
-            if (! self::hasFamilyUlidColumn()) {
-                return;
-            }
-
             if (Str::trim((string) $manufacturer->getAttribute('family_ulid')) === '') {
                 $manufacturer->setAttribute('family_ulid', (string) Str::ulid());
             }
@@ -126,10 +122,6 @@ class Manufacturer extends Model
             return $this;
         }
 
-        if (! self::hasFamilyUlidColumn()) {
-            return $this;
-        }
-
         $family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
         if ($family_ulid === '') {
             $family_ulid = (string) Str::ulid();
@@ -152,6 +144,7 @@ class Manufacturer extends Model
             return $this->fresh() ?? $this;
         }
 
+        /** @var Manufacturer|Model $duplicate */
         $duplicate = self::query()->create([
             'family_ulid' => $family_ulid,
             'shop_id'     => $shop_id,
@@ -159,7 +152,13 @@ class Manufacturer extends Model
             'is_active'   => (bool) $this->is_active,
         ]);
 
-        $this->descriptions()
+        $duplicate_descriptions = $duplicate->descriptions();
+
+        if ($duplicate_descriptions->get()->isEmpty()) {
+            $duplicate_descriptions->createMany([]);
+        }
+
+        /*$this->descriptions()
             ->orderBy('id')
             ->get()
             ->each(function (ManufacturerDescription $description) use ($duplicate): void {
@@ -172,21 +171,8 @@ class Manufacturer extends Model
                         'name' => $description->name,
                     ]
                 );
-            });
+            });*/
 
         return $duplicate;
-    }
-
-    private static function hasFamilyUlidColumn(): bool
-    {
-        try {
-            $model = new self();
-
-            return $model->getConnection()
-                ->getSchemaBuilder()
-                ->hasColumn($model->getTable(), 'family_ulid');
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

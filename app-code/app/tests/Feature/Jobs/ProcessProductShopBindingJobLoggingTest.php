@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Jobs;
 
 use App\Jobs\ProcessProductShopBindingJob;
-use App\Supports\Services\Catalog\ProductShopBindingService;
+use App\Supports\Services\Products\ProductShopBindingService;
 use Illuminate\Support\Arr;
 use Tests\TestCase;
 
@@ -80,9 +80,9 @@ class ProcessProductShopBindingJobLoggingTest extends TestCase
                  * @return array<string, mixed>
                  */
                 public function bindProductToShopAndReturnTargetProduct(
-                    int $product_id,
-                    int $shop_id,
-                    int $product_import_batch_id = 0,
+                    int   $product_id,
+                    int   $target_shop_id,
+                    int   $product_import_batch_id = 0,
                     array $source_payload = []
                 ): array {
                     return [

@@ -589,8 +589,12 @@ class ProductImportItemsRelationManager extends RelationManager
                                         TextInput::make('image')->label(__('admin/product_imports/batches.product_edit.fields.image'))->maxLength(3000),
                                         TextInput::make('price')->label(__('admin/product_imports/batches.product_edit.fields.price'))->numeric(),
                                         Toggle::make('is_active')->label(__('admin/product_imports/batches.product_edit.fields.is_active')),
-                                        DateTimePicker::make('date_available')->label(__('admin/product_imports/batches.product_edit.fields.date_available')),
-                                        DateTimePicker::make('date_added')->label(__('admin/product_imports/batches.product_edit.fields.date_added')),
+                                        DateTimePicker::make('date_available')
+                                            ->format(config('app.datetime_format'))
+                                            ->label(__('admin/product_imports/batches.product_edit.fields.date_available')),
+                                        DateTimePicker::make('date_added')
+                                            ->format(config('app.datetime_format'))
+                                            ->label(__('admin/product_imports/batches.product_edit.fields.date_added')),
                                     ])->columns(3),
                                 Tab::make('descriptions')
                                     ->label(__('admin/product_imports/batches.product_edit.tabs.descriptions'))
@@ -672,8 +676,12 @@ class ProductImportItemsRelationManager extends RelationManager
                                                 TextInput::make('quantity')->label(__('admin/product_imports/batches.product_edit.fields.quantity'))->numeric()->default(1),
                                                 TextInput::make('price')->label(__('admin/product_imports/batches.product_edit.fields.price'))->numeric()->default(0),
                                                 TextInput::make('priority')->label(__('admin/product_imports/batches.product_edit.fields.priority'))->numeric()->default(1),
-                                                DateTimePicker::make('date_start')->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
-                                                DateTimePicker::make('date_end')->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
+                                                DateTimePicker::make('date_start')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
+                                                DateTimePicker::make('date_end')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
                                             ])->columns(3),
                                         Repeater::make('specials')
                                             ->label(__('admin/product_imports/batches.product_edit.sections.specials'))
@@ -681,8 +689,12 @@ class ProductImportItemsRelationManager extends RelationManager
                                                 TextInput::make('user_group_id')->label(__('admin/product_imports/batches.product_edit.fields.user_group_id'))->numeric()->default(1),
                                                 TextInput::make('price')->label(__('admin/product_imports/batches.product_edit.fields.price'))->numeric()->default(0),
                                                 TextInput::make('priority')->label(__('admin/product_imports/batches.product_edit.fields.priority'))->numeric()->default(1),
-                                                DateTimePicker::make('date_start')->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
-                                                DateTimePicker::make('date_end')->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
+                                                DateTimePicker::make('date_start')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label(__('admin/product_imports/batches.product_edit.fields.date_start')),
+                                                DateTimePicker::make('date_end')
+                                                    ->format(config('app.datetime_format'))
+                                                    ->label(__('admin/product_imports/batches.product_edit.fields.date_end')),
                                             ])->columns(3),
                                     ]),
                             ])
@@ -826,21 +838,21 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->label(__('admin/product_deletes/batches.actions.delete_product_from_shop'))
                     ->icon(Heroicon::Trash)
                     ->color('danger')
-                    ->visible(fn (ProductImportItem $record): bool => $this->hasExternalProductIdForRecord($record))
+                    ->visible(fn(ProductImportItem $record): bool => $this->hasExternalProductIdForRecord($record))
                     ->schema([
                         Select::make('shop_ids')
                             ->label(__('admin/product_imports/batches.filters.shop'))
-                            ->options(fn (ProductImportItem $record): array => $this->resolveDeleteShopOptionsForRecord($record))
+                            ->options(fn(ProductImportItem $record): array => $this->resolveDeleteShopOptionsForRecord($record))
                             ->multiple()
                             ->required()
                             ->searchable()
                             ->preload(),
                     ])
                     ->action(function (ProductImportItem $record, array $data): void {
-                        $product_id = (int) ($record->product_id ?? 0);
-                        $shop_ids = collect($data['shop_ids'] ?? [])
-                            ->map(static fn ($shop_id): int => (int) $shop_id)
-                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                        $product_id = (int)($record->product_id ?? 0);
+                        $shop_ids   = collect($data['shop_ids'] ?? [])
+                            ->map(static fn($shop_id): int => (int)$shop_id)
+                            ->filter(static fn(int $shop_id): bool => $shop_id > 0)
                             ->unique()
                             ->values()
                             ->all();
@@ -858,7 +870,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             [$product_id],
                             $shop_ids,
                             'product_import_items',
-                            is_numeric(auth()->id()) ? (int) auth()->id() : null
+                            is_numeric(auth()->id()) ? (int)auth()->id() : null
                         );
 
                         Notification::make()
@@ -915,7 +927,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.filters.shop'))
-                                ->options(fn (): array => Shop::query()
+                                ->options(fn(): array => Shop::query()
                                     ->where('is_active', true)
                                     ->orderBy('name')
                                     ->pluck('name', 'id')
@@ -926,16 +938,16 @@ class ProductImportItemsRelationManager extends RelationManager
                                 ->preload(),
                         ])
                         ->action(function ($records, array $data): void {
-                            $shop_ids = collect($data['shop_ids'] ?? [])
-                                ->map(static fn ($shop_id): int => (int) $shop_id)
-                                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+                            $shop_ids    = collect($data['shop_ids'] ?? [])
+                                ->map(static fn($shop_id): int => (int)$shop_id)
+                                ->filter(static fn(int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
                             $product_ids = collect($records)
-                                ->filter(static fn ($record): bool => $record instanceof ProductImportItem)
-                                ->map(static fn (ProductImportItem $record): int => (int) ($record->product_id ?? 0))
-                                ->filter(static fn (int $product_id): bool => $product_id > 0)
+                                ->filter(static fn($record): bool => $record instanceof ProductImportItem)
+                                ->map(static fn(ProductImportItem $record): int => (int)($record->product_id ?? 0))
+                                ->filter(static fn(int $product_id): bool => $product_id > 0)
                                 ->unique()
                                 ->values()
                                 ->all();
@@ -953,7 +965,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                 $product_ids,
                                 $shop_ids,
                                 'product_import_items',
-                                is_numeric(auth()->id()) ? (int) auth()->id() : null
+                                is_numeric(auth()->id()) ? (int)auth()->id() : null
                             );
 
                             Notification::make()
@@ -1062,15 +1074,16 @@ class ProductImportItemsRelationManager extends RelationManager
                                         continue;
                                     }
 
-                                    ProcessProductShopBindingJob::dispatch(
+                                    ProcessProductShopBindingJob::dispatchSync(
                                         $product_id,
-                                        (int)$shop_id,
+                                        $shop_ids,
                                         $batch_id,
                                         $source_payload,
                                         auth()->id()
                                     );
 
                                     $summary['jobs_queued']++;
+                                    break;
                                 }
                             }
 
@@ -1452,7 +1465,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'processed_at'   => null,
                 ]);
 
-                ProcessProductExportItemJob::dispatch((int)$export_item->id);
+                ProcessProductExportItemJob::dispatchSync((int)$export_item->id);
                 $summary['exports_queued']++;
             } catch (Throwable) {
                 $summary['errors']++;
@@ -1625,7 +1638,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'processed_at'  => null,
             ]);
 
-            ProcessProductExportItemJob::dispatch((int)$failed_export_item->id);
+            ProcessProductExportItemJob::dispatchSync((int)$failed_export_item->id);
             $summary['queued']++;
         }
 
@@ -3021,7 +3034,11 @@ class ProductImportItemsRelationManager extends RelationManager
     {
         $default_language_id = $shop_language_id > 0
             ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
+            : (int)(ShopLanguage::query()
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->limit(1)
+                ->value('id') ?? 0);
 
         $query = Manufacturer::query()->with([
             'descriptions' => static function ($query) use ($default_language_id): void {
@@ -3315,7 +3332,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
     private function hasExternalProductIdForRecord(ProductImportItem $record): bool
     {
-        $product_id = (int) ($record->product_id ?? 0);
+        $product_id = (int)($record->product_id ?? 0);
         if ($product_id <= 0) {
             return false;
         }
@@ -3332,7 +3349,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function resolveDeleteShopOptionsForRecord(ProductImportItem $record): array
     {
-        $product_id = (int) ($record->product_id ?? 0);
+        $product_id = (int)($record->product_id ?? 0);
         if ($product_id <= 0) {
             return [];
         }

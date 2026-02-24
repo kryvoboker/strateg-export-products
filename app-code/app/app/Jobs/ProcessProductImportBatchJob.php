@@ -29,6 +29,7 @@ use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
+use App\Supports\Services\SeoSlug\DeSeoSlugService;
 use App\Supports\Services\SeoSlug\EnSeoSlugService;
 use App\Supports\Services\SeoSlug\RuSeoSlugService;
 use App\Supports\Services\SeoSlug\UaSeoSlugService;
@@ -853,6 +854,10 @@ class ProcessProductImportBatchJob implements ShouldQueue
             return RuSeoSlugService::make($base_text);
         }
 
+        if ($language_code === 'de') {
+            return DeSeoSlugService::make($base_text);
+        }
+
         return DefaultSeoSlugService::make($base_text);
     }
 
@@ -993,7 +998,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         try {
             ProcessProductShopBindingJob::dispatch(
                 $product_id,
-                $resolved_shop_id,
+                [$resolved_shop_id],
                 (int)$product_import_item->product_import_batch_id,
                 $payload,
             );
@@ -1362,20 +1367,46 @@ class ProcessProductImportBatchJob implements ShouldQueue
             }
 
             $query_value = (string)$product_id;
-            $keyword     = $this->normalizeSeoKeyword((string)Arr::get($seo_row, 'keyword', ''));
+            $language_code = $this->normalizeLanguageCode((string) Arr::get($seo_row, 'shop_language_code', ''));
+            $shop_language_id = null;
+            $shop_id = (int) Arr::get($payload, 'product.shop_id', 0);
+            if ($shop_id > 0 && $language_code !== '') {
+                $shop_language_id = ShopLanguage::query()
+                    ->where('shop_id', $shop_id)
+                    ->whereRaw('LOWER(code) = ?', [$language_code])
+                    ->value('id');
+                $shop_language_id = $shop_language_id !== null ? (int) $shop_language_id : null;
+            }
+
+            $keyword = $this->normalizeSeoKeyword((string)Arr::get($seo_row, 'keyword', ''));
 
             if ($keyword === '') {
-                $keyword = $uk_keyword;
+                $resolved_language_code = $language_code !== '' ? $language_code : 'uk';
+                $keyword = $this->generateKeywordForLanguage($base_text, $resolved_language_code);
+
+                if ($keyword === '') {
+                    $keyword = $uk_keyword;
+                }
+
+                Log::channel('stack')->debug('[FIX] Import SEO keyword fallback generated', [
+                    'batch_id'       => $this->batch_id,
+                    'product_id'     => $product_id,
+                    'row_number'     => Arr::get($payload, 'source_meta.row_number'),
+                    'product_model'  => (string) Arr::get($payload, 'product.model', ''),
+                    'language_code'  => $resolved_language_code,
+                    'strategy'       => 'fallback_generated',
+                ]);
             }
 
             SeoUrl::query()->updateOrCreate(
                 [
                     'seoable_type'     => Product::class,
                     'seoable_id'       => $product_id,
-                    'shop_language_id' => null,
+                    'shop_language_id' => $shop_language_id,
                     'query_value'      => $query_value,
                 ],
                 [
+                    'query_key'   => Arr::get($seo_row, 'query_key'),
                     'keyword'    => $keyword,
                     'sort_order' => (int)Arr::get($seo_row, 'sort_order', 1) ?: 1,
                 ]

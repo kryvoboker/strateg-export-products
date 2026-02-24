@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 namespace {
+
     use Carbon\Carbon;
     use Carbon\CarbonInterface;
 
@@ -18,7 +19,7 @@ namespace Tests\Unit\Models {
 
     use App\Models\Products\Imports\ProductImportItem;
     use App\Models\Products\Product;
-    use App\Supports\Services\Catalog\ProductShopBindingService;
+    use App\Supports\Services\Products\ProductShopBindingService;
     use Illuminate\Config\Repository;
     use Illuminate\Container\Container;
     use Illuminate\Database\Capsule\Manager as Capsule;

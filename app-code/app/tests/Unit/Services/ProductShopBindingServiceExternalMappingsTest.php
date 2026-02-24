@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Models\Attributes\Attribute;
-use App\Models\Categories\Category;
-use App\Models\Manufacturers\Manufacturer;
 use App\Models\Brands\Brand;
+use App\Models\Categories\Category;
 use App\Models\Categories\CategoryProduct;
+use App\Models\Manufacturers\Manufacturer;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Products\ProductToManufacturerBrand;
-use App\Supports\Services\Catalog\ProductShopBindingService;
+use App\Supports\Services\Products\ProductShopBindingService;
 use Illuminate\Config\Repository;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Foundation\Application;
@@ -119,6 +119,13 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
             $table->timestamps();
             $table->unique(['manufacturer_id', 'shop_id']);
         });
+        $schema->create('manufacturer_descriptions', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('manufacturer_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->text('name')->nullable();
+            $table->timestamps();
+        });
 
         $schema->create('brands', static function ($table): void {
             $table->increments('id');
@@ -136,6 +143,13 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
             $table->unsignedBigInteger('external_brand_id')->nullable();
             $table->timestamps();
             $table->unique(['brand_id', 'shop_id']);
+        });
+        $schema->create('brand_descriptions', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('brand_id');
+            $table->unsignedInteger('shop_language_id')->nullable();
+            $table->text('name')->nullable();
+            $table->timestamps();
         });
 
         $schema->create('product_shop', static function ($table): void {
@@ -165,6 +179,8 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
         ProductToManufacturerBrand::query()->delete();
         self::$capsule?->table('manufacturer_shop')->delete();
         self::$capsule?->table('brand_shop')->delete();
+        self::$capsule?->table('manufacturer_descriptions')->delete();
+        self::$capsule?->table('brand_descriptions')->delete();
         Manufacturer::query()->delete();
         Brand::query()->delete();
         ProductToAttribute::query()->delete();
@@ -282,6 +298,130 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
         self::assertSame(0, self::$capsule?->table('attribute_shop')->count());
         self::assertSame(0, self::$capsule?->table('manufacturer_shop')->count());
         self::assertSame(0, self::$capsule?->table('brand_shop')->count());
+    }
+
+    public function test_it_assigns_unbound_manufacturer_and_brand_to_shop_without_duplication(): void
+    {
+        $product_id = 3001;
+        $shop_id    = 10;
+
+        self::$capsule?->table('product_shop')->insert([
+            'product_id'              => $product_id,
+            'shop_id'                 => $shop_id,
+            'product_import_batch_id' => null,
+            'external_product_id'     => null,
+            'created_at'              => now()->toDateTimeString(),
+            'updated_at'              => now()->toDateTimeString(),
+        ]);
+
+        $manufacturer = Manufacturer::query()->create([
+            'family_ulid' => '01KHTESTMANUFASSIGN000000001',
+            'shop_id'     => null,
+            'sort_order'  => 1,
+            'is_active'   => true,
+        ]);
+        $brand = Brand::query()->create([
+            'family_ulid' => '01KHTESTBRANDASSIGN000000001',
+            'shop_id'     => null,
+            'sort_order'  => 1,
+            'is_active'   => true,
+        ]);
+
+        ProductToManufacturerBrand::query()->create([
+            'product_id'      => $product_id,
+            'manufacturer_id' => (int) $manufacturer->id,
+            'brand_id'        => (int) $brand->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $summary = $this->invokePrivateMethod($service, 'ensureShopScopedCatalogEntitiesForProduct', [$product_id, $shop_id]);
+
+        self::assertIsArray($summary);
+        self::assertSame(1, (int) ($summary['manufacturers_assigned'] ?? 0));
+        self::assertSame(0, (int) ($summary['manufacturers_created'] ?? 0));
+        self::assertSame(1, (int) ($summary['brands_assigned'] ?? 0));
+        self::assertSame(0, (int) ($summary['brands_created'] ?? 0));
+
+        self::assertSame(1, Manufacturer::query()->count());
+        self::assertSame(1, Brand::query()->count());
+        self::assertSame($shop_id, (int) (Manufacturer::query()->whereKey((int) $manufacturer->id)->value('shop_id') ?? 0));
+        self::assertSame($shop_id, (int) (Brand::query()->whereKey((int) $brand->id)->value('shop_id') ?? 0));
+
+        $binding = ProductToManufacturerBrand::query()
+            ->where('product_id', $product_id)
+            ->first();
+
+        self::assertNotNull($binding);
+        self::assertSame((int) $manufacturer->id, (int) ($binding?->manufacturer_id ?? 0));
+        self::assertSame((int) $brand->id, (int) ($binding?->brand_id ?? 0));
+    }
+
+    public function test_it_duplicates_manufacturer_and_brand_when_they_are_bound_to_another_shop(): void
+    {
+        $product_id = 3002;
+        $shop_id    = 10;
+
+        self::$capsule?->table('product_shop')->insert([
+            'product_id'              => $product_id,
+            'shop_id'                 => $shop_id,
+            'product_import_batch_id' => null,
+            'external_product_id'     => null,
+            'created_at'              => now()->toDateTimeString(),
+            'updated_at'              => now()->toDateTimeString(),
+        ]);
+
+        $manufacturer = Manufacturer::query()->create([
+            'family_ulid' => '01KHTESTMANUFDUPLICATE000001',
+            'shop_id'     => 20,
+            'sort_order'  => 1,
+            'is_active'   => true,
+        ]);
+        $brand = Brand::query()->create([
+            'family_ulid' => '01KHTESTBRANDDUPLICATE000001',
+            'shop_id'     => 20,
+            'sort_order'  => 1,
+            'is_active'   => true,
+        ]);
+
+        ProductToManufacturerBrand::query()->create([
+            'product_id'      => $product_id,
+            'manufacturer_id' => (int) $manufacturer->id,
+            'brand_id'        => (int) $brand->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $summary = $this->invokePrivateMethod($service, 'ensureShopScopedCatalogEntitiesForProduct', [$product_id, $shop_id]);
+
+        self::assertIsArray($summary);
+        self::assertSame(1, (int) ($summary['manufacturer_relinked'] ?? 0));
+        self::assertSame(1, (int) ($summary['manufacturers_created'] ?? 0));
+        self::assertSame(1, (int) ($summary['brand_relinked'] ?? 0));
+        self::assertSame(1, (int) ($summary['brands_created'] ?? 0));
+
+        self::assertSame(2, Manufacturer::query()->count());
+        self::assertSame(2, Brand::query()->count());
+
+        $target_manufacturer_id = (int) (Manufacturer::query()
+            ->where('family_ulid', '01KHTESTMANUFDUPLICATE000001')
+            ->where('shop_id', $shop_id)
+            ->value('id') ?? 0);
+        $target_brand_id = (int) (Brand::query()
+            ->where('family_ulid', '01KHTESTBRANDDUPLICATE000001')
+            ->where('shop_id', $shop_id)
+            ->value('id') ?? 0);
+
+        self::assertGreaterThan(0, $target_manufacturer_id);
+        self::assertGreaterThan(0, $target_brand_id);
+        self::assertNotSame((int) $manufacturer->id, $target_manufacturer_id);
+        self::assertNotSame((int) $brand->id, $target_brand_id);
+
+        $binding = ProductToManufacturerBrand::query()
+            ->where('product_id', $product_id)
+            ->first();
+
+        self::assertNotNull($binding);
+        self::assertSame($target_manufacturer_id, (int) ($binding?->manufacturer_id ?? 0));
+        self::assertSame($target_brand_id, (int) ($binding?->brand_id ?? 0));
     }
 
     /**

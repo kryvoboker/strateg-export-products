@@ -54,7 +54,7 @@ class ProductDescription extends Model
     public static function getByProductId(int $product_id): Collection
     {
         if ($product_id <= 0) {
-            return self::query()->whereRaw('1 = 0')->get();
+            return new Collection();
         }
 
         return self::query()

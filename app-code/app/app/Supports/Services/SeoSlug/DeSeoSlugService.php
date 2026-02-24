@@ -6,19 +6,8 @@ namespace App\Supports\Services\SeoSlug;
 
 use Illuminate\Support\Str;
 
-/**
- * EN SEO slug generator (latin → latin, kebab-case)
- *
- * Example:
- *  "T-shirt chervona with white circles"
- *    -> "t-shirt-chervona-with-white-circles"
- */
-final class EnSeoSlugService
+final class DeSeoSlugService
 {
-    /**
-     * @param  string  $text  Source text (EN mixed ok)
-     * @param  int  $max_len  Optional max length (0 = no limit)
-     */
     public static function make(string $text, int $max_len = 0): string
     {
         $text = Str::trim($text);
@@ -27,9 +16,10 @@ final class EnSeoSlugService
             return '';
         }
 
-        // Ukrainian-focused transliteration (DSTU-like, simplified for slugs)
         $map = [
-            'а' => 'a', 'б' => 'b', 'в' => 'v', 'г' => 'h', 'ґ' => 'g', 'д' => 'd',
+            'ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss',
+            'Ä' => 'ae', 'Ö' => 'oe', 'Ü' => 'ue', 'а' => 'a', 'б' => 'b', 'в' => 'v',
+            'г' => 'h', 'ґ' => 'g', 'д' => 'd',
             'е' => 'e', 'є' => 'ie', 'ж' => 'zh', 'з' => 'z', 'и' => 'y', 'і' => 'i',
             'ї' => 'i', 'й' => 'i', 'к' => 'k', 'л' => 'l', 'м' => 'm', 'н' => 'n',
             'о' => 'o', 'п' => 'p', 'р' => 'r', 'с' => 's', 'т' => 't', 'у' => 'u',
@@ -44,15 +34,9 @@ final class EnSeoSlugService
         ];
 
         $latin = Str::swap($map, $text);
-
-        // Lowercase (safe for UTF-8)
-        $latin = Str::lower($latin);
-
-        // Replace any non [a-z0-9] with hyphen
+        $latin = Str::lower(Str::ascii($latin));
         $latin = Str::replaceMatches('~[^a-z0-9]+~', '-', $latin) ?? '';
         $latin = Str::trim($latin, '-');
-
-        // Collapse multiple hyphens
         $latin = Str::replaceMatches('~-{2,}~', '-', $latin) ?? '';
 
         if ($max_len > 0 && Str::length($latin) > $max_len) {

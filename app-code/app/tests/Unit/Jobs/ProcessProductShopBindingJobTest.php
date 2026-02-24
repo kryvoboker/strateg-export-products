@@ -14,14 +14,14 @@ class ProcessProductShopBindingJobTest extends TestCase
     {
         $job = new ProcessProductShopBindingJob(
             product_id: 100,
-            shop_id: 7,
+            shop_ids: [7, 8],
             product_import_batch_id: 0,
             source_payload: [],
             requested_by_user_id: null,
         );
 
         self::assertInstanceOf(ShouldBeUnique::class, $job);
-        self::assertSame('product-shop-binding:7:100', $job->uniqueId());
+        self::assertSame('product-shop-binding:100:7,8', $job->uniqueId());
         self::assertSame(120, $job->uniqueFor);
     }
 }
