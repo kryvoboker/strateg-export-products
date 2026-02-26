@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Enums\Product\Delete\ProductDeleteItemsStatusEnum;
+use App\Jobs\Traits\InteractsWithShopApi;
 use App\Models\Products\Deletes\ProductDeleteItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductBackups;
@@ -24,12 +25,12 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Throwable;
 
 class ProcessProductDeleteItemJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use InteractsWithShopApi;
 
     public function __construct(public int $product_delete_item_id) {}
 
@@ -40,10 +41,10 @@ class ProcessProductDeleteItemJob implements ShouldQueue
             return;
         }
 
-        $payload              = is_array($product_delete_item->payload) ? $product_delete_item->payload : [];
-        $shop_id              = (int) Arr::get($payload, 'shop_id', 0);
-        $product_id           = (int) ($product_delete_item->product_id ?? 0);
-        $external_product_id  = (int) Arr::get($payload, 'external_product_id', 0);
+        $payload             = is_array($product_delete_item->payload) ? $product_delete_item->payload : [];
+        $shop_id             = (int) Arr::get($payload, 'shop_id', 0);
+        $product_id          = (int) ($product_delete_item->product_id ?? 0);
+        $external_product_id = (int) Arr::get($payload, 'external_product_id', 0);
 
         $product_delete_item->update([
             'status'        => ProductDeleteItemsStatusEnum::PROCESSING->value,
@@ -99,7 +100,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
             $backup_response = $this->sendBackupRequest($shop, $product, $external_product_id);
             if (! $backup_response->successful()) {
-                throw new RuntimeException('Backup API failed with status '.$backup_response->status().': '.$backup_response->body());
+                throw new RuntimeException($this->buildFailedApiResponseMessage('Backup API', $backup_response));
             }
 
             $backup_payload = $backup_response->json();
@@ -131,7 +132,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
             $delete_response = $this->sendDeleteRequest($shop, $product, $external_product_id);
             if (! $delete_response->successful()) {
-                throw new RuntimeException('Delete API failed with status '.$delete_response->status().': '.$delete_response->body());
+                throw new RuntimeException($this->buildFailedApiResponseMessage('Delete API', $delete_response));
             }
 
             $product_delete_item->update([
@@ -140,13 +141,13 @@ class ProcessProductDeleteItemJob implements ShouldQueue
                 'processed_at'  => now(),
                 'payload'       => [
                     ...$payload,
-                    'operation'         => 'delete',
-                    'shop_id'           => $shop_id,
+                    'operation'           => 'delete',
+                    'shop_id'             => $shop_id,
                     'external_product_id' => $external_product_id,
-                    'backup_id'         => (int) $created_backup->id,
-                    'backup_product_id' => $backup_product_id,
-                    'response_status'   => $delete_response->status(),
-                    'response_body'     => Str::limit($delete_response->body(), 10000),
+                    'backup_id'           => (int) $created_backup->id,
+                    'backup_product_id'   => $backup_product_id,
+                    'response_status'     => $delete_response->status(),
+                    'response_body'       => $this->truncateResponseBody($delete_response->body()),
                 ],
             ]);
         } catch (Throwable $exception) {
@@ -211,9 +212,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url      = Str::startsWith($endpoint, ['http://', 'https://'])
-            ? $endpoint
-            : Str::rtrim($base_url, '/').'/'.Str::ltrim($endpoint, '/');
+        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product backup');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -251,9 +250,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url      = Str::startsWith($endpoint, ['http://', 'https://'])
-            ? $endpoint
-            : Str::rtrim($base_url, '/').'/'.Str::ltrim($endpoint, '/');
+        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product delete');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -346,26 +343,18 @@ class ProcessProductDeleteItemJob implements ShouldQueue
             throw new RuntimeException('Shop delete API path is missing');
         }
 
-        if (Str::startsWith($delete_path, ['http://', 'https://'])) {
-            return $delete_path;
-        }
-
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($delete_path, '/');
+        return $this->resolveAbsoluteEndpointUrl($api_base_url, $delete_path, 'opencart product delete');
     }
 
     private function resolveBackupUrl(Shop $shop, string $api_base_url): string
     {
-        $options      = is_array($shop->options) ? $shop->options : [];
+        $options     = is_array($shop->options) ? $shop->options : [];
         $backup_path = Str::trim((string) Arr::get($options, 'part_api_url_backup_prods', ''));
         if ($backup_path === '') {
             throw new RuntimeException('Shop backup API path is missing');
         }
 
-        if (Str::startsWith($backup_path, ['http://', 'https://'])) {
-            return $backup_path;
-        }
-
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($backup_path, '/');
+        return $this->resolveAbsoluteEndpointUrl($api_base_url, $backup_path, 'opencart product backup');
     }
 
     /**
@@ -379,34 +368,17 @@ class ProcessProductDeleteItemJob implements ShouldQueue
         array $payload,
         int $timeout
     ): Response {
-        $request = Http::timeout($timeout)->asForm();
-        $request = $this->applyDebugCookieForDevelopment($request);
-
-        return $request->post($request_url, [
-            ...$payload,
-            'api_token' => $auth_api_token,
-        ]);
+        return $this->shopApiSendOpenCartRequestWithBodyAuthToken(
+            $request_url,
+            $auth_api_token,
+            $payload,
+            $timeout
+        );
     }
 
     private function isInvalidOpenCartAuthTokenResponse(Response $response): bool
     {
-        if ($response->status() === SymfonyResponse::HTTP_UNAUTHORIZED) {
-            return true;
-        }
-
-        if ($response->status() === SymfonyResponse::HTTP_FORBIDDEN) {
-            return true;
-        }
-
-        $response_body = Str::lower(Str::trim($response->body()));
-        if ($response_body === '') {
-            return false;
-        }
-
-        return Str::contains($response_body, 'invalid token')
-            || Str::contains($response_body, 'api token')
-            || Str::contains($response_body, 'token is invalid')
-            || Str::contains($response_body, 'permission denied');
+        return $this->shopApiIsInvalidOpenCartAuthTokenResponse($response);
     }
 
     /**
@@ -414,103 +386,42 @@ class ProcessProductDeleteItemJob implements ShouldQueue
      */
     private function requestOpenCartAuthApiToken(Shop $shop, string $api_base_url, int $timeout): string
     {
-        $login_url = $this->resolveLoginUrl($shop, $api_base_url);
-        $api_token = Str::trim((string) ($shop->api_token ?? ''));
-
-        if ($api_token === '') {
-            throw new RuntimeException('Shop API token is missing');
-        }
-
-        $request = Http::timeout($timeout)->asForm();
-        $request = $this->applyDebugCookieForDevelopment($request);
-
-        $response = $request->post($login_url, [
-            'api_token' => $api_token,
-        ]);
-
-        if (! $response->successful()) {
-            throw new RuntimeException('OpenCart auth API failed with status '.$response->status().': '.$response->body());
-        }
-
-        $auth_api_token = Str::trim((string) Arr::get($response->json(), 'api_token', ''));
-        if ($auth_api_token === '') {
-            throw new RuntimeException('OpenCart auth API token is empty');
-        }
-
-        return $auth_api_token;
+        return $this->shopApiRequestOpenCartAuthApiTokenWithApiToken($shop, $api_base_url, $timeout);
     }
 
     private function resolveLoginUrl(Shop $shop, string $api_base_url): string
     {
-        $login_path = Str::trim((string) ($shop->part_api_url_login ?? ''));
-        if ($login_path === '') {
-            throw new RuntimeException('Shop login API path is missing');
-        }
-
-        if (Str::startsWith($login_path, ['http://', 'https://'])) {
-            return $login_path;
-        }
-
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($login_path, '/');
+        return $this->shopApiResolveOpenCartLoginUrl($shop, $api_base_url);
     }
 
     private function resolveApiBaseUrl(Shop $shop): string
     {
-        $api_url = Str::trim((string) ($shop->api_url ?? ''));
-        if ($api_url !== '') {
-            return Str::rtrim($api_url, '/');
-        }
-
-        $base_url = Str::trim((string) ($shop->base_url ?? ''));
-        if ($base_url !== '') {
-            return Str::rtrim($base_url, '/');
-        }
-
-        throw new RuntimeException('Shop API URL is missing');
+        return $this->shopApiResolveApiBaseUrl($shop);
     }
 
     private function resolveBaseUrlForDefaultApi(Shop $shop): string
     {
-        $api_url = Str::trim((string) ($shop->api_url ?? ''));
-        if ($api_url !== '') {
-            return Str::rtrim($api_url, '/');
-        }
-
-        $base_url = Str::trim((string) ($shop->base_url ?? ''));
-        if ($base_url !== '') {
-            return Str::rtrim($base_url, '/');
-        }
-
-        throw new RuntimeException('Shop base/api URL is missing');
+        return $this->shopApiResolveBaseUrlForDefaultApi($shop);
     }
 
     private function resolveStoredAuthApiToken(Shop $shop): string
     {
-        $options = is_array($shop->options) ? $shop->options : [];
-
-        return Str::trim((string) Arr::get($options, 'auth_api_token', ''));
+        return $this->shopApiResolveStoredAuthApiToken($shop);
     }
 
     private function persistOpenCartAuthApiToken(Shop $shop, string $auth_api_token): void
     {
-        $options = is_array($shop->options) ? $shop->options : [];
-        $shop->update([
-            'options' => [
-                ...$options,
-                'auth_api_token' => $auth_api_token,
-            ],
-        ]);
+        $this->shopApiPersistOpenCartAuthApiToken($shop, $auth_api_token);
     }
 
     private function applyDebugCookieForDevelopment(PendingRequest $request): PendingRequest
     {
-        if (! app()->environment(['local', 'development', 'testing'])) {
-            return $request;
-        }
+        return $this->shopApiApplyDebugCookieForDevelopment($request);
+    }
 
-        return $request->withHeaders([
-            'Cookie' => 'XDEBUG_SESSION=PHPSTORM',
-        ]);
+    protected function shopApiShouldApplyDebugCookieForDevelopment(): bool
+    {
+        return app()->environment(['local', 'development', 'testing']);
     }
 
     private function resolveProductIdFromBackupPayload(array $backup_payload): int
@@ -538,20 +449,21 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
     private function isOpenCartShop(Shop $shop): bool
     {
-        $shop_type     = Str::lower(Str::trim((string) ($shop->type ?? '')));
-        $allowed_types = config('app.allowed_projects_types.opencart', []);
+        return $this->shopApiIsOpenCartShop($shop);
+    }
 
-        if (! is_array($allowed_types)) {
-            return false;
-        }
+    private function resolveAbsoluteEndpointUrl(string $base_url, string $endpoint, string $operation): string
+    {
+        return $this->shopApiResolveAbsoluteEndpointUrl($base_url, $endpoint, $operation);
+    }
 
-        foreach ($allowed_types as $allowed_type) {
-            if (Str::lower(Str::trim((string) $allowed_type)) === $shop_type) {
-                return true;
-            }
-        }
+    private function buildFailedApiResponseMessage(string $operation, Response $response): string
+    {
+        return $this->shopApiBuildFailedResponseMessage($operation, $response);
+    }
 
-        return false;
+    private function truncateResponseBody(string $response_body): string
+    {
+        return $this->shopApiTruncateResponseBody($response_body);
     }
 }
-

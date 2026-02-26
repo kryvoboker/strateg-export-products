@@ -45,4 +45,24 @@ class CategoryShop extends Model
     {
         return $this->belongsTo(Shop::class);
     }
+
+    /**
+     * @param  list<int>  $category_ids
+     * @return array<int, int|null>
+     */
+    public static function resolveExternalIdMapByCategoryIds(int $shop_id, array $category_ids): array
+    {
+        if ($shop_id <= 0 || $category_ids === []) {
+            return [];
+        }
+
+        return self::query()
+            ->where('shop_id', $shop_id)
+            ->whereIn('category_id', $category_ids)
+            ->pluck('external_category_id', 'category_id')
+            ->mapWithKeys(static fn ($external_category_id, $category_id): array => [
+                (int) $category_id => is_numeric($external_category_id) ? (int) $external_category_id : null,
+            ])
+            ->toArray();
+    }
 }

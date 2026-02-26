@@ -179,4 +179,38 @@ class ProductImportItem extends Model
 
         return $updated;
     }
+
+    public static function resolveBatchIdByProductImportItemId(int $product_import_item_id): int
+    {
+        if ($product_import_item_id <= 0) {
+            return 0;
+        }
+
+        return (int) (static::query()
+            ->whereKey($product_import_item_id)
+            ->value('product_import_batch_id') ?? 0);
+    }
+
+    public static function resolveLatestBatchIdByProductId(int $product_id): int
+    {
+        if ($product_id <= 0) {
+            return 0;
+        }
+
+        return (int) (static::query()
+            ->where('product_id', $product_id)
+            ->orderByDesc('id')
+            ->value('product_import_batch_id') ?? 0);
+    }
+
+    public static function resolveUlidById(int $product_import_item_id): string
+    {
+        if ($product_import_item_id <= 0) {
+            return '';
+        }
+
+        return Str::trim((string) (static::query()
+            ->whereKey($product_import_item_id)
+            ->value('ulid') ?? ''));
+    }
 }

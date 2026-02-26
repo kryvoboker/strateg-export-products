@@ -107,6 +107,58 @@ class ProcessProductExportItemJobFailureTest extends TestCase
         self::assertStringContainsString('does not contain external product id', (string) $export_item->error_message);
     }
 
+    public function test_it_marks_export_as_failed_when_default_export_url_is_invalid(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake();
+
+        [$export_item] = $this->makeOpenCartExportItem([
+            'type'                      => 'custom',
+            'base_url'                  => 'invalid-url',
+            'api_url'                   => null,
+            'part_api_url_export_prods' => '/api/export',
+            'options'                   => [
+                'api_timeout' => 10,
+            ],
+        ]);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('Invalid URL for product export request', (string) $export_item->error_message);
+        Http::assertNothingSent();
+    }
+
+    public function test_it_masks_sensitive_tokens_in_error_message_for_failed_export_api_response(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'shop-export-test.local/api/login' => Http::response([
+                'api_token' => 'auth-token-1',
+            ], 200),
+            'shop-export-test.local/api/export*' => Http::response(
+                'error=failed api_token=secret-token-123 token=another-secret Bearer eyJhbGciOiJIUzI1NiJ9',
+                500
+            ),
+        ]);
+
+        [$export_item] = $this->makeOpenCartExportItem([
+            'api_token' => 'master-token',
+        ]);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('Export API failed with status 500', (string) $export_item->error_message);
+        self::assertStringContainsString('[REDACTED]', (string) $export_item->error_message);
+        self::assertStringNotContainsString('secret-token-123', (string) $export_item->error_message);
+        self::assertStringNotContainsString('another-secret', (string) $export_item->error_message);
+    }
+
     /**
      * @param  array<string, mixed>  $shop_override
      * @return array{0: ProductExportItem, 1: Shop}

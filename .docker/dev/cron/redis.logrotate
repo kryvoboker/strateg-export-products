@@ -1,0 +1,16 @@
+/var/log/redis.log {
+    daily
+    rotate 7
+    missingok
+    notifempty
+    dateext
+    dateformat -%Y%m%d
+    compress
+    delaycompress
+    compresscmd /bin/gzip
+    uncompresscmd /bin/gunzip
+    compressext .gz
+    compressoptions -6
+    copytruncate
+    su www-data www-data
+}

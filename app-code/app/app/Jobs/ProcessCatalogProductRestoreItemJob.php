@@ -7,26 +7,14 @@ namespace App\Jobs;
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
-use App\Models\Attributes\Attribute;
-use App\Models\Attributes\AttributeDescription;
-use App\Models\Attributes\AttributeShop;
-use App\Models\Brands\Brand;
-use App\Models\Brands\BrandShop;
-use App\Models\Categories\Category;
-use App\Models\Categories\CategoryShop;
-use App\Models\Manufacturers\Manufacturer;
-use App\Models\Manufacturers\ManufacturerShop;
+use App\Jobs\Traits\InteractsWithShopApi;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Product;
-use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductShop;
-use App\Models\Products\ProductSpecial;
-use App\Models\Products\ProductToAttribute;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
-use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
-use App\Models\Shops\ShopLanguage;
+use App\Services\Products\Payload\ProductPayloadBuilderService;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -46,6 +34,7 @@ use Throwable;
 class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use InteractsWithShopApi;
 
     /**
      * Restore flow is intentionally full-payload only.
@@ -145,7 +134,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 
             $response = $this->sendRestoreRequest($shop, $request_payload);
             if (! $response->successful()) {
-                throw new RuntimeException('Restore API failed with status '.$response->status().': '.$response->body());
+                throw new RuntimeException($this->buildFailedApiResponseMessage('Restore API', $response));
             }
 
             $backup->markAsUsed();
@@ -185,7 +174,6 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
                 'error_msg'  => $exception->getMessage(),
                 'file'       => $exception->getFile(),
                 'line'       => $exception->getLine(),
-                'exception'  => $exception,
                 'product_id' => $product_id,
                 'shop_id'    => $shop_id,
             ]);
@@ -258,332 +246,25 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
         int $shop_id,
         int $external_product_id
     ): array {
-        $product->loadMissing([
-            'descriptions',
-            'images',
-            'categories.descriptions',
-            'productToAttributes.attribute',
-            'productToManufacturerBrand.manufacturer.descriptions',
-            'productToManufacturerBrand.brand.descriptions',
-            'specials',
-            'discounts',
+        $payload = app(ProductPayloadBuilderService::class)->build($product, $shop_id, [
+            'include_product_binding_fields' => true,
         ]);
-
-        $shop_languages = ShopLanguage::getActiveByShopId($shop_id);
-
-        $shop_language_ids = $shop_languages
-            ->pluck('id')
-            ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
-            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
-            ->values()
-            ->all();
-
-        $shop_language_map_by_id = $shop_languages
-            ->mapWithKeys(static fn (ShopLanguage $shop_language): array => [
-                (int) $shop_language->id => [
-                    'id'   => (int) $shop_language->id,
-                    'code' => Str::lower(Str::trim((string) $shop_language->code)),
-                    'name' => $shop_language->name,
-                ],
-            ])
-            ->toArray();
-
-        $seo_urls = SeoUrl::getForSeoableAndLanguageIds(Product::class, (int) $product->id, $shop_language_ids)
-            ->map(static function (SeoUrl $seo_url) use ($shop_language_map_by_id): array {
-                $shop_language_id = $seo_url->shop_language_id !== null ? (int) $seo_url->shop_language_id : null;
-
-                return [
-                    'shop_language_id'   => $seo_url->shop_language_id,
-                    'shop_language_code' => $shop_language_id !== null
-                        ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
-                        : null,
-                    'query_value' => $seo_url->query_value,
-                    'keyword'     => $seo_url->keyword,
-                    'sort_order'  => $seo_url->sort_order,
-                ];
-            })
-            ->values()
-            ->all();
-
-        $filtered_categories = $product->categories
-            ->filter(fn ($category): bool => $this->isEntityInShopScope((int) ($category->shop_id ?? 0), $shop_id))
-            ->values();
-
-        $filtered_product_attributes = $product->productToAttributes
-            ->filter(function ($product_to_attribute) use ($shop_id): bool {
-                $attribute = $product_to_attribute->attribute;
-                if (! $attribute instanceof Attribute) {
-                    return true;
-                }
-
-                return $this->isEntityInShopScope((int) ($attribute->shop_id ?? 0), $shop_id);
-            })
-            ->values();
-
-        $manufacturer = $product->productToManufacturerBrand?->manufacturer;
-        if ($manufacturer instanceof Manufacturer
-            && ! $this->isEntityInShopScope((int) ($manufacturer->shop_id ?? 0), $shop_id)) {
-            $manufacturer = null;
-        }
-
-        $brand = $product->productToManufacturerBrand?->brand;
-        if ($brand instanceof Brand
-            && ! $this->isEntityInShopScope((int) ($brand->shop_id ?? 0), $shop_id)) {
-            $brand = null;
-        }
-
-        $category_external_id_map = CategoryShop::query()
-            ->where('shop_id', $shop_id)
-            ->whereIn('category_id', $filtered_categories->pluck('id')->map(static fn ($id): int => (int) $id)->all())
-            ->pluck('external_category_id', 'category_id')
-            ->mapWithKeys(static fn ($external_category_id, $category_id): array => [
-                (int) $category_id => is_numeric($external_category_id) ? (int) $external_category_id : null,
-            ])
-            ->toArray();
-
-        $attribute_external_id_map = AttributeShop::query()
-            ->where('shop_id', $shop_id)
-            ->whereIn('attribute_id', $filtered_product_attributes->pluck('attribute_id')->map(static fn ($id): int => (int) $id)->all())
-            ->pluck('external_attribute_id', 'attribute_id')
-            ->mapWithKeys(static fn ($external_attribute_id, $attribute_id): array => [
-                (int) $attribute_id => is_numeric($external_attribute_id) ? (int) $external_attribute_id : null,
-            ])
-            ->toArray();
-
-        $external_manufacturer_id = $manufacturer instanceof Manufacturer
-            ? (int) (ManufacturerShop::query()
-                ->where('manufacturer_id', (int) $manufacturer->id)
-                ->where('shop_id', $shop_id)
-                ->value('external_manufacturer_id') ?? 0)
-            : 0;
-
-        $external_brand_id = $brand instanceof Brand
-            ? (int) (BrandShop::query()
-                ->where('brand_id', (int) $brand->id)
-                ->where('shop_id', $shop_id)
-                ->value('external_brand_id') ?? 0)
-            : 0;
-
-        $attribute_pairs = [];
-        foreach ($filtered_product_attributes as $product_to_attribute) {
-            $attribute_id     = (int) ($product_to_attribute->attribute_id ?? 0);
-            $shop_language_id = (int) ($product_to_attribute->shop_language_id ?? 0);
-            if ($attribute_id <= 0 || $shop_language_id <= 0) {
-                continue;
-            }
-
-            $attribute_pairs[] = [
-                'attribute_id'     => $attribute_id,
-                'shop_language_id' => $shop_language_id,
-            ];
-        }
-
-        $attribute_description_map = AttributeDescription::getNameMapByAttributeLanguagePairs($attribute_pairs);
-
-        $manufacturer_descriptions = $manufacturer instanceof Manufacturer
-            ? $manufacturer->descriptions
-                ->filter(static fn ($description): bool => $shop_language_ids === []
-                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
-                ->map(static function ($description) use ($shop_language_map_by_id): array {
-                    $shop_language_id = (int) ($description->shop_language_id ?? 0);
-
-                    return [
-                        'shop_language_id'   => $shop_language_id > 0 ? $shop_language_id : null,
-                        'shop_language_code' => $shop_language_id > 0
-                            ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
-                            : null,
-                        'name' => $description->name,
-                    ];
-                })
-                ->values()
-                ->all()
-            : [];
-
-        $brand_descriptions = $brand instanceof Brand
-            ? $brand->descriptions
-                ->filter(static fn ($description): bool => $shop_language_ids === []
-                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
-                ->map(static function ($description) use ($shop_language_map_by_id): array {
-                    $shop_language_id = (int) ($description->shop_language_id ?? 0);
-
-                    return [
-                        'shop_language_id'   => $shop_language_id > 0 ? $shop_language_id : null,
-                        'shop_language_code' => $shop_language_id > 0
-                            ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
-                            : null,
-                        'name' => $description->name,
-                    ];
-                })
-                ->values()
-                ->all()
-            : [];
-
-        $specials_payload = $product->specials
-            ->map(fn (ProductSpecial $special): array => [
-                'user_group_id' => $special->user_group_id,
-                'price'         => $special->price,
-                'priority'      => $special->priority,
-                'date_start'    => $this->normalizeDateTimeValue($special->date_start),
-                'date_end'      => $this->normalizeDateTimeValue($special->date_end),
-            ])->values()->all();
-
-        $discounts_payload = $product->discounts
-            ->map(fn (ProductDiscount $discount): array => [
-                'user_group_id' => $discount->user_group_id,
-                'quantity'      => $discount->quantity,
-                'price'         => $discount->price,
-                'priority'      => $discount->priority,
-                'date_start'    => $this->normalizeDateTimeValue($discount->date_start),
-                'date_end'      => $this->normalizeDateTimeValue($discount->date_end),
-            ])->values()->all();
-
-        $payload = [
-            'shop_id'        => $shop_id,
-            'shop_languages' => array_values($shop_language_map_by_id),
-            'product'        => [
-                'id'                  => (int) $product->id,
-                'external_product_id' => $external_product_id > 0 ? $external_product_id : null,
-                'model'               => $product->model,
-                'sku'                 => $product->sku,
-                'ean'                 => $product->ean,
-                'quantity'            => $product->quantity,
-                'minimum'             => $product->minimum,
-                'image'               => $product->image,
-                'price'               => $product->price,
-                'manufacturer_id'     => $manufacturer?->id,
-                'manufacturer'        => $manufacturer?->manufacturer_name,
-                'brand_id'            => $brand?->id,
-                'brand'               => $brand?->brand_name,
-                'is_active'           => (bool) $product->is_active,
-                'date_available'      => $this->normalizeDateTimeValue($product->date_available),
-                'date_added'          => $this->normalizeDateTimeValue($product->date_added),
-            ],
-            'descriptions' => $product->descriptions
-                ->filter(static fn ($description): bool => $shop_language_ids === []
-                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
-                ->map(static function ($description) use ($shop_language_map_by_id): array {
-                    $shop_language_id = (int) $description->shop_language_id;
-
-                    return [
-                        'shop_language_id'   => $shop_language_id,
-                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
-                        'name'               => $description->name,
-                        'description'        => $description->description,
-                        'meta_title'         => $description->meta_title,
-                        'meta_description'   => $description->meta_description,
-                        'meta_keywords'      => $description->meta_keywords,
-                    ];
-                })->values()->all(),
-            'images' => $product->images
-                ->map(static fn ($image): array => [
-                    'image'      => $image->image,
-                    'sort_order' => $image->sort_order,
-                ])->values()->all(),
-            'categories' => $filtered_categories
-                ->map(static function (Category $category) use ($shop_language_ids, $shop_language_map_by_id, $category_external_id_map): array {
-                    $descriptions = $category->descriptions
-                        ->filter(static fn ($description): bool => $shop_language_ids === []
-                            || in_array((int) $description->shop_language_id, $shop_language_ids, true))
-                        ->map(static function ($description) use ($shop_language_map_by_id): array {
-                            $shop_language_id = (int) $description->shop_language_id;
-
-                            return [
-                                'shop_language_id'   => $shop_language_id,
-                                'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
-                                'name'               => $description->name,
-                                'description'        => $description->description,
-                                'h1_title'           => $description->h1_title,
-                                'meta_title'         => $description->meta_title,
-                                'meta_description'   => $description->meta_description,
-                                'meta_keywords'      => $description->meta_keywords,
-                            ];
-                        })
-                        ->values()
-                        ->all();
-
-                    return [
-                        'id'                   => $category->id,
-                        'external_category_id' => $category_external_id_map[(int) $category->id] ?? null,
-                        'shop_id'              => $category->shop_id,
-                        'family_ulid'          => $category->family_ulid,
-                        'parent_id'            => $category->parent_id,
-                        'name'                 => Arr::get($descriptions, '0.name'),
-                        'descriptions'         => $descriptions,
-                    ];
-                })->values()->all(),
-            'attributes' => $filtered_product_attributes
-                ->filter(static fn (ProductToAttribute $attribute): bool => $shop_language_ids === []
-                    || in_array((int) $attribute->shop_language_id, $shop_language_ids, true))
-                ->map(static function (ProductToAttribute $attribute) use ($attribute_description_map, $shop_language_map_by_id, $attribute_external_id_map): array {
-                    $shop_language_id = (int) $attribute->shop_language_id;
-                    $attribute_id     = (int) $attribute->attribute_id;
-                    $attribute_model  = $attribute->attribute;
-
-                    return [
-                        'attribute_id'          => $attribute_id,
-                        'external_attribute_id' => $attribute_external_id_map[$attribute_id] ?? null,
-                        'attribute_shop_id'     => $attribute_model?->shop_id,
-                        'attribute_family_ulid' => $attribute_model?->family_ulid,
-                        'attribute_name'        => $attribute_description_map[$attribute_id.':'.$shop_language_id] ?? null,
-                        'shop_language_id'      => $shop_language_id,
-                        'shop_language_code'    => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
-                        'text'                  => $attribute->text,
-                    ];
-                })->values()->all(),
-            'manufacturer_brand' => [
-                'manufacturer_id'           => $manufacturer?->id,
-                'external_manufacturer_id'  => $external_manufacturer_id > 0 ? $external_manufacturer_id : null,
-                'manufacturer_shop_id'      => $manufacturer?->shop_id,
-                'manufacturer_family_ulid'  => $manufacturer?->family_ulid,
-                'manufacturer'              => $manufacturer?->manufacturer_name,
-                'manufacturer_descriptions' => $manufacturer_descriptions,
-                'brand_id'                  => $brand?->id,
-                'external_brand_id'         => $external_brand_id > 0 ? $external_brand_id : null,
-                'brand_shop_id'             => $brand?->shop_id,
-                'brand_family_ulid'         => $brand?->family_ulid,
-                'brand'                     => $brand?->brand_name,
-                'brand_descriptions'        => $brand_descriptions,
-            ],
-            'seo_urls'  => $seo_urls,
-            'specials'  => $specials_payload,
-            'discounts' => $discounts_payload,
-        ];
+        $payload['product']['external_product_id'] = $external_product_id > 0 ? $external_product_id : null;
 
         Log::channel('daily')->debug('Restore payload entity resolution summary', [
-            'product_id'                  => (int) $product->id,
-            'shop_id'                     => $shop_id,
-            'payload_mode'                => self::RESTORE_PAYLOAD_MODE,
-            'categories_total'            => count($payload['categories']),
-            'categories_with_external_id' => count(array_filter(
-                array_map(static fn (array $category_row): ?int => Arr::get($category_row, 'external_category_id'), $payload['categories']),
-                static fn ($value): bool => is_numeric($value) && (int) $value > 0
-            )),
-            'attributes_total'            => count($payload['attributes']),
-            'attributes_with_external_id' => count(array_filter(
-                array_map(static fn (array $attribute_row): ?int => Arr::get($attribute_row, 'external_attribute_id'), $payload['attributes']),
-                static fn ($value): bool => is_numeric($value) && (int) $value > 0
-            )),
-            'specials_total'                  => count($specials_payload),
-            'specials_with_dates'             => count(array_filter($specials_payload, static fn (array $special_row): bool => Arr::get($special_row, 'date_start') !== null || Arr::get($special_row, 'date_end') !== null)),
-            'discounts_total'                 => count($discounts_payload),
-            'discounts_with_dates'            => count(array_filter($discounts_payload, static fn (array $discount_row): bool => Arr::get($discount_row, 'date_start') !== null || Arr::get($discount_row, 'date_end') !== null)),
-            'external_product_id'             => Arr::get($payload, 'product.external_product_id'),
-            'external_manufacturer_id'        => Arr::get($payload, 'manufacturer_brand.external_manufacturer_id'),
-            'external_brand_id'               => Arr::get($payload, 'manufacturer_brand.external_brand_id'),
-            'manufacturer_descriptions_total' => count($manufacturer_descriptions),
-            'brand_descriptions_total'        => count($brand_descriptions),
+            'product_id'               => (int) $product->id,
+            'shop_id'                  => $shop_id,
+            'payload_mode'             => self::RESTORE_PAYLOAD_MODE,
+            'categories_total'         => count(Arr::get($payload, 'categories', [])),
+            'attributes_total'         => count(Arr::get($payload, 'attributes', [])),
+            'specials_total'           => count(Arr::get($payload, 'specials', [])),
+            'discounts_total'          => count(Arr::get($payload, 'discounts', [])),
+            'external_product_id'      => Arr::get($payload, 'product.external_product_id'),
+            'external_manufacturer_id' => Arr::get($payload, 'manufacturer_brand.external_manufacturer_id'),
+            'external_brand_id'        => Arr::get($payload, 'manufacturer_brand.external_brand_id'),
         ]);
 
         return $payload;
-    }
-
-    private function isEntityInShopScope(int $entity_shop_id, int $shop_id): bool
-    {
-        if ($shop_id <= 0) {
-            return true;
-        }
-
-        return $entity_shop_id === $shop_id;
     }
 
     /**
@@ -624,9 +305,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url      = Str::startsWith($endpoint, ['http://', 'https://'])
-            ? $endpoint
-            : Str::rtrim($base_url, '/').'/'.Str::ltrim($endpoint, '/');
+        $url      = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product restore');
 
         $request = Http::timeout($timeout)
             ->asForm();
@@ -723,43 +402,17 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 
     private function isOpenCartShop(Shop $shop): bool
     {
-        $shop_type     = Str::lower(Str::trim((string) ($shop->type ?? '')));
-        $allowed_types = config('app.allowed_projects_types.opencart', []);
-
-        if (! is_array($allowed_types)) {
-            return false;
-        }
-
-        foreach ($allowed_types as $allowed_type) {
-            if (Str::lower(Str::trim((string) $allowed_type)) === $shop_type) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->shopApiIsOpenCartShop($shop);
     }
 
     private function resolveBaseUrlForDefaultApi(Shop $shop): string
     {
-        $api_url  = Str::trim((string) ($shop->api_url ?? ''));
-        $base_url = $api_url !== '' ? $api_url : Str::trim((string) ($shop->base_url ?? ''));
-
-        if ($base_url === '') {
-            throw new RuntimeException('Missing api_url/base_url for API requests');
-        }
-
-        return Str::rtrim($base_url, '/');
+        return $this->shopApiResolveBaseUrlForDefaultApi($shop);
     }
 
     private function resolveApiBaseUrl(Shop $shop): string
     {
-        $api_base_url = $this->resolveBaseUrlForDefaultApi($shop);
-
-        if (validate_url($api_base_url) === false) {
-            throw new RuntimeException('Invalid api_url/base_url for OpenCart API requests');
-        }
-
-        return $api_base_url;
+        return $this->shopApiResolveApiBaseUrl($shop);
     }
 
     private function resolveRestoreUrl(Shop $shop, string $api_base_url): string
@@ -775,40 +428,22 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
             throw new RuntimeException('Missing part_api_url_restore_prods for restore API');
         }
 
-        if (Str::startsWith($part_api_url_restore_prods, ['http://', 'https://'])) {
-            return $part_api_url_restore_prods;
-        }
-
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($part_api_url_restore_prods, '/');
+        return $this->resolveAbsoluteEndpointUrl($api_base_url, $part_api_url_restore_prods, 'opencart product restore');
     }
 
     private function resolveOpenCartLoginUrl(Shop $shop, string $api_base_url): string
     {
-        $part_api_url_login = $shop->part_api_url_login ?? '';
-
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($part_api_url_login, '/');
+        return $this->shopApiResolveOpenCartLoginUrl($shop, $api_base_url);
     }
 
     private function resolveStoredAuthApiToken(Shop $shop): string
     {
-        $options = is_array($shop->options) ? $shop->options : [];
-
-        return Str::trim((string) Arr::get($options, 'auth_api_token', ''));
+        return $this->shopApiResolveStoredAuthApiToken($shop);
     }
 
     private function persistOpenCartAuthApiToken(Shop $shop, string $auth_api_token): void
     {
-        $clean_auth_api_token = Str::trim($auth_api_token);
-        if ($clean_auth_api_token === '') {
-            return;
-        }
-
-        $options                   = is_array($shop->options) ? $shop->options : [];
-        $options['auth_api_token'] = $clean_auth_api_token;
-
-        $shop->update([
-            'options' => $options,
-        ]);
+        $this->shopApiPersistOpenCartAuthApiToken($shop, $auth_api_token);
     }
 
     /**
@@ -816,37 +451,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
      */
     private function requestOpenCartAuthApiToken(Shop $shop, string $api_base_url, int $timeout): string
     {
-        $login_url = $this->resolveOpenCartLoginUrl($shop, $api_base_url);
-        $options   = is_array($shop->options) ? $shop->options : [];
-
-        $api_username = Str::trim((string) Arr::get($options, 'api_username', ''));
-        $api_token    = Str::trim((string) ($shop->api_token ?? ''));
-
-        if ($api_token === '') {
-            throw new RuntimeException('Missing api_token for OpenCart login API request');
-        }
-
-        $response = Http::timeout($timeout)
-            ->asForm();
-
-        $response = $this->applyDebugCookieForDevelopment($response)
-            ->post($login_url, [
-                'username' => $api_username,
-                'key'      => $api_token,
-            ]);
-
-        if (! $response->successful()) {
-            throw new RuntimeException('OpenCart login API failed with status '.$response->status().': '.$response->body());
-        }
-
-        $response_data  = $response->json();
-        $auth_api_token = Str::trim((string) Arr::get($response_data, 'api_token', ''));
-
-        if ($auth_api_token === '') {
-            throw new RuntimeException('OpenCart login API did not return api_token');
-        }
-
-        return $auth_api_token;
+        return $this->shopApiRequestOpenCartAuthApiTokenWithKey($shop, $api_base_url, $timeout);
     }
 
     /**
@@ -860,87 +465,41 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
         array $request_payload,
         int $timeout
     ): Response {
-        $url = $request_url;
-        $url .= Str::contains($request_url, '?') ? '&' : '?';
-        $url .= 'api_token='.urlencode($auth_api_token);
-
-        $request = Http::timeout($timeout)
-            ->asForm();
-        $request = $this->applyDebugCookieForDevelopment($request);
-
-        return $request->post($url, $request_payload);
+        return $this->shopApiSendOpenCartRequestWithQueryAuthToken(
+            $request_url,
+            $auth_api_token,
+            $request_payload,
+            $timeout
+        );
     }
 
     private function applyDebugCookieForDevelopment(PendingRequest $request): PendingRequest
     {
-        $is_debug_mode              = (bool) config('app.debug', false);
-        $is_development_environment = app()->isLocal();
-
-        if ($is_debug_mode === false || $is_development_environment === false) {
-            return $request;
-        }
-
-        return $request->withHeaders([
-            'Cookie' => 'XDEBUG_SESSION=PHPSTORM',
-        ]);
+        return $this->shopApiApplyDebugCookieForDevelopment($request);
     }
 
     private function isInvalidOpenCartAuthTokenResponse(Response $response): bool
     {
-        if ($response->status() === 401 || $response->status() === 403) {
-            return true;
-        }
-
-        $response_body = Str::lower(Str::trim($response->body()));
-        if ($response_body === '') {
-            return false;
-        }
-
-        if (Str::startsWith($response_body, '<!doctype html>') || Str::startsWith($response_body, '<html')) {
-            return true;
-        }
-
-        if (
-            Str::contains($response_body, 'error_invalid_token')
-            || (Str::contains($response_body, 'invalid') && Str::contains($response_body, 'token'))
-            || Str::contains($response_body, 'token is invalid')
-            || Str::contains($response_body, 'invalid api token')
-            || Str::contains($response_body, 'api token is invalid')
-        ) {
-            return true;
-        }
-
-        $response_data = $response->json();
-        if (! is_array($response_data)) {
-            return false;
-        }
-
-        if (Arr::has($response_data, 'error_invalid_token')) {
-            return true;
-        }
-
-        $error_text = Str::lower(Str::trim((string) Arr::get($response_data, 'error', '')));
-
-        return $error_text !== '' && Str::contains($error_text, 'token');
+        return $this->shopApiIsInvalidOpenCartAuthTokenResponse($response);
     }
 
     private function truncateResponseBody(string $response_body): string
     {
-        return Str::limit(Str::trim($response_body), 20000);
+        return $this->shopApiTruncateResponseBody($response_body);
+    }
+
+    private function resolveAbsoluteEndpointUrl(string $base_url, string $endpoint, string $operation): string
+    {
+        return $this->shopApiResolveAbsoluteEndpointUrl($base_url, $endpoint, $operation);
+    }
+
+    private function buildFailedApiResponseMessage(string $operation, Response $response): string
+    {
+        return $this->shopApiBuildFailedResponseMessage($operation, $response);
     }
 
     private function normalizeDateTimeValue(mixed $value): ?string
     {
-        if ($value === null) {
-            return null;
-        }
-
-        if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d H:i:s');
-        }
-
-        $clean_value = trim((string) $value);
-
-        return $clean_value !== '' ? $clean_value : null;
+        return $this->shopApiNormalizeDateTimeValue($value);
     }
 }

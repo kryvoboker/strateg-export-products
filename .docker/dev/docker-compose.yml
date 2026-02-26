@@ -10,7 +10,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
-        USERNAME: ${USERNAME:-www-data}
+        USERNAME: www-data
     image: dev-strateg-export-products-php-fpm:1.0
     container_name: dev-strateg-export-products-php-fpm
     env_file:
@@ -46,7 +46,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
-        USERNAME: ${USERNAME:-www-data}
+        USERNAME: www-data
     image: dev-strateg-export-products-cron:1.0-alpine
     container_name: dev-strateg-export-products-cron
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
-        USERNAME: ${USERNAME:-www-data}
+        USERNAME: www-data
     image: dev-strateg-export-products-nginx:1.0-alpine-slim
     container_name: dev-strateg-export-products-nginx
     env_file:
@@ -118,7 +118,7 @@ services:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
         UMASK: ${UMASK:-0002}
-        USERNAME: ${USERNAME:-postgres}
+        USERNAME: postgres
     image: dev-strateg-export-products-postgresql:1.0-alpine
     container_name: dev-strateg-export-products-postgresql
     healthcheck:
@@ -133,10 +133,39 @@ services:
       - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
     volumes:
-      - ../../.db:/var/lib/postgresql
+      - ../../.db/postgresql:/var/lib/postgresql
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system
+    cap_drop:
+      - ALL # Removes Linux capabilities
+    networks:
+      - dev-strateg-export-products-net
+
+  dev-strateg-export-products-redis:
+    build:
+      context: ${PWD}
+      dockerfile: .docker/dev/redis/Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+        UMASK: ${UMASK:-0002}
+        USERNAME: redis
+    image: dev-strateg-export-products-redis:1.0-alpine
+    container_name: dev-strateg-export-products-redis
+    restart: unless-stopped
+    ports:
+      - "42604:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ../../.db/redis:/data
+    security_opt:
+      - no-new-privileges:true
+      - apparmor=docker-default
     cap_drop:
       - ALL # Removes Linux capabilities
     networks:

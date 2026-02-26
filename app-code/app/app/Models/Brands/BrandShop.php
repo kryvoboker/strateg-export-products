@@ -45,4 +45,16 @@ class BrandShop extends Model
     {
         return $this->belongsTo(Shop::class);
     }
+
+    public static function resolveExternalBrandId(int $brand_id, int $shop_id): int
+    {
+        if ($brand_id <= 0 || $shop_id <= 0) {
+            return 0;
+        }
+
+        return (int) (self::query()
+            ->where('brand_id', $brand_id)
+            ->where('shop_id', $shop_id)
+            ->value('external_brand_id') ?? 0);
+    }
 }

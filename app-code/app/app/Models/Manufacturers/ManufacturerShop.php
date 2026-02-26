@@ -45,4 +45,16 @@ class ManufacturerShop extends Model
     {
         return $this->belongsTo(Shop::class);
     }
+
+    public static function resolveExternalManufacturerId(int $manufacturer_id, int $shop_id): int
+    {
+        if ($manufacturer_id <= 0 || $shop_id <= 0) {
+            return 0;
+        }
+
+        return (int) (self::query()
+            ->where('manufacturer_id', $manufacturer_id)
+            ->where('shop_id', $shop_id)
+            ->value('external_manufacturer_id') ?? 0);
+    }
 }

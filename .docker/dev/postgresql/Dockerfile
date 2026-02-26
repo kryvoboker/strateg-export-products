@@ -33,6 +33,8 @@ RUN chmod +x /usr/local/bin/custom-entrypoint.sh
 
 USER ${USERNAME}
 
+EXPOSE 5432
+
 ENTRYPOINT ["/usr/local/bin/custom-entrypoint.sh"]
 
 CMD ["postgres"]

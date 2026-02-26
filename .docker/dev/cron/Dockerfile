@@ -8,6 +8,7 @@ RUN apk add --no-cache \
   unzip \
   zip \
   tzdata \
+  logrotate \
   dos2unix
 
 ENV TZ=Europe/Kyiv
@@ -29,6 +30,8 @@ RUN install-php-extensions gd \
     intl \
     bcmath \
     apcu \
+    pcntl \
+    redis \
   && rm -f /usr/local/bin/install-php-extensions
 
 FROM php-cli AS supercronic
@@ -62,9 +65,17 @@ RUN deluser ${USERNAME} 2>/dev/null || true \
   && adduser -D -u ${UID} -G ${USERNAME} -s /bin/sh ${USERNAME}
 
 # Create crontab directory with proper permissions
-RUN mkdir -p /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
-  && chown ${UID}:${GID} /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
-  && chmod -R 755 /var/log/cron/ ${COMPOSER_CACHE_DIR}/
+RUN mkdir -p /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ /var/lib/ \
+  && chown -R ${UID}:${GID} /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ /var/lib/ \
+  && chmod -R 755 /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
+  && touch /var/lib/logrotate.status \
+  && chmod 600 /var/lib/logrotate.status \
+  && chown ${UID}:${GID} /var/lib/logrotate.status
+
+COPY --chown=root:root .docker/dev/cron/redis.logrotate /etc/logrotate.d/redis
+
+RUN dos2unix /etc/logrotate.d/redis \
+  && chmod 644 /etc/logrotate.d/redis
 
 # Copy entrypoint script
 COPY --chown=${UID}:${GID} .docker/dev/cron/entrypoint.sh /usr/local/bin/entrypoint.sh

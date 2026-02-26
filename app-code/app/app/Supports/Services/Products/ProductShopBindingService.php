@@ -32,6 +32,7 @@ use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
+use App\Supports\Services\Products\Traits\NormalizesProductServiceInput;
 use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
 use App\Supports\Services\SeoSlug\DeSeoSlugService;
 use App\Supports\Services\SeoSlug\EnSeoSlugService;
@@ -49,6 +50,8 @@ use Throwable;
 
 class ProductShopBindingService
 {
+    use NormalizesProductServiceInput;
+
     private const array EMPTY_CATALOG_SYNC_SUMMARY = [
         'categories_relinked'    => 0,
         'categories_assigned'    => 0,
@@ -479,16 +482,7 @@ class ProductShopBindingService
 
     private function resolveAlreadyBoundProductIdByFamilyUlid(string $family_ulid, int $shop_id): int
     {
-        if ($shop_id <= 0 || $family_ulid === '') {
-            return 0;
-        }
-
-        return (int) (ProductShop::query()
-            ->join('products', 'products.id', '=', 'product_shop.product_id')
-            ->where('products.family_ulid', $family_ulid)
-            ->where('shop_id', $shop_id)
-            ->orderByDesc('product_shop.id')
-            ->value('product_shop.product_id') ?? 0);
+        return ProductShop::resolveLatestBoundProductIdByFamilyUlidAndShop($family_ulid, $shop_id);
     }
 
     private function ensureProductFamilyUlid(Product $product): string
@@ -501,10 +495,8 @@ class ProductShopBindingService
         $source_ulid            = '';
         $product_import_item_id = (int) ($product->product_import_item_id ?? 0);
 
-        if ($product_import_item_id > 0 && $this->hasProductImportItemUlidColumn()) {
-            $source_ulid = Str::trim((string) (ProductImportItem::query()
-                ->whereKey($product_import_item_id)
-                ->value('ulid') ?? ''));
+        if ($product_import_item_id > 0) {
+            $source_ulid = ProductImportItem::resolveUlidById($product_import_item_id);
         }
 
         $family_ulid = $source_ulid !== '' ? $source_ulid : (string) Str::ulid();
@@ -513,25 +505,6 @@ class ProductShopBindingService
         ]);
 
         return $family_ulid;
-    }
-
-    private function hasProductImportItemUlidColumn(): bool
-    {
-        static $has_ulid_column = null;
-
-        if (is_bool($has_ulid_column)) {
-            return $has_ulid_column;
-        }
-
-        try {
-            $has_ulid_column = DB::connection()
-                ->getSchemaBuilder()
-                ->hasColumn('product_import_items', 'ulid');
-        } catch (Throwable) {
-            $has_ulid_column = false;
-        }
-
-        return $has_ulid_column;
     }
 
     private function duplicateProductWithRelationsForShop(
@@ -1424,14 +1397,7 @@ class ProductShopBindingService
 
     private function hasProductShopBinding(int $product_id, int $target_shop_id): bool
     {
-        if ($product_id <= 0 || $target_shop_id <= 0) {
-            return false;
-        }
-
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->where('shop_id', $target_shop_id)
-            ->exists();
+        return ProductShop::isProductBoundToShop($product_id, $target_shop_id);
     }
 
     private function resolveProductImportBatchId(Product $source_product, int $product_import_batch_id): int
@@ -1440,27 +1406,21 @@ class ProductShopBindingService
             return $product_import_batch_id;
         }
 
-        $batch_id_from_product_import_item = (int) (ProductImportItem::query()
-            ->whereKey((int) ($source_product->product_import_item_id ?? 0))
-            ->value('product_import_batch_id') ?? 0);
+        $batch_id_from_product_import_item = ProductImportItem::resolveBatchIdByProductImportItemId(
+            (int) ($source_product->product_import_item_id ?? 0)
+        );
 
         if ($batch_id_from_product_import_item > 0) {
             return $batch_id_from_product_import_item;
         }
 
-        $batch_id_from_items = (int) (ProductImportItem::query()
-            ->where('product_id', $source_product->id)
-            ->orderByDesc('id')
-            ->value('product_import_batch_id') ?? 0);
+        $batch_id_from_items = ProductImportItem::resolveLatestBatchIdByProductId((int) $source_product->id);
 
         if ($batch_id_from_items > 0) {
             return $batch_id_from_items;
         }
 
-        return (int) (ProductShop::query()
-            ->where('product_id', $source_product->id)
-            ->orderByDesc('id')
-            ->value('product_import_batch_id') ?? 0);
+        return ProductShop::resolveLatestBatchIdByProductId((int) $source_product->id);
     }
 
     public function applyDefaultLanguageToProductTranslations(int $product_id, int $target_shop_id): void
@@ -1537,7 +1497,7 @@ class ProductShopBindingService
             return;
         }
 
-        $shop_languages = ShopLanguage::getActiveByShopId($target_shop_id);
+        $shop_languages = ShopLanguage::getActiveByShopIdCached($target_shop_id);
         if ($shop_languages->isEmpty()) {
             Log::channel('stack')->warning('SEO language synchronization skipped: no active shop languages', [
                 'product_id' => $product_id,
@@ -1972,7 +1932,7 @@ class ProductShopBindingService
      */
     private function synchronizeManufacturerDescriptionsForShopLanguages(int $product_id, int $target_shop_id): void
     {
-        $target_shop_languages = ShopLanguage::getActiveByShopId($target_shop_id);
+        $target_shop_languages = ShopLanguage::getActiveByShopIdCached($target_shop_id);
 
         if ($target_shop_languages->isEmpty()) {
             Log::channel('daily')->warning('Manufacturer language synchronization skipped: no active shop languages', [
@@ -2059,7 +2019,7 @@ class ProductShopBindingService
      */
     private function synchronizeBrandDescriptionsForShopLanguages(int $product_id, int $target_shop_id): void
     {
-        $target_shop_languages = ShopLanguage::getActiveByShopId($target_shop_id);
+        $target_shop_languages = ShopLanguage::getActiveByShopIdCached($target_shop_id);
 
         if ($target_shop_languages->isEmpty()) {
             Log::channel('daily')->warning('Brand language synchronization skipped: no active shop languages', [
@@ -2209,21 +2169,7 @@ class ProductShopBindingService
      */
     private function resolveSourceShopLanguageIdsByCode(string $language_code, int $shop_id): array
     {
-        $normalized_language_code = $this->normalizeLanguageCode($language_code);
-        if ($normalized_language_code === '') {
-            return [];
-        }
-
-        return ShopLanguage::query()
-            ->whereRaw('LOWER(code) = ?', [$normalized_language_code])
-            ->orderByRaw('CASE WHEN shop_id = ? THEN 0 ELSE 1 END', [$shop_id])
-            ->orderByDesc('is_default')
-            ->orderBy('id')
-            ->pluck('id')
-            ->map(static fn (mixed $shop_language_id): int => (int) $shop_language_id)
-            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
-            ->values()
-            ->all();
+        return ShopLanguage::resolveOrderedLanguageIdsByCodeCached($language_code, $shop_id);
     }
 
     /**
@@ -2231,7 +2177,7 @@ class ProductShopBindingService
      */
     private function translateProductTextsForShopLanguages(int $product_id, int $target_shop_id): void
     {
-        $target_shop_languages = ShopLanguage::getActiveByShopId($target_shop_id);
+        $target_shop_languages = ShopLanguage::getActiveByShopIdCached($target_shop_id);
 
         if ($target_shop_languages->isEmpty()) {
             return;
@@ -2849,13 +2795,6 @@ class ProductShopBindingService
         }
     }
 
-    private function normalizeLanguageCode(string $language_code): string
-    {
-        $normalized_language_code = Str::lower(Str::trim($language_code));
-
-        return $normalized_language_code === 'ua' ? 'uk' : $normalized_language_code;
-    }
-
     private function generateSeoKeywordForLanguage(string $base_text, string $language_code): string
     {
         $normalized_language_code = $this->normalizeLanguageCode($language_code);
@@ -2910,12 +2849,6 @@ class ProductShopBindingService
      */
     private function normalizeShopIds(array $shop_ids): array
     {
-        return collect($shop_ids)
-            ->map(static fn (mixed $shop_id): int => (int) $shop_id)
-            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
+        return $this->normalizePositiveIntList($shop_ids, true);
     }
 }

@@ -11,10 +11,13 @@ use App\Jobs\ProcessProductDeleteItemJob;
 use App\Models\Products\Deletes\ProductDeleteBatch;
 use App\Models\Products\Deletes\ProductDeleteItem;
 use App\Models\Products\ProductShop;
+use App\Supports\Services\Products\Traits\NormalizesProductServiceInput;
 use Illuminate\Support\Facades\Log;
 
 class ProductDeleteQueueService
 {
+    use NormalizesProductServiceInput;
+
     /**
      * @param  list<int>  $product_ids
      * @param  list<int>  $shop_ids
@@ -38,19 +41,8 @@ class ProductDeleteQueueService
             'errors'                     => 0,
         ];
 
-        $normalized_product_ids = collect($product_ids)
-            ->map(static fn (int $product_id): int => (int) $product_id)
-            ->filter(static fn (int $product_id): bool => $product_id > 0)
-            ->unique()
-            ->values()
-            ->all();
-
-        $normalized_shop_ids = collect($shop_ids)
-            ->map(static fn (int $shop_id): int => (int) $shop_id)
-            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        $normalized_product_ids = $this->normalizePositiveIntList($product_ids);
+        $normalized_shop_ids    = $this->normalizePositiveIntList($shop_ids);
 
         if ($normalized_product_ids === [] || $normalized_shop_ids === []) {
             return $summary;
@@ -128,11 +120,7 @@ class ProductDeleteQueueService
         }
 
         try {
-            $product_shop = ProductShop::query()
-                ->where('product_id', $product_id)
-                ->where('shop_id', $shop_id)
-                ->orderByDesc('id')
-                ->first();
+            $product_shop = ProductShop::resolveLatestByProductAndShop($product_id, $shop_id);
 
             if (! $product_shop instanceof ProductShop) {
                 $summary['skipped_not_bound']++;
@@ -159,13 +147,11 @@ class ProductDeleteQueueService
                 return $summary;
             }
 
-            $existing_item = ProductDeleteItem::query()
-                ->where('product_delete_batch_id', (int) $batch->id)
-                ->where('product_id', $product_id)
-                ->whereRaw("(payload->>'operation') = 'delete'")
-                ->whereRaw("(payload->>'shop_id')::int = ?", [$shop_id])
-                ->orderByDesc('id')
-                ->first();
+            $existing_item = ProductDeleteItem::resolveLatestDeleteOperationItem(
+                (int) $batch->id,
+                $product_id,
+                $shop_id
+            );
 
             if ($existing_item instanceof ProductDeleteItem) {
                 if ($existing_item->status === ProductDeleteItemsStatusEnum::FAILED->value) {
@@ -221,10 +207,8 @@ class ProductDeleteQueueService
             return;
         }
 
-        $items_query = ProductDeleteItem::query()
-            ->where('product_delete_batch_id', $product_delete_batch_id);
-
-        $total_items = (int) $items_query->count();
+        $status_counters = ProductDeleteItem::resolveStatusCountersByBatchId($product_delete_batch_id);
+        $total_items     = $status_counters['total'];
         if ($total_items <= 0) {
             $batch->update([
                 'status'          => ProductDeleteBatchesStatusEnum::FAILED->value,
@@ -243,15 +227,9 @@ class ProductDeleteQueueService
             return;
         }
 
-        $processing_count = (int) (clone $items_query)
-            ->where('status', ProductDeleteItemsStatusEnum::PROCESSING->value)
-            ->count();
-        $deleted_count = (int) (clone $items_query)
-            ->where('status', ProductDeleteItemsStatusEnum::DELETED->value)
-            ->count();
-        $failed_count = (int) (clone $items_query)
-            ->where('status', ProductDeleteItemsStatusEnum::FAILED->value)
-            ->count();
+        $processing_count = $status_counters['processing'];
+        $deleted_count    = $status_counters['deleted'];
+        $failed_count     = $status_counters['failed'];
 
         $status = match (true) {
             $processing_count > 0                         => ProductDeleteBatchesStatusEnum::PROCESSING->value,
@@ -275,4 +253,3 @@ class ProductDeleteQueueService
         ]);
     }
 }
-

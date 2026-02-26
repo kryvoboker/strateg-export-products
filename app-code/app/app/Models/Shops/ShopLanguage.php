@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -83,6 +84,8 @@ class ShopLanguage extends Model
         });
 
         static::saved(function (self $shop_language): void {
+            self::flushLanguageCacheForShop((int) $shop_language->shop_id, (string) $shop_language->code);
+
             if (! (bool) $shop_language->is_default) {
                 return;
             }
@@ -97,6 +100,8 @@ class ShopLanguage extends Model
         });
 
         static::deleting(function (self $shop_language): void {
+            self::flushLanguageCacheForShop((int) $shop_language->shop_id, (string) $shop_language->code);
+
             if (! (bool) $shop_language->is_default) {
                 return;
             }
@@ -206,6 +211,46 @@ class ShopLanguage extends Model
             ->get(['id', 'code', 'name', 'is_default']);
     }
 
+    /**
+     * @return Collection<int, self>
+     */
+    public static function getActiveByShopIdCached(int $shop_id): Collection
+    {
+        if ($shop_id <= 0) {
+            return self::query()->whereRaw('1 = 0')->get();
+        }
+
+        if (! app()->bound('cache')) {
+            return self::getActiveByShopId($shop_id);
+        }
+
+        $cache_key = 'shop-language:active-by-shop-id:'.$shop_id;
+
+        /** @var array<int, array{id:int,code:string,name:string,is_default:bool,is_active:bool,shop_id:int}> $cached_rows */
+        $cached_rows = Cache::remember($cache_key, now()->addMinutes(15), static function () use ($shop_id): array {
+            return self::query()
+                ->where('shop_id', $shop_id)
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->get(['id', 'shop_id', 'code', 'name', 'is_default', 'is_active'])
+                ->map(static fn (self $shop_language): array => [
+                    'id'         => (int) $shop_language->id,
+                    'shop_id'    => (int) $shop_language->shop_id,
+                    'code'       => (string) $shop_language->code,
+                    'name'       => (string) $shop_language->name,
+                    'is_default' => (bool) $shop_language->is_default,
+                    'is_active'  => (bool) $shop_language->is_active,
+                ])
+                ->all();
+        });
+
+        return (new self())->newCollection(
+            collect($cached_rows)
+                ->map(static fn (array $row): self => new self($row))
+                ->all()
+        );
+    }
+
     public static function getCodeById(int $shop_language_id): string
     {
         if ($shop_language_id <= 0) {
@@ -215,5 +260,75 @@ class ShopLanguage extends Model
         return Str::lower(Str::trim((string) (self::query()
             ->whereKey($shop_language_id)
             ->value('code') ?? '')));
+    }
+
+    /**
+     * @return list<int>
+     */
+    public static function resolveOrderedLanguageIdsByCode(string $language_code, int $shop_id): array
+    {
+        $normalized_language_code = Str::lower(Str::trim($language_code));
+        if ($normalized_language_code === '') {
+            return [];
+        }
+
+        return self::query()
+            ->whereRaw('LOWER(code) = ?', [$normalized_language_code])
+            ->orderByRaw('CASE WHEN shop_id = ? THEN 0 ELSE 1 END', [$shop_id])
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(static fn (mixed $shop_language_id): int => (int) $shop_language_id)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public static function resolveOrderedLanguageIdsByCodeCached(string $language_code, int $shop_id): array
+    {
+        $normalized_language_code = Str::lower(Str::trim($language_code));
+        if ($normalized_language_code === '') {
+            return [];
+        }
+
+        if (! app()->bound('cache')) {
+            return self::resolveOrderedLanguageIdsByCode($normalized_language_code, $shop_id);
+        }
+
+        $cache_key = sprintf(
+            'shop-language:ordered-language-ids:code:%s:shop:%d',
+            $normalized_language_code,
+            $shop_id
+        );
+
+        /** @var list<int> $language_ids */
+        $language_ids = Cache::remember($cache_key, now()->addMinutes(15), static fn (): array => self::resolveOrderedLanguageIdsByCode($normalized_language_code, $shop_id));
+
+        return $language_ids;
+    }
+
+    private static function flushLanguageCacheForShop(int $shop_id, string $language_code): void
+    {
+        if ($shop_id <= 0) {
+            return;
+        }
+
+        if (! app()->bound('cache')) {
+            return;
+        }
+
+        Cache::forget('shop-language:active-by-shop-id:'.$shop_id);
+
+        $normalized_language_code = Str::lower(Str::trim($language_code));
+        if ($normalized_language_code !== '') {
+            Cache::forget(sprintf(
+                'shop-language:ordered-language-ids:code:%s:shop:%d',
+                $normalized_language_code,
+                $shop_id
+            ));
+        }
     }
 }

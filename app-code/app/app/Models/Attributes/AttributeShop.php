@@ -45,4 +45,24 @@ class AttributeShop extends Model
     {
         return $this->belongsTo(Shop::class);
     }
+
+    /**
+     * @param  list<int>  $attribute_ids
+     * @return array<int, int|null>
+     */
+    public static function resolveExternalIdMapByAttributeIds(int $shop_id, array $attribute_ids): array
+    {
+        if ($shop_id <= 0 || $attribute_ids === []) {
+            return [];
+        }
+
+        return self::query()
+            ->where('shop_id', $shop_id)
+            ->whereIn('attribute_id', $attribute_ids)
+            ->pluck('external_attribute_id', 'attribute_id')
+            ->mapWithKeys(static fn ($external_attribute_id, $attribute_id): array => [
+                (int) $attribute_id => is_numeric($external_attribute_id) ? (int) $external_attribute_id : null,
+            ])
+            ->toArray();
+    }
 }

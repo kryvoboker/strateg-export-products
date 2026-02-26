@@ -16,11 +16,13 @@
 !.docker/dev/php/
 !.docker/dev/nginx/
 !.docker/dev/cron/
+!.docker/dev/redis/
 .docker/prod
 !.docker/prod/postgresql/
 !.docker/prod/php/
 !.docker/prod/nginx/
 !.docker/prod/cron/
+!.docker/prod/redis/
 
 # Node.js
 node_modules

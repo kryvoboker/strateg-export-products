@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Products;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Log;
@@ -312,6 +313,50 @@ class ProductBackups extends Model
             ->first();
 
         return $backup instanceof self ? $backup : null;
+    }
+
+    /**
+     * @return Collection<int, static>
+     */
+    public static function getUnusedLocalSnapshotsForProduct(int $product_id): Collection
+    {
+        if ($product_id <= 0) {
+            return static::query()->whereRaw('1 = 0')->get();
+        }
+
+        return static::query()
+            ->localProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->where('is_used', false)
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, static>
+     */
+    public static function getUnusedExternalSnapshotsForProductShop(
+        int $product_id,
+        int $shop_id,
+        ?int $external_product_id = null
+    ): Collection {
+        if ($product_id <= 0 || $shop_id <= 0) {
+            return static::query()->whereRaw('1 = 0')->get();
+        }
+
+        $query = static::query()
+            ->externalProductSnapshots()
+            ->where('backupable_id', $product_id)
+            ->where('shop_id', $shop_id)
+            ->where('is_used', false);
+
+        if ($external_product_id !== null && $external_product_id > 0) {
+            $query->where('external_product_id', (string) $external_product_id);
+        }
+
+        return $query
+            ->orderByDesc('id')
+            ->get();
     }
 
     private static function trimScopeBackups(

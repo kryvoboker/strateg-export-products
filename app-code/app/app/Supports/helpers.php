@@ -134,3 +134,55 @@ if (!function_exists('normalize_str')) {
         return Str::replace(['&nbsp;', "\u{00a0}"], ' ', $string);
     }
 }
+
+if (! function_exists('normalize_positive_int_list')) {
+    /**
+     * @param  array<mixed>  $values
+     * @return list<int>
+     */
+    function normalize_positive_int_list(array $values, bool $is_sort = false): array
+    {
+        $normalized_values = collect($values)
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->unique();
+
+        if ($is_sort) {
+            $normalized_values = $normalized_values->sort();
+        }
+
+        return $normalized_values
+            ->values()
+            ->all();
+    }
+}
+
+if (! function_exists('normalize_trimmed_str')) {
+    function normalize_trimmed_str(mixed $value, ?string $char_list = null): string
+    {
+        if (! is_string($value) && ! is_numeric($value)) {
+            return '';
+        }
+
+        return normalize_str((string) $value, $char_list);
+    }
+}
+
+if (! function_exists('normalize_nullable_trimmed_str')) {
+    function normalize_nullable_trimmed_str(mixed $value, ?string $char_list = null): ?string
+    {
+        $normalized_value = normalize_trimmed_str($value, $char_list);
+
+        return $normalized_value !== '' ? $normalized_value : null;
+    }
+}
+
+if (! function_exists('normalize_array_payload')) {
+    /**
+     * @return array<string, mixed>
+     */
+    function normalize_array_payload(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
+    }
+}

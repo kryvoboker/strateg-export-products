@@ -100,4 +100,57 @@ class ProductDeleteItem extends Model
             'processed_at'            => null,
         ]);
     }
+
+    public static function resolveLatestDeleteOperationItem(
+        int $product_delete_batch_id,
+        int $product_id,
+        int $shop_id
+    ): ?self {
+        if ($product_delete_batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
+            return null;
+        }
+
+        $product_delete_item = static::query()
+            ->where('product_delete_batch_id', $product_delete_batch_id)
+            ->where('product_id', $product_id)
+            ->whereRaw("(payload->>'operation') = 'delete'")
+            ->whereRaw("(payload->>'shop_id')::int = ?", [$shop_id])
+            ->orderByDesc('id')
+            ->first();
+
+        return $product_delete_item instanceof self ? $product_delete_item : null;
+    }
+
+    /**
+     * @return array{
+     *     total:int,
+     *     processing:int,
+     *     deleted:int,
+     *     failed:int
+     * }
+     */
+    public static function resolveStatusCountersByBatchId(int $product_delete_batch_id): array
+    {
+        if ($product_delete_batch_id <= 0) {
+            return [
+                'total'      => 0,
+                'processing' => 0,
+                'deleted'    => 0,
+                'failed'     => 0,
+            ];
+        }
+
+        $status_rows = static::query()
+            ->selectRaw('status, COUNT(*) AS status_total')
+            ->where('product_delete_batch_id', $product_delete_batch_id)
+            ->groupBy('status')
+            ->get();
+
+        return [
+            'total'      => (int) $status_rows->sum('status_total'),
+            'processing' => (int) ($status_rows->firstWhere('status', ProductDeleteItemsStatusEnum::PROCESSING->value)->status_total ?? 0),
+            'deleted'    => (int) ($status_rows->firstWhere('status', ProductDeleteItemsStatusEnum::DELETED->value)->status_total ?? 0),
+            'failed'     => (int) ($status_rows->firstWhere('status', ProductDeleteItemsStatusEnum::FAILED->value)->status_total ?? 0),
+        ];
+    }
 }

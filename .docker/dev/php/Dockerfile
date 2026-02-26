@@ -30,6 +30,8 @@ RUN install-php-extensions gd \
     intl \
     bcmath \
     apcu \
+    pcntl \
+    redis \
   && rm -f /usr/local/bin/install-php-extensions
 
 RUN echo "xhprof.output_dir = /tmp/xhprof" >> /usr/local/etc/php/conf.d/docker-php-ext-xhprof.ini \

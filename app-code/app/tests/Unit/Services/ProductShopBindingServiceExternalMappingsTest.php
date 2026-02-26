@@ -169,6 +169,16 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
             $table->unsignedInteger('brand_id')->nullable();
             $table->timestamps();
         });
+
+        $schema->create('shop_languages', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('shop_id');
+            $table->string('code', 20);
+            $table->string('name')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
+            $table->timestamps();
+        });
     }
 
     protected function setUp(): void
@@ -181,6 +191,7 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
         self::$capsule?->table('brand_shop')->delete();
         self::$capsule?->table('manufacturer_descriptions')->delete();
         self::$capsule?->table('brand_descriptions')->delete();
+        self::$capsule?->table('shop_languages')->delete();
         Manufacturer::query()->delete();
         Brand::query()->delete();
         ProductToAttribute::query()->delete();
@@ -189,6 +200,27 @@ class ProductShopBindingServiceExternalMappingsTest extends TestCase
         CategoryProduct::query()->delete();
         self::$capsule?->table('category_shop')->delete();
         Category::query()->delete();
+
+        self::$capsule?->table('shop_languages')->insert([
+            [
+                'shop_id'     => 10,
+                'code'        => 'uk',
+                'name'        => 'Ukrainian',
+                'is_active'   => true,
+                'is_default'  => true,
+                'created_at'  => now()->toDateTimeString(),
+                'updated_at'  => now()->toDateTimeString(),
+            ],
+            [
+                'shop_id'     => 20,
+                'code'        => 'uk',
+                'name'        => 'Ukrainian',
+                'is_active'   => true,
+                'is_default'  => true,
+                'created_at'  => now()->toDateTimeString(),
+                'updated_at'  => now()->toDateTimeString(),
+            ],
+        ]);
     }
 
     public function test_it_creates_external_mapping_rows_only_for_entities_in_target_shop_scope(): void
