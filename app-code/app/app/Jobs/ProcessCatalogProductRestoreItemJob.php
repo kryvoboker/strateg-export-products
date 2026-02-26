@@ -7,12 +7,26 @@ namespace App\Jobs;
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
+use App\Models\Attributes\Attribute;
+use App\Models\Attributes\AttributeDescription;
+use App\Models\Attributes\AttributeShop;
+use App\Models\Brands\Brand;
+use App\Models\Brands\BrandShop;
+use App\Models\Categories\Category;
+use App\Models\Categories\CategoryShop;
+use App\Models\Manufacturers\Manufacturer;
+use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Product;
+use App\Models\Products\ProductDiscount;
 use App\Models\Products\ProductShop;
+use App\Models\Products\ProductSpecial;
+use App\Models\Products\ProductToAttribute;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
+use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
+use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,6 +46,12 @@ use Throwable;
 class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * Restore flow is intentionally full-payload only.
+     * For partial updates use ProcessProductUpdateItemJob.
+     */
+    private const string RESTORE_PAYLOAD_MODE = 'full';
 
     public function __construct(public int $product_update_item_id) {}
 
@@ -104,7 +124,15 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 
             $backup_payload = is_array($backup->payload) ? $backup->payload : [];
 
+            $product_payload = $this->buildRestoreProductPayload(
+                $product,
+                $shop_id,
+                $external_product_id
+            );
+
             $request_payload = [
+                ...$product_payload,
+                'payload_mode'        => self::RESTORE_PAYLOAD_MODE,
                 'operation'           => 'restore',
                 'shop_id'             => $shop_id,
                 'product_id'          => $product_id,
@@ -223,6 +251,339 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
             'error_message' => null,
             'processed_at'  => null,
         ]);
+    }
+
+    private function buildRestoreProductPayload(
+        Product $product,
+        int $shop_id,
+        int $external_product_id
+    ): array {
+        $product->loadMissing([
+            'descriptions',
+            'images',
+            'categories.descriptions',
+            'productToAttributes.attribute',
+            'productToManufacturerBrand.manufacturer.descriptions',
+            'productToManufacturerBrand.brand.descriptions',
+            'specials',
+            'discounts',
+        ]);
+
+        $shop_languages = ShopLanguage::getActiveByShopId($shop_id);
+
+        $shop_language_ids = $shop_languages
+            ->pluck('id')
+            ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
+            ->values()
+            ->all();
+
+        $shop_language_map_by_id = $shop_languages
+            ->mapWithKeys(static fn (ShopLanguage $shop_language): array => [
+                (int) $shop_language->id => [
+                    'id'   => (int) $shop_language->id,
+                    'code' => Str::lower(Str::trim((string) $shop_language->code)),
+                    'name' => $shop_language->name,
+                ],
+            ])
+            ->toArray();
+
+        $seo_urls = SeoUrl::getForSeoableAndLanguageIds(Product::class, (int) $product->id, $shop_language_ids)
+            ->map(static function (SeoUrl $seo_url) use ($shop_language_map_by_id): array {
+                $shop_language_id = $seo_url->shop_language_id !== null ? (int) $seo_url->shop_language_id : null;
+
+                return [
+                    'shop_language_id'   => $seo_url->shop_language_id,
+                    'shop_language_code' => $shop_language_id !== null
+                        ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
+                        : null,
+                    'query_value' => $seo_url->query_value,
+                    'keyword'     => $seo_url->keyword,
+                    'sort_order'  => $seo_url->sort_order,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $filtered_categories = $product->categories
+            ->filter(fn ($category): bool => $this->isEntityInShopScope((int) ($category->shop_id ?? 0), $shop_id))
+            ->values();
+
+        $filtered_product_attributes = $product->productToAttributes
+            ->filter(function ($product_to_attribute) use ($shop_id): bool {
+                $attribute = $product_to_attribute->attribute;
+                if (! $attribute instanceof Attribute) {
+                    return true;
+                }
+
+                return $this->isEntityInShopScope((int) ($attribute->shop_id ?? 0), $shop_id);
+            })
+            ->values();
+
+        $manufacturer = $product->productToManufacturerBrand?->manufacturer;
+        if ($manufacturer instanceof Manufacturer
+            && ! $this->isEntityInShopScope((int) ($manufacturer->shop_id ?? 0), $shop_id)) {
+            $manufacturer = null;
+        }
+
+        $brand = $product->productToManufacturerBrand?->brand;
+        if ($brand instanceof Brand
+            && ! $this->isEntityInShopScope((int) ($brand->shop_id ?? 0), $shop_id)) {
+            $brand = null;
+        }
+
+        $category_external_id_map = CategoryShop::query()
+            ->where('shop_id', $shop_id)
+            ->whereIn('category_id', $filtered_categories->pluck('id')->map(static fn ($id): int => (int) $id)->all())
+            ->pluck('external_category_id', 'category_id')
+            ->mapWithKeys(static fn ($external_category_id, $category_id): array => [
+                (int) $category_id => is_numeric($external_category_id) ? (int) $external_category_id : null,
+            ])
+            ->toArray();
+
+        $attribute_external_id_map = AttributeShop::query()
+            ->where('shop_id', $shop_id)
+            ->whereIn('attribute_id', $filtered_product_attributes->pluck('attribute_id')->map(static fn ($id): int => (int) $id)->all())
+            ->pluck('external_attribute_id', 'attribute_id')
+            ->mapWithKeys(static fn ($external_attribute_id, $attribute_id): array => [
+                (int) $attribute_id => is_numeric($external_attribute_id) ? (int) $external_attribute_id : null,
+            ])
+            ->toArray();
+
+        $external_manufacturer_id = $manufacturer instanceof Manufacturer
+            ? (int) (ManufacturerShop::query()
+                ->where('manufacturer_id', (int) $manufacturer->id)
+                ->where('shop_id', $shop_id)
+                ->value('external_manufacturer_id') ?? 0)
+            : 0;
+
+        $external_brand_id = $brand instanceof Brand
+            ? (int) (BrandShop::query()
+                ->where('brand_id', (int) $brand->id)
+                ->where('shop_id', $shop_id)
+                ->value('external_brand_id') ?? 0)
+            : 0;
+
+        $attribute_pairs = [];
+        foreach ($filtered_product_attributes as $product_to_attribute) {
+            $attribute_id     = (int) ($product_to_attribute->attribute_id ?? 0);
+            $shop_language_id = (int) ($product_to_attribute->shop_language_id ?? 0);
+            if ($attribute_id <= 0 || $shop_language_id <= 0) {
+                continue;
+            }
+
+            $attribute_pairs[] = [
+                'attribute_id'     => $attribute_id,
+                'shop_language_id' => $shop_language_id,
+            ];
+        }
+
+        $attribute_description_map = AttributeDescription::getNameMapByAttributeLanguagePairs($attribute_pairs);
+
+        $manufacturer_descriptions = $manufacturer instanceof Manufacturer
+            ? $manufacturer->descriptions
+                ->filter(static fn ($description): bool => $shop_language_ids === []
+                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
+                ->map(static function ($description) use ($shop_language_map_by_id): array {
+                    $shop_language_id = (int) ($description->shop_language_id ?? 0);
+
+                    return [
+                        'shop_language_id'   => $shop_language_id > 0 ? $shop_language_id : null,
+                        'shop_language_code' => $shop_language_id > 0
+                            ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
+                            : null,
+                        'name' => $description->name,
+                    ];
+                })
+                ->values()
+                ->all()
+            : [];
+
+        $brand_descriptions = $brand instanceof Brand
+            ? $brand->descriptions
+                ->filter(static fn ($description): bool => $shop_language_ids === []
+                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
+                ->map(static function ($description) use ($shop_language_map_by_id): array {
+                    $shop_language_id = (int) ($description->shop_language_id ?? 0);
+
+                    return [
+                        'shop_language_id'   => $shop_language_id > 0 ? $shop_language_id : null,
+                        'shop_language_code' => $shop_language_id > 0
+                            ? Arr::get($shop_language_map_by_id, $shop_language_id.'.code')
+                            : null,
+                        'name' => $description->name,
+                    ];
+                })
+                ->values()
+                ->all()
+            : [];
+
+        $specials_payload = $product->specials
+            ->map(fn (ProductSpecial $special): array => [
+                'user_group_id' => $special->user_group_id,
+                'price'         => $special->price,
+                'priority'      => $special->priority,
+                'date_start'    => $this->normalizeDateTimeValue($special->date_start),
+                'date_end'      => $this->normalizeDateTimeValue($special->date_end),
+            ])->values()->all();
+
+        $discounts_payload = $product->discounts
+            ->map(fn (ProductDiscount $discount): array => [
+                'user_group_id' => $discount->user_group_id,
+                'quantity'      => $discount->quantity,
+                'price'         => $discount->price,
+                'priority'      => $discount->priority,
+                'date_start'    => $this->normalizeDateTimeValue($discount->date_start),
+                'date_end'      => $this->normalizeDateTimeValue($discount->date_end),
+            ])->values()->all();
+
+        $payload = [
+            'shop_id'        => $shop_id,
+            'shop_languages' => array_values($shop_language_map_by_id),
+            'product'        => [
+                'id'                  => (int) $product->id,
+                'external_product_id' => $external_product_id > 0 ? $external_product_id : null,
+                'model'               => $product->model,
+                'sku'                 => $product->sku,
+                'ean'                 => $product->ean,
+                'quantity'            => $product->quantity,
+                'minimum'             => $product->minimum,
+                'image'               => $product->image,
+                'price'               => $product->price,
+                'manufacturer_id'     => $manufacturer?->id,
+                'manufacturer'        => $manufacturer?->manufacturer_name,
+                'brand_id'            => $brand?->id,
+                'brand'               => $brand?->brand_name,
+                'is_active'           => (bool) $product->is_active,
+                'date_available'      => $this->normalizeDateTimeValue($product->date_available),
+                'date_added'          => $this->normalizeDateTimeValue($product->date_added),
+            ],
+            'descriptions' => $product->descriptions
+                ->filter(static fn ($description): bool => $shop_language_ids === []
+                    || in_array((int) $description->shop_language_id, $shop_language_ids, true))
+                ->map(static function ($description) use ($shop_language_map_by_id): array {
+                    $shop_language_id = (int) $description->shop_language_id;
+
+                    return [
+                        'shop_language_id'   => $shop_language_id,
+                        'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
+                        'name'               => $description->name,
+                        'description'        => $description->description,
+                        'meta_title'         => $description->meta_title,
+                        'meta_description'   => $description->meta_description,
+                        'meta_keywords'      => $description->meta_keywords,
+                    ];
+                })->values()->all(),
+            'images' => $product->images
+                ->map(static fn ($image): array => [
+                    'image'      => $image->image,
+                    'sort_order' => $image->sort_order,
+                ])->values()->all(),
+            'categories' => $filtered_categories
+                ->map(static function (Category $category) use ($shop_language_ids, $shop_language_map_by_id, $category_external_id_map): array {
+                    $descriptions = $category->descriptions
+                        ->filter(static fn ($description): bool => $shop_language_ids === []
+                            || in_array((int) $description->shop_language_id, $shop_language_ids, true))
+                        ->map(static function ($description) use ($shop_language_map_by_id): array {
+                            $shop_language_id = (int) $description->shop_language_id;
+
+                            return [
+                                'shop_language_id'   => $shop_language_id,
+                                'shop_language_code' => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
+                                'name'               => $description->name,
+                                'description'        => $description->description,
+                                'h1_title'           => $description->h1_title,
+                                'meta_title'         => $description->meta_title,
+                                'meta_description'   => $description->meta_description,
+                                'meta_keywords'      => $description->meta_keywords,
+                            ];
+                        })
+                        ->values()
+                        ->all();
+
+                    return [
+                        'id'                   => $category->id,
+                        'external_category_id' => $category_external_id_map[(int) $category->id] ?? null,
+                        'shop_id'              => $category->shop_id,
+                        'family_ulid'          => $category->family_ulid,
+                        'parent_id'            => $category->parent_id,
+                        'name'                 => Arr::get($descriptions, '0.name'),
+                        'descriptions'         => $descriptions,
+                    ];
+                })->values()->all(),
+            'attributes' => $filtered_product_attributes
+                ->filter(static fn (ProductToAttribute $attribute): bool => $shop_language_ids === []
+                    || in_array((int) $attribute->shop_language_id, $shop_language_ids, true))
+                ->map(static function (ProductToAttribute $attribute) use ($attribute_description_map, $shop_language_map_by_id, $attribute_external_id_map): array {
+                    $shop_language_id = (int) $attribute->shop_language_id;
+                    $attribute_id     = (int) $attribute->attribute_id;
+                    $attribute_model  = $attribute->attribute;
+
+                    return [
+                        'attribute_id'          => $attribute_id,
+                        'external_attribute_id' => $attribute_external_id_map[$attribute_id] ?? null,
+                        'attribute_shop_id'     => $attribute_model?->shop_id,
+                        'attribute_family_ulid' => $attribute_model?->family_ulid,
+                        'attribute_name'        => $attribute_description_map[$attribute_id.':'.$shop_language_id] ?? null,
+                        'shop_language_id'      => $shop_language_id,
+                        'shop_language_code'    => Arr::get($shop_language_map_by_id, $shop_language_id.'.code'),
+                        'text'                  => $attribute->text,
+                    ];
+                })->values()->all(),
+            'manufacturer_brand' => [
+                'manufacturer_id'           => $manufacturer?->id,
+                'external_manufacturer_id'  => $external_manufacturer_id > 0 ? $external_manufacturer_id : null,
+                'manufacturer_shop_id'      => $manufacturer?->shop_id,
+                'manufacturer_family_ulid'  => $manufacturer?->family_ulid,
+                'manufacturer'              => $manufacturer?->manufacturer_name,
+                'manufacturer_descriptions' => $manufacturer_descriptions,
+                'brand_id'                  => $brand?->id,
+                'external_brand_id'         => $external_brand_id > 0 ? $external_brand_id : null,
+                'brand_shop_id'             => $brand?->shop_id,
+                'brand_family_ulid'         => $brand?->family_ulid,
+                'brand'                     => $brand?->brand_name,
+                'brand_descriptions'        => $brand_descriptions,
+            ],
+            'seo_urls'  => $seo_urls,
+            'specials'  => $specials_payload,
+            'discounts' => $discounts_payload,
+        ];
+
+        Log::channel('daily')->debug('Restore payload entity resolution summary', [
+            'product_id'                  => (int) $product->id,
+            'shop_id'                     => $shop_id,
+            'payload_mode'                => self::RESTORE_PAYLOAD_MODE,
+            'categories_total'            => count($payload['categories']),
+            'categories_with_external_id' => count(array_filter(
+                array_map(static fn (array $category_row): ?int => Arr::get($category_row, 'external_category_id'), $payload['categories']),
+                static fn ($value): bool => is_numeric($value) && (int) $value > 0
+            )),
+            'attributes_total'            => count($payload['attributes']),
+            'attributes_with_external_id' => count(array_filter(
+                array_map(static fn (array $attribute_row): ?int => Arr::get($attribute_row, 'external_attribute_id'), $payload['attributes']),
+                static fn ($value): bool => is_numeric($value) && (int) $value > 0
+            )),
+            'specials_total'                  => count($specials_payload),
+            'specials_with_dates'             => count(array_filter($specials_payload, static fn (array $special_row): bool => Arr::get($special_row, 'date_start') !== null || Arr::get($special_row, 'date_end') !== null)),
+            'discounts_total'                 => count($discounts_payload),
+            'discounts_with_dates'            => count(array_filter($discounts_payload, static fn (array $discount_row): bool => Arr::get($discount_row, 'date_start') !== null || Arr::get($discount_row, 'date_end') !== null)),
+            'external_product_id'             => Arr::get($payload, 'product.external_product_id'),
+            'external_manufacturer_id'        => Arr::get($payload, 'manufacturer_brand.external_manufacturer_id'),
+            'external_brand_id'               => Arr::get($payload, 'manufacturer_brand.external_brand_id'),
+            'manufacturer_descriptions_total' => count($manufacturer_descriptions),
+            'brand_descriptions_total'        => count($brand_descriptions),
+        ]);
+
+        return $payload;
+    }
+
+    private function isEntityInShopScope(int $entity_shop_id, int $shop_id): bool
+    {
+        if ($shop_id <= 0) {
+            return true;
+        }
+
+        return $entity_shop_id === $shop_id;
     }
 
     /**
@@ -566,5 +927,20 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
     private function truncateResponseBody(string $response_body): string
     {
         return Str::limit(Str::trim($response_body), 20000);
+    }
+
+    private function normalizeDateTimeValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        $clean_value = trim((string) $value);
+
+        return $clean_value !== '' ? $clean_value : null;
     }
 }

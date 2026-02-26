@@ -199,7 +199,17 @@ class ProcessProductExportItemJobFailureTest extends TestCase
 
     private function recreateSchema(): void
     {
+        Schema::dropIfExists('brand_shop');
+        Schema::dropIfExists('manufacturer_shop');
+        Schema::dropIfExists('attribute_shop');
+        Schema::dropIfExists('category_shop');
+        Schema::dropIfExists('product_to_manufacturer_brand');
+        Schema::dropIfExists('brand_descriptions');
+        Schema::dropIfExists('manufacturer_descriptions');
+        Schema::dropIfExists('brands');
+        Schema::dropIfExists('manufacturers');
         Schema::dropIfExists('attribute_descriptions');
+        Schema::dropIfExists('attributes');
         Schema::dropIfExists('product_discounts');
         Schema::dropIfExists('product_specials');
         Schema::dropIfExists('product_to_attributes');
@@ -338,9 +348,20 @@ class ProcessProductExportItemJobFailureTest extends TestCase
 
         Schema::create('categories', static function (Blueprint $table): void {
             $table->id();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->string('family_ulid', 26)->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+        });
+
+        Schema::create('category_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('category_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_category_id')->nullable();
+            $table->timestamps();
+            $table->unique(['category_id', 'shop_id']);
         });
 
         Schema::create('category_descriptions', static function (Blueprint $table): void {
@@ -365,12 +386,91 @@ class ProcessProductExportItemJobFailureTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('attributes', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
         Schema::create('attribute_descriptions', static function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('attribute_id');
             $table->unsignedBigInteger('shop_language_id')->nullable();
             $table->string('name')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('attribute_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('attribute_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_attribute_id')->nullable();
+            $table->timestamps();
+            $table->unique(['attribute_id', 'shop_id']);
+        });
+
+        Schema::create('manufacturers', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('manufacturer_descriptions', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('manufacturer_id');
+            $table->unsignedBigInteger('shop_language_id')->nullable();
+            $table->string('name')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('manufacturer_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('manufacturer_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_manufacturer_id')->nullable();
+            $table->timestamps();
+            $table->unique(['manufacturer_id', 'shop_id']);
+        });
+
+        Schema::create('brands', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
+            $table->unsignedSmallInteger('sort_order')->default(1);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('brand_descriptions', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('brand_id');
+            $table->unsignedBigInteger('shop_language_id')->nullable();
+            $table->string('name')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('brand_shop', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('brand_id');
+            $table->unsignedBigInteger('shop_id');
+            $table->unsignedBigInteger('external_brand_id')->nullable();
+            $table->timestamps();
+            $table->unique(['brand_id', 'shop_id']);
+        });
+
+        Schema::create('product_to_manufacturer_brand', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('manufacturer_id')->nullable();
+            $table->unsignedBigInteger('brand_id')->nullable();
+            $table->timestamps();
+            $table->unique('product_id');
         });
 
         Schema::create('product_specials', static function (Blueprint $table): void {
