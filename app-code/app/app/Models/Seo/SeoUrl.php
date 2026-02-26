@@ -8,7 +8,6 @@ use App\Models\Shops\ShopLanguage;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class SeoUrl extends Model
 {
@@ -43,21 +42,13 @@ class SeoUrl extends Model
     }
 
     /**
-     * @return MorphTo<Model, $this>
-     */
-    public function seoable(): MorphTo
-    {
-        return $this->morphTo();
-    }
-
-    /**
      * @param  list<int>  $shop_language_ids
      * @return Collection<int, self>
      */
     public static function getForSeoableAndLanguageIds(string $seoable_type, int $seoable_id, array $shop_language_ids = []): Collection
     {
         if ($seoable_type === '' || $seoable_id <= 0) {
-            return self::query()->whereRaw('1 = 0')->get();
+            return new Collection(new self());
         }
 
         return self::query()

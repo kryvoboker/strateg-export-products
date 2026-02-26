@@ -7,16 +7,19 @@ namespace App\Models\Attributes;
 use App\Models\Products\Product;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Shops\Shop;
+use App\Models\Shops\ShopLanguage;
+use App\Models\Trait\AiTranslationCacheRelationTrait;
 use App\Models\Trait\DescriptionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class Attribute extends Model
 {
-    use DescriptionsTrait;
+    use AiTranslationCacheRelationTrait, DescriptionsTrait;
 
     protected $fillable = [
         'family_ulid',
@@ -28,17 +31,13 @@ class Attribute extends Model
     protected static function booted(): void
     {
         static::creating(function (self $attribute): void {
-            if (! self::hasFamilyUlidColumn()) {
-                return;
-            }
-
             if (Str::trim((string) $attribute->getAttribute('family_ulid')) === '') {
                 $attribute->setAttribute('family_ulid', (string) Str::ulid());
             }
         });
 
         static::deleting(function (self $attribute): void {
-            $attribute->productToAttributes()->delete();
+            $attribute->aiTranslationCaches()->delete();
         });
     }
 
@@ -87,14 +86,6 @@ class Attribute extends Model
     }
 
     /**
-     * @return HasMany<AttributeNameHash, $this>
-     */
-    public function nameHashes(): HasMany
-    {
-        return $this->hasMany(AttributeNameHash::class, 'attribute_id');
-    }
-
-    /**
      * @return BelongsToMany<Shop, $this>
      */
     public function shops(): BelongsToMany
@@ -132,73 +123,67 @@ class Attribute extends Model
             ->first();
     }
 
-    public function duplicateForShop(int $shop_id): self
+    public function duplicateForShop(int $target_shop_id): self
     {
-        if ($shop_id <= 0) {
+        if ($target_shop_id <= 0) {
             return $this;
         }
 
-        if (! self::hasFamilyUlidColumn()) {
-            return $this;
-        }
+        $source_family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
 
-        $family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
-        if ($family_ulid === '') {
-            $family_ulid = (string) Str::ulid();
+        if ($source_family_ulid === '') {
+            $source_family_ulid = (string) Str::ulid();
             $this->update([
-                'family_ulid' => $family_ulid,
+                'family_ulid' => $source_family_ulid,
             ]);
         }
 
-        $existing = self::findByFamilyAndShop($family_ulid, $shop_id);
-        if ($existing instanceof self) {
-            return $existing;
+        $target_existing = self::findByFamilyAndShop($source_family_ulid, $target_shop_id);
+
+        if ($target_existing instanceof self) {
+            return $target_existing;
         }
 
-        $current_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
-        if ($current_shop_id <= 0) {
+        $source_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
+
+        if ($source_shop_id <= 0) {
             $this->update([
-                'shop_id' => $shop_id,
+                'shop_id' => $target_shop_id,
             ]);
 
             return $this->fresh() ?? $this;
         }
 
+        $source_attribute_name = $this->descriptions()
+            ->where('shop_language_id', $source_shop_id)
+            ->value('name') ?? '';
+
+        /** @var self $duplicate */
         $duplicate = self::query()->create([
-            'family_ulid' => $family_ulid,
-            'shop_id'     => $shop_id,
+            'family_ulid' => $source_family_ulid,
+            'shop_id'     => $target_shop_id,
             'sort_order'  => (int) $this->sort_order,
             'is_active'   => (bool) $this->is_active,
         ]);
 
-        $this->descriptions()
-            ->orderBy('id')
-            ->get()
-            ->each(function (AttributeDescription $description) use ($duplicate): void {
-                AttributeDescription::query()->updateOrCreate(
-                    [
-                        'attribute_id'     => (int) $duplicate->id,
-                        'shop_language_id' => $description->shop_language_id,
-                    ],
-                    [
-                        'name' => $description->name,
-                    ]
-                );
-            });
+        if (! $duplicate instanceof self) {
+            throw new RuntimeException('Failed to duplicate attribute for target shop.');
+        }
+
+        $target_default_shop_language_id = ShopLanguage::query()
+            ->where('shop_id', $target_shop_id)
+            ->where('is_default', true)
+            ->value('id') ?? 0;
+
+        if ($target_default_shop_language_id <= 0) {
+            throw new RuntimeException('Target default shop language not found for shop ID: '.$target_shop_id);
+        }
+
+        $duplicate->descriptions()->create([
+            'shop_language_id' => $target_default_shop_language_id,
+            'name'             => $source_attribute_name,
+        ]);
 
         return $duplicate;
-    }
-
-    private static function hasFamilyUlidColumn(): bool
-    {
-        try {
-            $model = new self();
-
-            return $model->getConnection()
-                ->getSchemaBuilder()
-                ->hasColumn($model->getTable(), 'family_ulid');
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

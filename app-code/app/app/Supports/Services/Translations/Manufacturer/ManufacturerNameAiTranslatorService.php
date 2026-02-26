@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Supports\Services\Translations\Product;
+namespace App\Supports\Services\Translations\Manufacturer;
 
 use App\Abstratcts\Ai\AiDbCachedTranslatorAbstract;
-use App\Models\Products\Product;
+use App\Models\Manufacturers\Manufacturer;
 use App\Services\Api\Ai\OpenAiTranslatorService;
 
-class ProductAttributeTextAiTranslatorService extends AiDbCachedTranslatorAbstract
+class ManufacturerNameAiTranslatorService extends AiDbCachedTranslatorAbstract
 {
     public function __construct(
         OpenAiTranslatorService $ai,
@@ -18,11 +18,11 @@ class ProductAttributeTextAiTranslatorService extends AiDbCachedTranslatorAbstra
 
     protected function resolveScopeType(): string
     {
-        return Product::class;
+        return Manufacturer::class;
     }
 
     protected function resolveScopeId(): int
     {
-        return ($this->product_id ?? 0);
+        return $this->manufacturer_id ?? 0;
     }
 }

@@ -6,6 +6,7 @@ namespace Tests\Feature\Jobs;
 
 use App\Enums\Product\Import\ProductImportBatchesSourceTypeEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
+use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Jobs\ProcessProductImportBatchJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
@@ -16,8 +17,11 @@ use App\Models\Categories\CategoryDescription;
 use App\Models\Manufacturers\Manufacturer;
 use App\Models\Manufacturers\ManufacturerDescription;
 use App\Models\Products\Imports\ProductImportBatch;
+use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
+use App\Models\Products\ProductToAttribute;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -99,6 +103,86 @@ class ProcessProductImportBatchJobExcelFullCycleDuplicatesTest extends TestCase
         self::assertSame(1, AttributeDescription::query()->where('name', 'Color')->count());
         self::assertSame(1, ManufacturerDescription::query()->where('name', 'Apple')->count());
         self::assertSame(1, BrandDescription::query()->where('name', 'iPhone')->count());
+    }
+
+    public function test_it_maps_attribute_names_to_values_by_position_and_normalizes_html_entities(): void
+    {
+        $source_path = 'upload/excel/2026/02/attribute_pairs_valid.xlsx';
+        $this->createExcelFixtureForSingleAttributeRow(
+            $source_path,
+            'Color|Memory&nbsp;Size|GPS|Cable&nbsp;Length',
+            'Black|64&nbsp;GB|Yes|3&nbsp;m'
+        );
+
+        $batch = ProductImportBatch::query()->create([
+            'user_id'         => 1,
+            'source_type'     => ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value,
+            'source_name'     => 'Attribute Pairs Valid',
+            'source_path'     => $source_path,
+            'status'          => ProductImportBatchesStatusEnum::NEW->value,
+            'total_items'     => 0,
+            'processed_items' => 0,
+            'failed_items'    => 0,
+            'options'         => [],
+        ]);
+
+        (new ProcessProductImportBatchJob((int) $batch->id))->handle();
+
+        $product_id = (int) Product::query()->value('id');
+        self::assertGreaterThan(0, $product_id);
+
+        /** @var array<string, string> $attribute_map */
+        $attribute_map = DB::table('product_to_attributes as product_to_attribute')
+            ->join('attribute_descriptions as attribute_description', function ($join): void {
+                $join->on('attribute_description.attribute_id', '=', 'product_to_attribute.attribute_id')
+                    ->whereNull('attribute_description.shop_language_id');
+            })
+            ->where('product_to_attribute.product_id', $product_id)
+            ->pluck('product_to_attribute.text', 'attribute_description.name')
+            ->all();
+
+        self::assertSame([
+            'Color'        => 'Black',
+            'Memory Size'  => '64 GB',
+            'GPS'          => 'Yes',
+            'Cable Length' => '3 m',
+        ], $attribute_map);
+
+        foreach ($attribute_map as $attribute_text) {
+            self::assertStringNotContainsString('|', $attribute_text);
+        }
+    }
+
+    public function test_it_marks_item_failed_and_skips_attribute_upsert_on_attribute_pairs_mismatch(): void
+    {
+        $source_path = 'upload/excel/2026/02/attribute_pairs_invalid.xlsx';
+        $this->createExcelFixtureForSingleAttributeRow(
+            $source_path,
+            'Color|Memory|GPS|Cable',
+            'Black|64 GB|Yes'
+        );
+
+        $batch = ProductImportBatch::query()->create([
+            'user_id'         => 1,
+            'source_type'     => ProductImportBatchesSourceTypeEnum::EXCEL_FILE->value,
+            'source_name'     => 'Attribute Pairs Invalid',
+            'source_path'     => $source_path,
+            'status'          => ProductImportBatchesStatusEnum::NEW->value,
+            'total_items'     => 0,
+            'processed_items' => 0,
+            'failed_items'    => 0,
+            'options'         => [],
+        ]);
+
+        (new ProcessProductImportBatchJob((int) $batch->id))->handle();
+
+        $item = ProductImportItem::query()->first();
+        self::assertInstanceOf(ProductImportItem::class, $item);
+        self::assertSame(ProductImportItemsStatusEnum::FAILED->value, (string) $item->status);
+        self::assertStringContainsString('Invalid product attribute mapping', (string) $item->error_message);
+
+        self::assertSame(1, Product::query()->count());
+        self::assertSame(0, ProductToAttribute::query()->count());
     }
 
     private function recreateSchema(): void
@@ -419,5 +503,68 @@ class ProcessProductImportBatchJobExcelFullCycleDuplicatesTest extends TestCase
 
         self::assertTrue(Storage::exists($path));
     }
-}
 
+    private function createExcelFixtureForSingleAttributeRow(
+        string $path,
+        string $attribute_names,
+        string $attribute_values
+    ): void {
+        $spreadsheet = new Spreadsheet();
+
+        $sheets = [
+            'Product' => [
+                ['Product Id', 'Model', 'SKU', 'EAN', 'Quantity', 'Minimum', 'Image', 'Price', 'Manufacturer', 'Brand', 'Is Active', 'Date Available', 'Date Added'],
+                ['', 'ATTR-TEST', 'SKU-ATTR-TEST', '5555555555555', '5', '1', 'catalog/attr-test.jpg', '100', 'Apple', 'iPhone', '1', '2026-02-23 10:00:00', '2026-02-23 10:00:00'],
+            ],
+            'Description' => [
+                ['Product Id', 'Name', 'Description', 'Meta Title', 'Meta Description', 'Meta Keywords'],
+                ['', 'Attribute Test Product', 'Description', 'Meta', 'Meta desc', 'attr,test'],
+            ],
+            'Image' => [
+                ['Product Id', 'Image', 'Sort Order'],
+                ['', 'catalog/attr-test-1.jpg', '1'],
+            ],
+            'Product Category' => [
+                ['Product Id', 'Category Name'],
+                ['', 'Electronics > Smartphones'],
+            ],
+            'Product Attribute' => [
+                ['Product Id', 'Attribute Name', 'Attribute Text'],
+                ['', $attribute_names, $attribute_values],
+            ],
+            'Seo Url' => [
+                ['Product Id', 'Query Key', 'Query Value', 'Keyword', 'Sort Order'],
+                ['', 'product_id', '', 'attribute-test-product', '1'],
+            ],
+            'Special' => [
+                ['Product Id', 'User Group Id', 'Price', 'Priority', 'Date Start', 'Date End'],
+                ['', '1', '95', '1', '2026-02-23 00:00:00', '2027-02-23 00:00:00'],
+            ],
+            'Discount' => [
+                ['Product Id', 'User Group Id', 'Quantity', 'Price', 'Priority', 'Date Start', 'Date End'],
+                ['', '1', '2', '90', '1', '2026-02-23 00:00:00', '2027-02-23 00:00:00'],
+            ],
+        ];
+
+        $sheet_index = 0;
+        foreach ($sheets as $sheet_name => $rows) {
+            $sheet = $sheet_index === 0
+                ? $spreadsheet->getActiveSheet()
+                : $spreadsheet->createSheet($sheet_index);
+
+            $sheet->setTitle($sheet_name);
+            $sheet->fromArray($rows, null, 'A1');
+            $sheet_index++;
+        }
+
+        $full_path = Storage::path($path);
+        File::ensureDirectoryExists(dirname($full_path));
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($full_path);
+
+        $spreadsheet->disconnectWorksheets();
+
+        self::assertTrue(Storage::exists($path));
+    }
+}

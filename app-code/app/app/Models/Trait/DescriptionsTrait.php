@@ -9,6 +9,9 @@ use Illuminate\Support\Str;
 
 trait DescriptionsTrait
 {
+    /**
+     * @return string
+     */
     protected function getNameForFilamentPage(): string
     {
         $description_name = collect($this->getRelationValue('descriptions'))

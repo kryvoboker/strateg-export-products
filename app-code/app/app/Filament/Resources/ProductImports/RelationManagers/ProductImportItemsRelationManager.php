@@ -1465,7 +1465,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     'processed_at'   => null,
                 ]);
 
-                ProcessProductExportItemJob::dispatchSync((int)$export_item->id);
+                ProcessProductExportItemJob::dispatch((int)$export_item->id);
                 $summary['exports_queued']++;
             } catch (Throwable) {
                 $summary['errors']++;
@@ -1638,7 +1638,7 @@ class ProductImportItemsRelationManager extends RelationManager
                 'processed_at'  => null,
             ]);
 
-            ProcessProductExportItemJob::dispatchSync((int)$failed_export_item->id);
+            ProcessProductExportItemJob::dispatch((int)$failed_export_item->id);
             $summary['queued']++;
         }
 

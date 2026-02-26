@@ -1464,7 +1464,7 @@ class ProductsTable
                     continue;
                 }
 
-                ProcessProductShopBindingJob::dispatch(
+                ProcessProductShopBindingJob::dispatchSync(
                     (int) $record->id,
                     $shop_ids,
                     $product_import_batch_id,

@@ -245,14 +245,14 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         ]);
 
         CategoryDescription::query()->create([
-            'category_id'       => (int) $category->id,
-            'shop_language_id'  => null,
-            'name'              => 'Board games',
-            'description'       => null,
-            'h1_title'          => 'Board games',
-            'meta_title'        => 'Board games',
-            'meta_description'  => null,
-            'meta_keywords'     => null,
+            'category_id'      => (int) $category->id,
+            'shop_language_id' => null,
+            'name'             => 'Board games',
+            'description'      => null,
+            'h1_title'         => 'Board games',
+            'meta_title'       => 'Board games',
+            'meta_description' => null,
+            'meta_keywords'    => null,
         ]);
 
         CategoryProduct::query()->create([
@@ -432,7 +432,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         self::assertSame(['Red [uk]', 'XL [uk]'], $uk_attribute_texts);
     }
 
-    public function test_it_uses_fake_translation_prefix_when_ai_translation_is_disabled(): void
+    public function test_it_routes_translation_via_ai_translation_service_when_ai_translation_is_disabled(): void
     {
         app('config')->set('app.ai_translation_enabled', false);
 
@@ -498,15 +498,15 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             ->first();
 
         self::assertInstanceOf(ProductDescription::class, $uk_product_description);
-        self::assertSame('translated-to-uk-Phone', (string) $uk_product_description->name);
-        self::assertSame('translated-to-uk-Smart phone', (string) $uk_product_description->description);
+        self::assertSame('Phone [uk]', (string) $uk_product_description->name);
+        self::assertSame('Smart phone [uk]', (string) $uk_product_description->description);
 
         $uk_attribute_name = AttributeDescription::query()
             ->where('attribute_id', (int) $source_attribute->id)
             ->where('shop_language_id', (int) $uk_language->id)
             ->value('name');
 
-        self::assertSame('translated-to-uk-Color', (string) $uk_attribute_name);
+        self::assertSame('Color [uk]', (string) $uk_attribute_name);
 
         $uk_attribute_text = ProductToAttribute::query()
             ->where('product_id', $product_id)
@@ -514,7 +514,172 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             ->where('shop_language_id', (int) $uk_language->id)
             ->value('text');
 
-        self::assertSame('translated-to-uk-Red', (string) $uk_attribute_text);
+        self::assertSame('Red [uk]', (string) $uk_attribute_text);
+    }
+
+    public function test_it_retranslates_copied_attribute_values_for_non_default_languages_on_duplicate_like_rows(): void
+    {
+        $shop_id    = 21;
+        $product_id = 1201;
+
+        $uk_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $en_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        $ru_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'ru',
+            'name'       => 'Русский',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        ProductDescription::query()->create([
+            'product_id'       => $product_id,
+            'shop_language_id' => (int) $uk_language->id,
+            'name'             => 'Ноутбук',
+            'description'      => 'Опис',
+            'meta_title'       => 'Ноутбук',
+            'meta_description' => 'Опис',
+            'meta_keywords'    => 'ноутбук',
+        ]);
+
+        $attribute = Attribute::query()->create([
+            'parent_id'  => null,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        AttributeDescription::query()->create([
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $uk_language->id,
+            'name'             => 'Країна виробництва',
+        ]);
+
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $uk_language->id,
+            'text'             => 'Німеччина',
+        ]);
+
+        // Simulate duplicated-product bug: non-default languages already contain source text.
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $en_language->id,
+            'text'             => 'Німеччина',
+        ]);
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $ru_language->id,
+            'text'             => 'Німеччина',
+        ]);
+
+        $service = new ProductShopBindingService();
+
+        $this->invokePrivateMethod(
+            $service,
+            'translateProductTextsForShopLanguages',
+            [$product_id, $shop_id]
+        );
+
+        $en_attribute_text = ProductToAttribute::query()
+            ->where('product_id', $product_id)
+            ->where('shop_language_id', (int) $en_language->id)
+            ->value('text');
+
+        $ru_attribute_text = ProductToAttribute::query()
+            ->where('product_id', $product_id)
+            ->where('shop_language_id', (int) $ru_language->id)
+            ->value('text');
+
+        self::assertSame('Німеччина [en]', (string) $en_attribute_text);
+        self::assertSame('Німеччина [ru]', (string) $ru_attribute_text);
+        self::assertSame(1, ProductToAttribute::query()->where('product_id', $product_id)->where('shop_language_id', (int) $en_language->id)->count());
+        self::assertSame(1, ProductToAttribute::query()->where('product_id', $product_id)->where('shop_language_id', (int) $ru_language->id)->count());
+    }
+
+    public function test_it_uses_category_translation_method_for_category_name(): void
+    {
+        $shop_id    = 18;
+        $product_id = 818;
+
+        $en_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $uk_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        ProductDescription::query()->create([
+            'product_id'       => $product_id,
+            'shop_language_id' => (int) $en_language->id,
+            'name'             => 'Phone',
+            'description'      => 'Smart phone',
+            'meta_title'       => 'Phone',
+            'meta_description' => 'Smart phone',
+            'meta_keywords'    => 'phone',
+        ]);
+
+        $category = Category::query()->create([
+            'parent_id'  => null,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $category->id,
+            'shop_language_id' => (int) $en_language->id,
+            'name'             => 'Phones',
+            'description'      => 'Phones category',
+            'h1_title'         => 'Phones',
+            'meta_title'       => 'Phones',
+            'meta_description' => 'Phones category',
+            'meta_keywords'    => 'phones',
+        ]);
+
+        CategoryProduct::query()->create([
+            'product_id'  => $product_id,
+            'category_id' => (int) $category->id,
+        ]);
+
+        $service = new ProductShopBindingService();
+        $this->invokePrivateMethod(
+            $service,
+            'translateProductTextsForShopLanguages',
+            [$product_id, $shop_id]
+        );
+
+        $uk_category_description = CategoryDescription::query()
+            ->where('category_id', (int) $category->id)
+            ->where('shop_language_id', (int) $uk_language->id)
+            ->first();
+
+        self::assertInstanceOf(CategoryDescription::class, $uk_category_description);
+        self::assertSame('category-Phones [uk]', (string) $uk_category_description->name);
     }
 
     public function test_it_creates_manufacturer_and_brand_descriptions_for_all_active_shop_languages(): void
@@ -613,14 +778,14 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         self::assertSame($expected_language_ids, $brand_rows->pluck('shop_language_id')->map(static fn ($id): int => (int) $id)->all());
 
         self::assertSame('Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_one_uk->id)?->name);
-        self::assertSame('translated-to-en-Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
+        self::assertSame('Acme [en]', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
         self::assertSame('Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_two_uk->id)?->name);
-        self::assertSame('translated-to-de-Acme', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
+        self::assertSame('Acme [de]', (string) $manufacturer_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
 
         self::assertSame('Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_one_uk->id)?->name);
-        self::assertSame('translated-to-en-Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
+        self::assertSame('Prime [en]', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_one_en->id)?->name);
         self::assertSame('Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_two_uk->id)?->name);
-        self::assertSame('translated-to-de-Prime', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
+        self::assertSame('Prime [de]', (string) $brand_rows->firstWhere('shop_language_id', (int) $shop_two_de->id)?->name);
 
         self::assertSame(
             (int) $manufacturer_rows->count(),
@@ -690,12 +855,47 @@ final class FakeAiTranslationService
         return $this->translateFromPrompt($prompt);
     }
 
+    public function attributeDescription(int $attribute_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
     public function productName(int $product_id, string $prompt): string
     {
         return $this->translateFromPrompt($prompt);
     }
 
     public function productDescription(int $product_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
+    public function categoryName(int $category_id, string $prompt): string
+    {
+        return 'category-'.$this->translateFromPrompt($prompt);
+    }
+
+    public function categoryDescription(int $category_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
+    public function brandName(int $brand_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
+    public function brandDescription(int $brand_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
+    public function manufacturerName(int $manufacturer_id, string $prompt): string
+    {
+        return $this->translateFromPrompt($prompt);
+    }
+
+    public function manufacturerDescription(int $manufacturer_id, string $prompt): string
     {
         return $this->translateFromPrompt($prompt);
     }

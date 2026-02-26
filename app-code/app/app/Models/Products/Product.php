@@ -12,7 +12,9 @@ use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
+use App\Models\Trait\AiTranslationCacheRelationTrait;
 use App\Models\Trait\DescriptionsTrait;
+use App\Models\Trait\SeoUrlRelationTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -23,7 +25,7 @@ use RuntimeException;
 
 class Product extends Model
 {
-    use DescriptionsTrait;
+    use AiTranslationCacheRelationTrait, DescriptionsTrait, SeoUrlRelationTrait;
 
     protected $fillable = [
         'product_import_item_id',
@@ -40,6 +42,14 @@ class Product extends Model
         'date_available',
         'date_added',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $product): void {
+            $product->seoUrl()->delete();
+            $product->aiTranslationCaches()->delete();
+        });
+    }
 
     /**
      * @return array<string, string>
@@ -136,30 +146,6 @@ class Product extends Model
     public function exportItems(): HasMany
     {
         return $this->hasMany(ProductExportItem::class);
-    }
-
-    /**
-     * @return HasMany<ProductNameHash, $this>
-     */
-    public function nameHashes(): HasMany
-    {
-        return $this->hasMany(ProductNameHash::class);
-    }
-
-    /**
-     * @return HasMany<ProductDescriptionHash, $this>
-     */
-    public function descriptionHashes(): HasMany
-    {
-        return $this->hasMany(ProductDescriptionHash::class);
-    }
-
-    /**
-     * @return HasMany<ProductAttributeTextHash, $this>
-     */
-    public function attributeTextHashes(): HasMany
-    {
-        return $this->hasMany(ProductAttributeTextHash::class);
     }
 
     /**

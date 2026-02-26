@@ -7,16 +7,19 @@ namespace App\Models\Brands;
 use App\Models\Products\Product;
 use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Shops\Shop;
+use App\Models\Shops\ShopLanguage;
+use App\Models\Trait\AiTranslationCacheRelationTrait;
 use App\Models\Trait\DescriptionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class Brand extends Model
 {
-    use DescriptionsTrait;
+    use AiTranslationCacheRelationTrait, DescriptionsTrait;
 
     protected $fillable = [
         'family_ulid',
@@ -31,6 +34,10 @@ class Brand extends Model
             if (Str::trim((string) $brand->getAttribute('family_ulid')) === '') {
                 $brand->setAttribute('family_ulid', (string) Str::ulid());
             }
+        });
+
+        static::deleting(function (self $brand) {
+            $brand->aiTranslationCaches()->delete();
         });
     }
 
@@ -116,62 +123,66 @@ class Brand extends Model
             ->first();
     }
 
-    public function duplicateForShop(int $shop_id): self
+    public function duplicateForShop(int $target_shop_id): self
     {
-        if ($shop_id <= 0) {
+        if ($target_shop_id <= 0) {
             return $this;
         }
 
-        $family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
-        if ($family_ulid === '') {
-            $family_ulid = (string) Str::ulid();
+        $source_family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
+
+        if ($source_family_ulid === '') {
+            $source_family_ulid = (string) Str::ulid();
             $this->update([
-                'family_ulid' => $family_ulid,
+                'family_ulid' => $source_family_ulid,
             ]);
         }
 
-        $existing = self::findByFamilyAndShop($family_ulid, $shop_id);
-        if ($existing instanceof self) {
-            return $existing;
+        $target_manufacturer = self::findByFamilyAndShop($source_family_ulid, $target_shop_id);
+
+        if ($target_manufacturer instanceof self) {
+            return $target_manufacturer;
         }
 
-        $current_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
-        if ($current_shop_id <= 0) {
+        $source_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
+
+        if ($source_shop_id <= 0) {
             $this->update([
-                'shop_id' => $shop_id,
+                'shop_id' => $target_shop_id,
             ]);
 
             return $this->fresh() ?? $this;
         }
 
-        /** @var Brand|Model $duplicate */
+        $source_manufacturer_name = $this->descriptions()
+            ->where('shop_language_id', $source_shop_id)
+            ->value('name') ?? '';
+
+        /** @var self $duplicate */
         $duplicate = self::query()->create([
-            'family_ulid' => $family_ulid,
-            'shop_id'     => $shop_id,
+            'family_ulid' => $source_family_ulid,
+            'shop_id'     => $target_shop_id,
             'sort_order'  => (int) $this->sort_order,
             'is_active'   => (bool) $this->is_active,
         ]);
 
-        $duplicate_descriptions = $duplicate->descriptions();
-
-        if ($duplicate_descriptions->get()->isEmpty()) {
-            $duplicate_descriptions->createMany([]);
+        if (! $duplicate instanceof self) {
+            throw new RuntimeException('Failed to duplicate brand for target shop.');
         }
 
-        /*$this->descriptions()
-            ->orderBy('id')
-            ->get()
-            ->each(function (BrandDescription $description) use ($duplicate): void {
-                BrandDescription::query()->updateOrCreate(
-                    [
-                        'brand_id'         => (int) $duplicate->id,
-                        'shop_language_id' => $description->shop_language_id,
-                    ],
-                    [
-                        'name' => $description->name,
-                    ]
-                );
-            });*/
+        $target_default_shop_language_id = ShopLanguage::query()
+            ->where('shop_id', $target_shop_id)
+            ->where('is_default', true)
+            ->value('id') ?? 0;
+
+        if ($target_default_shop_language_id <= 0) {
+            throw new RuntimeException('Target default shop language not found for shop ID: '.$target_shop_id);
+        }
+
+        $duplicate->descriptions()->create([
+            'shop_language_id' => $target_default_shop_language_id,
+            'name'             => $source_manufacturer_name,
+        ]);
 
         return $duplicate;
     }

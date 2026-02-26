@@ -115,3 +115,22 @@ if (! function_exists('decode_html_entities')) {
         return html_entity_decode((string) $string, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
+
+if (!function_exists('normalize_str')) {
+    /**
+     * @param string|null $string
+     * @param string|null $char_list
+     *
+     * @return string
+     */
+    function normalize_str(?string $string, ?string $char_list = null): string
+    {
+        if ($string === null) {
+            return '';
+        }
+
+        $string = decode_html_entities(Str::trim($string, $char_list));
+
+        return Str::replace(['&nbsp;', "\u{00a0}"], ' ', $string);
+    }
+}

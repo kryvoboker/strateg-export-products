@@ -6,16 +6,20 @@ namespace App\Models\Categories;
 
 use App\Models\Products\Product;
 use App\Models\Shops\Shop;
+use App\Models\Shops\ShopLanguage;
+use App\Models\Trait\AiTranslationCacheRelationTrait;
 use App\Models\Trait\DescriptionsTrait;
+use App\Models\Trait\SeoUrlRelationTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class Category extends Model
 {
-    use DescriptionsTrait;
+    use AiTranslationCacheRelationTrait, DescriptionsTrait, SeoUrlRelationTrait;
 
     protected $fillable = [
         'family_ulid',
@@ -28,16 +32,14 @@ class Category extends Model
     protected static function booted(): void
     {
         static::creating(function (self $category): void {
-            if (! self::hasFamilyUlidColumn()) {
-                return;
-            }
-
             if (Str::trim((string) $category->getAttribute('family_ulid')) === '') {
                 $category->setAttribute('family_ulid', (string) Str::ulid());
             }
         });
 
         static::deleting(function (self $category): void {
+            $category->aiTranslationCaches()->delete();
+
             $category->children()->get()->each(static function (self $child_category): void {
                 $child_category->delete();
             });
@@ -79,14 +81,6 @@ class Category extends Model
     public function categoryProducts(): HasMany
     {
         return $this->hasMany(CategoryProduct::class);
-    }
-
-    /**
-     * @return HasMany<CategoryNameHash, $this>
-     */
-    public function nameHashes(): HasMany
-    {
-        return $this->hasMany(CategoryNameHash::class, 'category_id');
     }
 
     /**
@@ -150,39 +144,37 @@ class Category extends Model
             ->first();
     }
 
-    public function duplicateForShop(int $shop_id, ?int $target_parent_id = null): self
+    public function duplicateForShop(int $target_shop_id, ?int $target_parent_id = null): self
     {
-        if ($shop_id <= 0) {
+        if ($target_shop_id <= 0) {
             return $this;
         }
 
-        if (! self::hasFamilyUlidColumn()) {
-            return $this;
-        }
-
-        $family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
-        if ($family_ulid === '') {
-            $family_ulid = (string) Str::ulid();
+        $source_family_ulid = Str::trim((string) $this->getAttribute('family_ulid'));
+        if ($source_family_ulid === '') {
+            $source_family_ulid = (string) Str::ulid();
             $this->update([
-                'family_ulid' => $family_ulid,
+                'family_ulid' => $source_family_ulid,
             ]);
         }
 
-        $existing = self::findByFamilyAndShop($family_ulid, $shop_id);
-        if ($existing instanceof self) {
-            if ($target_parent_id !== null && (int) ($existing->parent_id ?? 0) !== $target_parent_id) {
-                $existing->update([
+        $target_category = self::findByFamilyAndShop($source_family_ulid, $target_shop_id);
+
+        if ($target_category instanceof self) {
+            if ($target_parent_id !== null && (int) ($target_category->parent_id ?? 0) !== $target_parent_id) {
+                $target_category->update([
                     'parent_id' => $target_parent_id,
                 ]);
             }
 
-            return $existing;
+            return $target_category;
         }
 
-        $current_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
-        if ($current_shop_id <= 0) {
+        $source_shop_id = (int) ($this->getAttribute('shop_id') ?? 0);
+
+        if ($source_shop_id <= 0) {
             $updated_data = [
-                'shop_id' => $shop_id,
+                'shop_id' => $target_shop_id,
             ];
 
             if ($target_parent_id !== null) {
@@ -194,15 +186,67 @@ class Category extends Model
             return $this->fresh() ?? $this;
         }
 
+        $source_descriptions = $this->descriptions()->get();
+
+        $source_description = $source_descriptions
+            ->where('shop_language_id', $source_shop_id)
+            ->first();
+
+        if (! $source_description instanceof CategoryDescription) {
+            $source_default_shop_language_id = ShopLanguage::query()
+                ->where('shop_id', $source_shop_id)
+                ->where('is_default', true)
+                ->value('id') ?? 0;
+
+            if ($source_default_shop_language_id <= 0) {
+                throw new RuntimeException('Source shop language not found for shop ID: '.$source_shop_id);
+            }
+
+            $source_descriptions
+                ->whereNull('shop_language_id')
+                ->first()
+                ?->update([
+                    'shop_language_id' => $source_default_shop_language_id,
+                ]);
+
+            $source_description = $source_descriptions
+                ->where('shop_language_id', $source_shop_id)
+                ->first();
+        }
+
+        /** @var self $duplicate */
         $duplicate = self::query()->create([
-            'family_ulid' => $family_ulid,
-            'shop_id'     => $shop_id,
+            'family_ulid' => $source_family_ulid,
+            'shop_id'     => $target_shop_id,
             'parent_id'   => $target_parent_id,
             'sort_order'  => (int) $this->sort_order,
             'is_active'   => (bool) $this->is_active,
         ]);
 
-        $this->descriptions()
+        if (! $duplicate instanceof self) {
+            throw new RuntimeException('Failed to duplicate category for target shop.');
+        }
+
+        $target_default_shop_language_id = ShopLanguage::query()
+            ->where('shop_id', $target_shop_id)
+            ->where('is_default', true)
+            ->value('id') ?? 0;
+
+        if ($target_default_shop_language_id <= 0) {
+            throw new RuntimeException('Target default shop language not found for shop ID: '.$target_shop_id);
+        }
+
+        $duplicate->descriptions()->create([
+            'shop_language_id' => $target_default_shop_language_id,
+            'name'             => $source_description->name,
+            'description'      => $source_description->description,
+            'h1_title'         => $source_description->h1_title,
+            'meta_title'       => $source_description->meta_title,
+            'meta_description' => $source_description->meta_description,
+            'meta_keywords'    => $source_description->meta_keywords,
+        ]);
+
+        /*$this->descriptions()
             ->orderBy('id')
             ->get()
             ->each(function (CategoryDescription $description) use ($duplicate): void {
@@ -220,21 +264,8 @@ class Category extends Model
                         'meta_keywords'    => $description->meta_keywords,
                     ]
                 );
-            });
+            });*/
 
         return $duplicate;
-    }
-
-    private static function hasFamilyUlidColumn(): bool
-    {
-        try {
-            $model = new self();
-
-            return $model->getConnection()
-                ->getSchemaBuilder()
-                ->hasColumn($model->getTable(), 'family_ulid');
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

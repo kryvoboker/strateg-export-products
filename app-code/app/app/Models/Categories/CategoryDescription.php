@@ -85,7 +85,7 @@ class CategoryDescription extends Model
     /**
      * @param  array<string, mixed>  $values
      */
-    public static function upsertByCategoryAndLanguage(int $category_id, int $shop_language_id, array $values): self
+    public static function upsertByCategoryAndLanguage(int $category_id, int $shop_language_id, array $values): self|Model
     {
         return self::query()->updateOrCreate(
             [

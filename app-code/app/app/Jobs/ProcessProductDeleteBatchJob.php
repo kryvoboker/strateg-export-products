@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Revolution\Google\Sheets\Facades\Sheets;
 use RuntimeException;
@@ -115,9 +116,9 @@ class ProcessProductDeleteBatchJob implements ShouldQueue
         $normalized_document = [];
 
         foreach ($spreadsheet->getWorksheetIterator() as $worksheet) {
-            $sheet_name        = (string) $worksheet->getTitle();
-            $highest_row       = (int) $worksheet->getHighestDataRow();
-            $highest_col_index = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($worksheet->getHighestDataColumn());
+            $sheet_name        = $worksheet->getTitle();
+            $highest_row       = $worksheet->getHighestDataRow();
+            $highest_col_index = Coordinate::columnIndexFromString($worksheet->getHighestDataColumn());
 
             if ($highest_row < 1 || $highest_col_index < 1) {
                 continue;

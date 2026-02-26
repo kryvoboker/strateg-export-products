@@ -5,9 +5,8 @@ declare(strict_types=1);
 namespace App\Supports\Services\Translations\Product;
 
 use App\Abstratcts\Ai\AiDbCachedTranslatorAbstract;
-use App\Models\Products\ProductNameHash;
+use App\Models\Products\Product;
 use App\Services\Api\Ai\OpenAiTranslatorService;
-use Illuminate\Database\Eloquent\Model;
 
 class ProductNameAiTranslatorService extends AiDbCachedTranslatorAbstract
 {
@@ -17,40 +16,13 @@ class ProductNameAiTranslatorService extends AiDbCachedTranslatorAbstract
         parent::__construct($ai);
     }
 
-    protected function findCached(string $hash): ?string
+    protected function resolveScopeType(): string
     {
-        $product_hash = ProductNameHash::getNameHash($this->product_id, $hash);
-
-        $this->setProductNameHash($product_hash);
-
-        if ($product_hash === null) {
-            return null;
-        }
-
-        $ai_answer_cache = $product_hash->aiAnswerCache()->first();
-
-        return $ai_answer_cache?->answer;
+        return Product::class;
     }
 
-    protected function storeTranslation(string $hash, string $prompt, string $translated_text): Model
+    protected function resolveScopeId(): int
     {
-        $product_hash = $this->getProductNameHash();
-
-        if ($product_hash === null) {
-            $product_hash = ProductNameHash::create([
-                'product_id' => $this->product_id,
-                'hash'       => $hash,
-            ]);
-        }
-
-        return $product_hash
-            ->aiAnswerCache()
-            ->updateOrCreate(
-                [],
-                [
-                    'prompt' => $prompt,
-                    'answer' => $translated_text,
-                ],
-            );
+        return (int) ($this->product_id ?? 0);
     }
 }
