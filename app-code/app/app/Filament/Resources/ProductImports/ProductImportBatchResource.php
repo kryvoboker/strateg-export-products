@@ -11,7 +11,7 @@ use App\Filament\Resources\ProductImports\Pages\ViewProductImportBatch;
 use App\Filament\Resources\ProductImports\RelationManagers\ProductImportItemsRelationManager;
 use App\Filament\Resources\ProductImports\Schemas\ProductImportBatchForm;
 use App\Filament\Resources\ProductImports\Tables\ProductImportBatchesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Products\Imports\ProductImportBatch;
 use BackedEnum;
 use Filament\Infolists\Components\TextEntry;

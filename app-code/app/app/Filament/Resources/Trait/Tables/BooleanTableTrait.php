@@ -25,11 +25,4 @@ trait BooleanTableTrait
             ->sortable($params['sortable'] ?? true);
     }
 
-    protected static function getIsNoIndexTableField(array $params = []): Column
-    {
-        return IconColumn::make('is_noindex')
-            ->label($params['label'] ?? __('admin/default.labels.is_noindex'))
-            ->boolean($params['boolean'] ?? true)
-            ->sortable($params['sortable'] ?? true);
-    }
 }

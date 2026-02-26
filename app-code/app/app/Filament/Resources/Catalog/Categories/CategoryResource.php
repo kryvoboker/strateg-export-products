@@ -10,7 +10,7 @@ use App\Filament\Resources\Catalog\Categories\Pages\EditCategory;
 use App\Filament\Resources\Catalog\Categories\Pages\ListCategories;
 use App\Filament\Resources\Catalog\Categories\Schemas\CategoryForm;
 use App\Filament\Resources\Catalog\Categories\Tables\CategoriesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Categories\Category;
 use BackedEnum;
 use Filament\Resources\Resource;

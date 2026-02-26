@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ProductImports\Schemas;
 
-use App\Filament\Resources\Trait\Forms\CommonTextFormTrait;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
@@ -19,8 +18,6 @@ use Illuminate\Validation\Rules\File;
 
 class ProductImportBatchForm
 {
-    use CommonTextFormTrait;
-
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -50,15 +47,14 @@ class ProductImportBatchForm
                         Tab::make('sheets')
                             ->label(__('admin/product_imports/batches.tabs.google_sheets'))
                             ->schema([
-                                self::getUrlFormField([
-                                    'field_name'          => 'sheets_url',
-                                    'label'               => __('admin/product_imports/batches.labels.google_sheets_url'),
-                                    'placeholder'         => 'https://docs.google.com/spreadsheets/d/...',
-                                    'max_length'          => 2000,
-                                    'rules'               => ['nullable', 'url', 'max:2000'],
-                                    'required'            => false,
-                                    'is_column_span_full' => true,
-                                ]),
+                                TextInput::make('sheets_url')
+                                    ->label(__('admin/product_imports/batches.labels.google_sheets_url'))
+                                    ->maxLength(2000)
+                                    ->url()
+                                    ->rules(['nullable', 'url', 'max:2000'])
+                                    ->placeholder('https://docs.google.com/spreadsheets/d/...')
+                                    ->required(false)
+                                    ->columnSpanFull(),
                             ]),
 
                         Tab::make('admin')

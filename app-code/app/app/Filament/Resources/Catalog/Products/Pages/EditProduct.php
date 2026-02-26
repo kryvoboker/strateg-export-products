@@ -9,6 +9,7 @@ use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Filament\Resources\Catalog\Products\ProductResource;
 use App\Jobs\ProcessProductUpdateItemJob;
+use App\Services\Products\ProductEditPersistenceService;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Categories\Category;
@@ -457,140 +458,14 @@ class EditProduct extends EditRecord
      */
     private function persistEditedProductData(Product $product, array $data, int $default_shop_language_id = 0): void
     {
-        $product_id = (int) $product->id;
-
-        $product->update([
-            'model'          => Arr::get($data, 'model'),
-            'sku'            => Arr::get($data, 'sku'),
-            'ean'            => Arr::get($data, 'ean'),
-            'quantity'       => (int) Arr::get($data, 'quantity', 0),
-            'minimum'        => max((int) Arr::get($data, 'minimum', 1), 1),
-            'image'          => Arr::get($data, 'image'),
-            'price'          => (float) Arr::get($data, 'price', 0),
-            'is_active'      => (bool) Arr::get($data, 'is_active', false),
-            'date_available' => Arr::get($data, 'date_available'),
-            'date_added'     => Arr::get($data, 'date_added'),
-        ]);
-
-        $this->syncExternalProductIdForSelectedShop($product_id, $data);
-
-        ProductDescription::query()->where('product_id', $product_id)->delete();
-        $descriptions_by_language = Arr::get($data, 'descriptions_by_language', []);
-        if (is_array($descriptions_by_language) && $descriptions_by_language !== []) {
-            foreach ($descriptions_by_language as $shop_language_id => $description_row) {
-                if (! is_array($description_row)) {
-                    continue;
-                }
-
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
-
-                if ($resolved_shop_language_id <= 0) {
-                    continue;
-                }
-
-                ProductDescription::query()->create([
-                    'product_id'       => $product_id,
-                    'shop_language_id' => $resolved_shop_language_id,
-                    'name'             => Arr::get($description_row, 'name'),
-                    'description'      => Arr::get($description_row, 'description'),
-                    'meta_title'       => Arr::get($description_row, 'meta_title'),
-                    'meta_description' => Arr::get($description_row, 'meta_description'),
-                    'meta_keywords'    => Arr::get($description_row, 'meta_keywords'),
-                ]);
-            }
-        }
-
-        ProductImage::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'images', []) as $image_row) {
-            if (! is_array($image_row)) {
-                continue;
-            }
-
-            $image = Str::trim((string) Arr::get($image_row, 'image', ''));
-            if ($image === '') {
-                continue;
-            }
-
-            ProductImage::query()->create([
-                'product_id' => $product_id,
-                'image'      => $image,
-                'sort_order' => (int) Arr::get($image_row, 'sort_order', 1),
-            ]);
-        }
-
-        $this->syncProductCategoriesFromFormData($product_id, $data, $default_shop_language_id);
-        $this->syncProductAttributesFromFormData($product_id, $data, $default_shop_language_id);
-        $this->syncProductManufacturerBrandFromFormData($product_id, $data);
-
-        SeoUrl::query()
-            ->where('seoable_type', Product::class)
-            ->where('seoable_id', $product_id)
-            ->delete();
-
-        $seo_urls_by_language = Arr::get($data, 'seo_urls_by_language', []);
-        if (is_array($seo_urls_by_language) && $seo_urls_by_language !== []) {
-            foreach ($seo_urls_by_language as $shop_language_id => $seo_rows) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
-
-                if ($resolved_shop_language_id <= 0 || ! is_array($seo_rows)) {
-                    continue;
-                }
-
-                foreach ($seo_rows as $seo_row) {
-                    if (! is_array($seo_row)) {
-                        continue;
-                    }
-
-                    SeoUrl::query()->create([
-                        'seoable_type'     => Product::class,
-                        'seoable_id'       => $product_id,
-                        'shop_language_id' => $resolved_shop_language_id,
-                        'query_value'      => (string) $product_id,
-                        'keyword'          => (string) Arr::get($seo_row, 'keyword', ''),
-                        'sort_order'       => (int) Arr::get($seo_row, 'sort_order', 1),
-                    ]);
-                }
-            }
-        }
-
-        ProductDiscount::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'discounts', []) as $discount_row) {
-            if (! is_array($discount_row)) {
-                continue;
-            }
-
-            ProductDiscount::query()->create([
-                'product_id'    => $product_id,
-                'user_group_id' => (int) Arr::get($discount_row, 'user_group_id', 1),
-                'quantity'      => max((int) Arr::get($discount_row, 'quantity', 1), 1),
-                'price'         => (float) Arr::get($discount_row, 'price', 0),
-                'priority'      => (int) Arr::get($discount_row, 'priority', 1),
-                'date_start'    => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end'      => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
-            ]);
-        }
-
-        ProductSpecial::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'specials', []) as $special_row) {
-            if (! is_array($special_row)) {
-                continue;
-            }
-
-            ProductSpecial::query()->create([
-                'product_id'    => $product_id,
-                'user_group_id' => (int) Arr::get($special_row, 'user_group_id', 1),
-                'price'         => (float) Arr::get($special_row, 'price', 0),
-                'priority'      => (int) Arr::get($special_row, 'priority', 1),
-                'date_start'    => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end'      => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
-            ]);
-        }
+        app(ProductEditPersistenceService::class)->persist(
+            $product,
+            $data,
+            $default_shop_language_id,
+            [
+                'sync_external_product_id' => true,
+            ],
+        );
     }
 
     /**
@@ -598,47 +473,7 @@ class EditProduct extends EditRecord
      */
     private function syncExternalProductIdForSelectedShop(int $product_id, array $data): void
     {
-        $shop_id = (int) Arr::get($data, 'bind_shop_id', 0);
-        if ($product_id <= 0 || $shop_id <= 0) {
-            return;
-        }
-
-        $product_shop = ProductShop::query()
-            ->where('product_id', $product_id)
-            ->where('shop_id', $shop_id)
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $product_shop instanceof ProductShop) {
-            Log::channel('stack')->warning('Product shop binding not found while updating external_product_id', [
-                'product_id' => $product_id,
-                'shop_id'    => $shop_id,
-            ]);
-
-            return;
-        }
-
-        $raw_external_product_id = Arr::get($data, 'external_product_id');
-        $external_product_id     = (is_numeric($raw_external_product_id) && (int) $raw_external_product_id > 0)
-            ? (int) $raw_external_product_id
-            : null;
-
-        try {
-            $product_shop->update([
-                'external_product_id' => $external_product_id,
-            ]);
-        } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to update external_product_id for product shop binding', [
-                'product_id'          => $product_id,
-                'shop_id'             => $shop_id,
-                'external_product_id' => $external_product_id,
-                'error_msg'           => $exception->getMessage(),
-                'file'                => $exception->getFile(),
-                'line'                => $exception->getLine(),
-            ]);
-
-            throw $exception;
-        }
+        app(ProductEditPersistenceService::class)->syncExternalProductIdForSelectedShop($product_id, $data);
     }
 
     /**

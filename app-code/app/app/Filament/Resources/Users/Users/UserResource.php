@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Users\Users;
 
 use App\Filament\Navigation\AdminNavigationGroupEnum;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Filament\Resources\Users\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Users\Pages\ListUsers;

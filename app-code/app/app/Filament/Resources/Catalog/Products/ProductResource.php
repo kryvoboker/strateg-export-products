@@ -10,7 +10,7 @@ use App\Filament\Resources\Catalog\Products\Pages\EditProduct;
 use App\Filament\Resources\Catalog\Products\Pages\ListProducts;
 use App\Filament\Resources\Catalog\Products\Schemas\ProductForm;
 use App\Filament\Resources\Catalog\Products\Tables\ProductsTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Products\Product;
 use BackedEnum;
 use Filament\Resources\Resource;

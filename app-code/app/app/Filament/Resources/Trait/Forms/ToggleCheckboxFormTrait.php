@@ -24,21 +24,6 @@ trait ToggleCheckboxFormTrait
         return $toggle_input;
     }
 
-    protected static function getIsNoIndexFormField(array $params = []): Field
-    {
-        $toggle_input = Toggle::make('is_noindex')
-            ->label(__('admin/default.labels.is_noindex'))
-            ->helperText($params['helper_text'] ?? null)
-            ->default($params['default'] ?? false)
-            ->required($params['required'] ?? true);
-
-        if (isset($params['is_column_span_full']) && $params['is_column_span_full'] === true) {
-            $toggle_input->columnSpanFull();
-        }
-
-        return $toggle_input;
-    }
-
     protected static function getIsDefaultFormField(array $params = []): Field
     {
         $toggle_input = Toggle::make('is_default')

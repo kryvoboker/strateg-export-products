@@ -11,7 +11,7 @@ use App\Filament\Resources\ProductDeletes\Pages\ViewProductDeleteBatch;
 use App\Filament\Resources\ProductDeletes\RelationManagers\ProductDeleteItemsRelationManager;
 use App\Filament\Resources\ProductDeletes\Schemas\ProductDeleteForm;
 use App\Filament\Resources\ProductDeletes\Tables\ProductDeletesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Products\Deletes\ProductDeleteBatch;
 use BackedEnum;
 use Filament\Infolists\Components\TextEntry;

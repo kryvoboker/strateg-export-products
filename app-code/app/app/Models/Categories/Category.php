@@ -10,6 +10,7 @@ use App\Models\Shops\ShopLanguage;
 use App\Models\Trait\AiTranslationCacheRelationTrait;
 use App\Models\Trait\DescriptionsTrait;
 use App\Models\Trait\SeoUrlRelationTrait;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -142,6 +143,40 @@ class Category extends Model
             ->where('family_ulid', $family_ulid)
             ->where('shop_id', $shop_id)
             ->first();
+    }
+
+    public static function findCategoryIdByParentAndNameForLanguage(
+        ?int $parent_category_id,
+        string $category_name,
+        int $shop_language_id
+    ): ?int {
+        $normalized_category_name = Str::lower(Str::trim($category_name));
+        if ($normalized_category_name === '') {
+            return null;
+        }
+
+        $query = self::query()
+            ->select('categories.id')
+            ->join('category_descriptions', 'category_descriptions.category_id', '=', 'categories.id')
+            ->whereRaw('LOWER(category_descriptions.name) = ?', [$normalized_category_name])
+            ->when(
+                $parent_category_id === null,
+                static fn (Builder $builder): Builder => $builder->whereNull('categories.parent_id'),
+                static fn (Builder $builder): Builder => $builder->where('categories.parent_id', $parent_category_id),
+            )
+            ->when(
+                $shop_language_id > 0,
+                static fn (Builder $builder): Builder => $builder
+                    ->orderByRaw(
+                        'CASE WHEN category_descriptions.shop_language_id = ? THEN 0 ELSE 1 END',
+                        [$shop_language_id]
+                    )
+            )
+            ->orderBy('categories.id');
+
+        $category_id = $query->value('categories.id');
+
+        return $category_id !== null ? (int) $category_id : null;
     }
 
     public function duplicateForShop(int $target_shop_id, ?int $target_parent_id = null): self

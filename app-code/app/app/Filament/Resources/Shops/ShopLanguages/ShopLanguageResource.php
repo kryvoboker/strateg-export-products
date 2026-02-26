@@ -10,7 +10,7 @@ use App\Filament\Resources\Shops\ShopLanguages\Pages\EditShopLanguage;
 use App\Filament\Resources\Shops\ShopLanguages\Pages\ListShopLanguages;
 use App\Filament\Resources\Shops\ShopLanguages\Schemas\ShopLanguageForm;
 use App\Filament\Resources\Shops\ShopLanguages\Tables\ShopLanguagesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Shops\ShopLanguage;
 use BackedEnum;
 use Filament\Resources\Resource;

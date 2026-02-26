@@ -10,7 +10,7 @@ use App\Filament\Resources\Catalog\Manufacturers\Pages\EditManufacturer;
 use App\Filament\Resources\Catalog\Manufacturers\Pages\ListManufacturers;
 use App\Filament\Resources\Catalog\Manufacturers\Schemas\ManufacturerForm;
 use App\Filament\Resources\Catalog\Manufacturers\Tables\ManufacturersTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Manufacturers\Manufacturer;
 use BackedEnum;
 use Filament\Resources\Resource;

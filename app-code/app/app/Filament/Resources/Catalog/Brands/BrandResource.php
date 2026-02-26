@@ -10,7 +10,7 @@ use App\Filament\Resources\Catalog\Brands\Pages\EditBrand;
 use App\Filament\Resources\Catalog\Brands\Pages\ListBrands;
 use App\Filament\Resources\Catalog\Brands\Schemas\BrandForm;
 use App\Filament\Resources\Catalog\Brands\Tables\BrandsTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Brands\Brand;
 use BackedEnum;
 use Filament\Resources\Resource;

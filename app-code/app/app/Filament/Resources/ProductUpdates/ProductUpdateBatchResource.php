@@ -11,7 +11,7 @@ use App\Filament\Resources\ProductUpdates\Pages\ViewProductUpdateBatch;
 use App\Filament\Resources\ProductUpdates\RelationManagers\ProductUpdateItemsRelationManager;
 use App\Filament\Resources\ProductUpdates\Schemas\ProductUpdateBatchForm;
 use App\Filament\Resources\ProductUpdates\Tables\ProductUpdateBatchesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use BackedEnum;
 use Filament\Infolists\Components\TextEntry;

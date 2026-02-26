@@ -11,7 +11,7 @@ use App\Filament\Resources\Shops\Shops\Pages\ListShops;
 use App\Filament\Resources\Shops\Shops\RelationManagers\ShopLanguagesRelationManager;
 use App\Filament\Resources\Shops\Shops\Schemas\ShopForm;
 use App\Filament\Resources\Shops\Shops\Tables\ShopsTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Shops\Shop;
 use BackedEnum;
 use Filament\Resources\Pages\PageRegistration;

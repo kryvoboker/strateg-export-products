@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\ProductUpdates\Schemas;
 
-use App\Filament\Resources\Trait\Forms\CommonTextFormTrait;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -13,8 +13,6 @@ use Illuminate\Validation\Rules\File;
 
 class ProductUpdateBatchForm
 {
-    use CommonTextFormTrait;
-
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -43,15 +41,14 @@ class ProductUpdateBatchForm
                         Tab::make('sheets')
                             ->label(__('admin/product_imports/batches.tabs.google_sheets'))
                             ->schema([
-                                self::getUrlFormField([
-                                    'field_name'          => 'sheets_url',
-                                    'label'               => __('admin/product_imports/batches.labels.google_sheets_url'),
-                                    'placeholder'         => 'https://docs.google.com/spreadsheets/d/...',
-                                    'max_length'          => 2000,
-                                    'rules'               => ['nullable', 'url', 'max:2000'],
-                                    'required'            => false,
-                                    'is_column_span_full' => true,
-                                ]),
+                                TextInput::make('sheets_url')
+                                    ->label(__('admin/product_imports/batches.labels.google_sheets_url'))
+                                    ->maxLength(2000)
+                                    ->url()
+                                    ->rules(['nullable', 'url', 'max:2000'])
+                                    ->placeholder('https://docs.google.com/spreadsheets/d/...')
+                                    ->required(false)
+                                    ->columnSpanFull(),
                             ]),
                     ])
                     ->columnSpanFull()

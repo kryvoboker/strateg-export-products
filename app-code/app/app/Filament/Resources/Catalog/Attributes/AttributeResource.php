@@ -10,7 +10,7 @@ use App\Filament\Resources\Catalog\Attributes\Pages\EditAttribute;
 use App\Filament\Resources\Catalog\Attributes\Pages\ListAttributes;
 use App\Filament\Resources\Catalog\Attributes\Schemas\AttributeForm;
 use App\Filament\Resources\Catalog\Attributes\Tables\AttributesTable;
-use App\Filament\Resources\Trait\TotalModelItemsResourceTrait;
+use App\Filament\Resources\Trait\Support\TotalModelItemsResourceTrait;
 use App\Models\Attributes\Attribute;
 use BackedEnum;
 use Filament\Resources\Resource;

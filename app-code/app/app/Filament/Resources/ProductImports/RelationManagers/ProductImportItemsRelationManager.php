@@ -10,6 +10,8 @@ use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductRestoreBatchJob;
 use App\Jobs\ProcessProductShopBindingJob;
+use App\Services\Products\ProductEditPersistenceService;
+use App\Services\Products\ProductResourceOptionsService;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
@@ -2325,180 +2327,16 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function persistEditedProductData(Product $product, array $data, int $bind_shop_language_id = 0): void
     {
-        $product_id               = (int)$product->id;
-        $default_shop_language_id = $bind_shop_language_id;
-
-        $product->update([
-            'model'          => Arr::get($data, 'model'),
-            'sku'            => Arr::get($data, 'sku'),
-            'ean'            => Arr::get($data, 'ean'),
-            'quantity'       => (int)Arr::get($data, 'quantity', 0),
-            'minimum'        => max((int)Arr::get($data, 'minimum', 1), 1),
-            'image'          => Arr::get($data, 'image'),
-            'price'          => (float)Arr::get($data, 'price', 0),
-            'is_active'      => (bool)Arr::get($data, 'is_active', false),
-            'date_available' => Arr::get($data, 'date_available'),
-            'date_added'     => Arr::get($data, 'date_added'),
-        ]);
-
-        ProductDescription::query()->where('product_id', $product_id)->delete();
-        $descriptions_by_language = Arr::get($data, 'descriptions_by_language', []);
-        if (is_array($descriptions_by_language) && $descriptions_by_language !== []) {
-            foreach ($descriptions_by_language as $shop_language_id => $description_row) {
-                if (!is_array($description_row)) {
-                    continue;
-                }
-
-                $resolved_shop_language_id = (int)$shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
-
-                if ($resolved_shop_language_id <= 0) {
-                    continue;
-                }
-
-                ProductDescription::query()->create([
-                    'product_id'       => $product_id,
-                    'shop_language_id' => $resolved_shop_language_id,
-                    'name'             => Arr::get($description_row, 'name'),
-                    'description'      => Arr::get($description_row, 'description'),
-                    'meta_title'       => Arr::get($description_row, 'meta_title'),
-                    'meta_description' => Arr::get($description_row, 'meta_description'),
-                    'meta_keywords'    => Arr::get($description_row, 'meta_keywords'),
-                ]);
-            }
-        } else {
-            foreach (Arr::get($data, 'descriptions', []) as $description_row) {
-                if (!is_array($description_row)) {
-                    continue;
-                }
-
-                $shop_language_id = (int)Arr::get($description_row, 'shop_language_id', 0);
-                if ($shop_language_id <= 0) {
-                    $shop_language_id = $default_shop_language_id;
-                }
-
-                if ($shop_language_id <= 0) {
-                    continue;
-                }
-
-                ProductDescription::query()->create([
-                    'product_id'       => $product_id,
-                    'shop_language_id' => $shop_language_id,
-                    'name'             => Arr::get($description_row, 'name'),
-                    'description'      => Arr::get($description_row, 'description'),
-                    'meta_title'       => Arr::get($description_row, 'meta_title'),
-                    'meta_description' => Arr::get($description_row, 'meta_description'),
-                    'meta_keywords'    => Arr::get($description_row, 'meta_keywords'),
-                ]);
-            }
-        }
-
-        ProductImage::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'images', []) as $image_row) {
-            if (!is_array($image_row)) {
-                continue;
-            }
-
-            $image = Str::trim((string)Arr::get($image_row, 'image', ''));
-            if ($image === '') {
-                continue;
-            }
-
-            ProductImage::query()->create([
-                'product_id' => $product_id,
-                'image'      => $image,
-                'sort_order' => (int)Arr::get($image_row, 'sort_order', 1),
-            ]);
-        }
-
-        $this->syncProductCategoriesFromFormData($product_id, $data, $default_shop_language_id);
-        $this->syncProductAttributesFromFormData($product_id, $data, $default_shop_language_id);
-        $this->syncProductManufacturerBrandFromFormData($product_id, $data);
-
-        SeoUrl::query()
-            ->where('seoable_type', Product::class)
-            ->where('seoable_id', $product_id)
-            ->delete();
-        $seo_urls_by_language = Arr::get($data, 'seo_urls_by_language', []);
-        if (is_array($seo_urls_by_language) && $seo_urls_by_language !== []) {
-            foreach ($seo_urls_by_language as $shop_language_id => $seo_rows) {
-                $resolved_shop_language_id = (int)$shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
-
-                if ($resolved_shop_language_id <= 0 || !is_array($seo_rows)) {
-                    continue;
-                }
-
-                foreach ($seo_rows as $seo_row) {
-                    if (!is_array($seo_row)) {
-                        continue;
-                    }
-
-                    SeoUrl::query()->create([
-                        'seoable_type'     => Product::class,
-                        'seoable_id'       => $product_id,
-                        'shop_language_id' => $resolved_shop_language_id,
-                        'query_key'        => (string)Arr::get($seo_row, 'query_key', ''),
-                        'query_value'      => (string)$product_id,
-                        'keyword'          => (string)Arr::get($seo_row, 'keyword', ''),
-                        'sort_order'       => (int)Arr::get($seo_row, 'sort_order', 1),
-                    ]);
-                }
-            }
-        } else {
-            foreach (Arr::get($data, 'seo_urls', []) as $seo_row) {
-                if (!is_array($seo_row)) {
-                    continue;
-                }
-
-                SeoUrl::query()->create([
-                    'seoable_type'     => Product::class,
-                    'seoable_id'       => $product_id,
-                    'shop_language_id' => null,
-                    'query_key'        => (string)Arr::get($seo_row, 'query_key', ''),
-                    'query_value'      => (string)$product_id,
-                    'keyword'          => (string)Arr::get($seo_row, 'keyword', ''),
-                    'sort_order'       => (int)Arr::get($seo_row, 'sort_order', 1),
-                ]);
-            }
-        }
-
-        ProductDiscount::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'discounts', []) as $discount_row) {
-            if (!is_array($discount_row)) {
-                continue;
-            }
-
-            ProductDiscount::query()->create([
-                'product_id'    => $product_id,
-                'user_group_id' => (int)Arr::get($discount_row, 'user_group_id', 1),
-                'quantity'      => max((int)Arr::get($discount_row, 'quantity', 1), 1),
-                'price'         => (float)Arr::get($discount_row, 'price', 0),
-                'priority'      => (int)Arr::get($discount_row, 'priority', 1),
-                'date_start'    => Arr::get($discount_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end'      => Arr::get($discount_row, 'date_end') ?: now()->toDateTimeString(),
-            ]);
-        }
-
-        ProductSpecial::query()->where('product_id', $product_id)->delete();
-        foreach (Arr::get($data, 'specials', []) as $special_row) {
-            if (!is_array($special_row)) {
-                continue;
-            }
-
-            ProductSpecial::query()->create([
-                'product_id'    => $product_id,
-                'user_group_id' => (int)Arr::get($special_row, 'user_group_id', 1),
-                'price'         => (float)Arr::get($special_row, 'price', 0),
-                'priority'      => (int)Arr::get($special_row, 'priority', 1),
-                'date_start'    => Arr::get($special_row, 'date_start') ?: now()->toDateTimeString(),
-                'date_end'      => Arr::get($special_row, 'date_end') ?: now()->toDateTimeString(),
-            ]);
-        }
+        app(ProductEditPersistenceService::class)->persist(
+            $product,
+            $data,
+            $bind_shop_language_id,
+            [
+                'allow_legacy_descriptions' => true,
+                'allow_legacy_attributes'   => true,
+                'allow_legacy_seo_urls'     => true,
+            ],
+        );
     }
 
     private function syncBatchTotalItems(int $batch_id): void
@@ -2939,43 +2777,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getCategoryOptionsByScope(string $scope, int $shop_id = 0, int $shop_language_id = 0): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $descriptions_query = CategoryDescription::query()->orderBy('name')->select('category_id', 'name');
-
-        if ($scope === 'shop' && $shop_id > 0) {
-            $shop_category_ids = CategoryShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('category_id')
-                ->map(static fn($category_id): int => (int)$category_id)
-                ->all();
-
-            if ($shop_category_ids === []) {
-                return [];
-            }
-
-            $descriptions_query->whereIn('category_id', $shop_category_ids);
-        }
-
-        if ($default_language_id > 0) {
-            $descriptions_query->where('shop_language_id', $default_language_id);
-        }
-
-        $options = $descriptions_query
-            ->pluck('name', 'category_id')
-            ->toArray();
-
-        if ($options !== []) {
-            return $options;
-        }
-
-        return Category::query()
-            ->orderBy('id')
-            ->get()
-            ->mapWithKeys(static fn(Category $category): array => [$category->id => '#' . $category->id])
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getCategoryOptionsByScope($scope, $shop_id, $shop_language_id);
     }
 
     /**
@@ -2986,45 +2788,7 @@ class ProductImportItemsRelationManager extends RelationManager
         int    $shop_id = 0,
         int    $shop_language_id = 0
     ): array {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $query = Attribute::query()
-            ->with([
-                'descriptions' => function ($query) use ($default_language_id): void {
-                    if ($default_language_id > 0) {
-                        $query->where('shop_language_id', $default_language_id);
-                    }
-                },
-            ]);
-
-        if ($scope === 'shop' && $shop_id > 0) {
-            $shop_attribute_ids = AttributeShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('attribute_id')
-                ->map(static fn($attribute_id): int => (int)$attribute_id)
-                ->all();
-
-            if ($shop_attribute_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_attribute_ids);
-        }
-
-        $query->orderBy('id');
-
-        /** @var Collection<int, Attribute> $attributes */
-        $attributes = $query->get();
-
-        return $attributes
-            ->mapWithKeys(static function (Attribute $attribute): array {
-                $name = $attribute->descriptions->first()?->name ?? ('#' . $attribute->id);
-
-                return [$attribute->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getAttributeOptionsByScope($scope, $shop_id, $shop_language_id);
     }
 
     /**
@@ -3032,47 +2796,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getManufacturerOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int)(ShopLanguage::query()
-                ->where('is_active', true)
-                ->orderBy('id')
-                ->limit(1)
-                ->value('id') ?? 0);
-
-        $query = Manufacturer::query()->with([
-            'descriptions' => static function ($query) use ($default_language_id): void {
-                if ($default_language_id > 0) {
-                    $query->where('shop_language_id', $default_language_id);
-                }
-            },
-        ]);
-
-        if ($shop_id > 0) {
-            $shop_manufacturer_ids = ManufacturerShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('manufacturer_id')
-                ->map(static fn($manufacturer_id): int => (int)$manufacturer_id)
-                ->all();
-
-            if ($shop_manufacturer_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_manufacturer_ids);
-        }
-
-        return $query->orderBy('id')
-            ->get()
-            ->mapWithKeys(static function (Manufacturer $manufacturer): array {
-                $name = Str::trim((string)($manufacturer->descriptions->first()?->name ?? ''));
-                if ($name === '') {
-                    $name = '#' . (int)$manufacturer->id;
-                }
-
-                return [(int)$manufacturer->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getManufacturerOptionsByScope($shop_id, $shop_language_id);
     }
 
     /**
@@ -3080,43 +2804,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getBrandOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int)(ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $query = Brand::query()->with([
-            'descriptions' => static function ($query) use ($default_language_id): void {
-                if ($default_language_id > 0) {
-                    $query->where('shop_language_id', $default_language_id);
-                }
-            },
-        ]);
-
-        if ($shop_id > 0) {
-            $shop_brand_ids = BrandShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('brand_id')
-                ->map(static fn($brand_id): int => (int)$brand_id)
-                ->all();
-
-            if ($shop_brand_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_brand_ids);
-        }
-
-        return $query->orderBy('id')
-            ->get()
-            ->mapWithKeys(static function (Brand $brand): array {
-                $name = Str::trim((string)($brand->descriptions->first()?->name ?? ''));
-                if ($name === '') {
-                    $name = '#' . (int)$brand->id;
-                }
-
-                return [(int)$brand->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getBrandOptionsByScope($shop_id, $shop_language_id);
     }
 
     /**
@@ -3156,16 +2844,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getShopLanguageOptions(int $shop_id): array
     {
-        if ($shop_id <= 0) {
-            return [];
-        }
-
-        return ShopLanguage::query()
-            ->where('shop_id', $shop_id)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getShopLanguageOptions($shop_id);
     }
 
     /**
@@ -3319,15 +2998,7 @@ class ProductImportItemsRelationManager extends RelationManager
      */
     private function getShopLanguages(int $shop_id): Collection
     {
-        if ($shop_id <= 0) {
-            return new Collection();
-        }
-
-        return ShopLanguage::query()
-            ->where('shop_id', $shop_id)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
+        return app(ProductResourceOptionsService::class)->getShopLanguages($shop_id);
     }
 
     private function hasExternalProductIdForRecord(ProductImportItem $record): bool
