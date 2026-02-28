@@ -117,9 +117,12 @@ class CategoryAttributeDeletionCascadeTest extends TestCase
         Schema::dropIfExists('categories');
         Schema::dropIfExists('product_to_attributes');
         Schema::dropIfExists('attributes');
+        Schema::dropIfExists('ai_translation_caches');
 
         Schema::create('attributes', static function (Blueprint $table): void {
             $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
             $table->boolean('is_active')->default(true);
             $table->smallInteger('sort_order')->default(1);
             $table->timestamps();
@@ -136,6 +139,8 @@ class CategoryAttributeDeletionCascadeTest extends TestCase
 
         Schema::create('categories', static function (Blueprint $table): void {
             $table->id();
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedBigInteger('shop_id')->nullable();
             $table->unsignedBigInteger('parent_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
@@ -167,6 +172,16 @@ class CategoryAttributeDeletionCascadeTest extends TestCase
             $table->foreignId('category_id')->constrained('categories')->cascadeOnDelete()->cascadeOnUpdate();
             $table->unsignedBigInteger('shop_id');
             $table->unsignedBigInteger('external_category_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('ai_translation_caches', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('translatable_type');
+            $table->unsignedBigInteger('translatable_id');
+            $table->string('hash', 64);
+            $table->longText('prompt');
+            $table->longText('answer');
             $table->timestamps();
         });
     }

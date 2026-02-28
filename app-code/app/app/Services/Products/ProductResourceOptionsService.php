@@ -435,8 +435,8 @@ class ProductResourceOptionsService
             return ShopLanguage::query()
                 ->where('shop_id', $shop_id)
                 ->where('is_active', true)
-                ->orderBy('sort_order')
                 ->orderBy('id')
+                ->orderBy('is_default')
                 ->get();
         });
 

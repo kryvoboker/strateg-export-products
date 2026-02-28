@@ -48,10 +48,11 @@ class SeoUrl extends Model
     public static function getForSeoableAndLanguageIds(string $seoable_type, int $seoable_id, array $shop_language_ids = []): Collection
     {
         if ($seoable_type === '' || $seoable_id <= 0) {
-            return new Collection(new self());
+            return new Collection();
         }
 
-        return self::query()
+        /** @var Collection<int, self> $seo_urls */
+        $seo_urls = self::query()
             ->where('seoable_type', $seoable_type)
             ->where('seoable_id', $seoable_id)
             ->when(
@@ -64,5 +65,7 @@ class SeoUrl extends Model
             )
             ->orderBy('id')
             ->get();
+
+        return $seo_urls;
     }
 }

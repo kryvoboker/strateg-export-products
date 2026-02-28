@@ -31,6 +31,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class ProductForm
@@ -201,7 +202,14 @@ class ProductForm
                             ->label(__('admin/product_imports/batches.product_edit.tabs.seo'))
                             ->schema([
                                 Tabs::make('seo_language_tabs')
-                                    ->tabs(fn (callable $get): array => self::getSeoUrlLanguageTabs((int) ($get('bind_shop_id') ?? 0)))
+                                    ->tabs(function (callable $get): array {
+                                        $seo_urls_by_language = $get('seo_urls_by_language');
+                                        $seo_language_ids     = is_array($seo_urls_by_language)
+                                            ? Arr::map(Arr::keys($seo_urls_by_language), static fn ($shop_language_id): int => (int) $shop_language_id)
+                                            : [];
+
+                                        return self::getSeoUrlLanguageTabs((int) ($get('bind_shop_id') ?? 0), $seo_language_ids);
+                                    })
                                     ->columnSpanFull(),
                             ]),
                         Tab::make('pricing')
@@ -564,11 +572,31 @@ class ProductForm
     }
 
     /**
+     * SEO tabs are rendered from shop languages. If a product has SEO rows but no current shop binding,
+     * we fallback to language IDs already present in seo_urls_by_language state.
+     *
+     * @param  list<int>  $seo_language_ids
      * @return array<Tab>
      */
-    private static function getSeoUrlLanguageTabs(int $shop_id): array
+    private static function getSeoUrlLanguageTabs(int $shop_id, array $seo_language_ids = []): array
     {
         $shop_languages = self::getShopLanguages($shop_id);
+        if ($shop_languages->isEmpty() && $seo_language_ids !== []) {
+            $seo_language_ids = collect($seo_language_ids)
+                ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
+                ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($seo_language_ids !== []) {
+                $shop_languages = ShopLanguage::query()
+                    ->whereIn('id', $seo_language_ids)
+                    ->orderBy('name')
+                    ->get();
+            }
+        }
+
         if ($shop_languages->isEmpty()) {
             return [
                 Tab::make('empty_seo_urls')

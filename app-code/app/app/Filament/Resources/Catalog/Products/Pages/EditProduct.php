@@ -9,7 +9,6 @@ use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Filament\Resources\Catalog\Products\ProductResource;
 use App\Jobs\ProcessProductUpdateItemJob;
-use App\Services\Products\ProductEditPersistenceService;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Categories\Category;
@@ -27,6 +26,7 @@ use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductEditPersistenceService;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -255,6 +255,43 @@ class EditProduct extends EditRecord
             ->orderBy('id')
             ->get();
 
+        /**
+         * Some products have SEO rows but no direct product_shop binding.
+         * In this case, resolve the UI scope from SEO language rows so SEO tab can render existing values.
+         */
+        if ($current_shop_id === null || $current_shop_language_id === null) {
+            $first_seo_shop_language_id = $seo_urls
+                ->pluck('shop_language_id')
+                ->filter(static fn ($shop_language_id): bool => is_numeric($shop_language_id) && (int) $shop_language_id > 0)
+                ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
+                ->first();
+
+            if (is_int($first_seo_shop_language_id) && $first_seo_shop_language_id > 0) {
+                if ($current_shop_id === null) {
+                    $resolved_shop_id = ShopLanguage::query()
+                        ->whereKey($first_seo_shop_language_id)
+                        ->value('shop_id');
+
+                    if (is_numeric($resolved_shop_id) && (int) $resolved_shop_id > 0) {
+                        $current_shop_id = (int) $resolved_shop_id;
+                    }
+                }
+
+                if ($current_shop_language_id === null) {
+                    $current_shop_language_id = $first_seo_shop_language_id;
+                }
+            }
+        }
+
+        if ($current_shop_language_id === null && $current_shop_id !== null) {
+            $current_shop_language_id = ShopLanguage::query()
+                ->where('shop_id', (int) $current_shop_id)
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('id')
+                ->value('id');
+        }
+
         $descriptions_by_language = $product->descriptions
             ->mapWithKeys(static fn (ProductDescription $description): array => [
                 (int) $description->shop_language_id => [
@@ -316,6 +353,14 @@ class EditProduct extends EditRecord
             $shop_language_id = (int) ($seo_url->shop_language_id ?? 0);
             if ($shop_language_id <= 0) {
                 $shop_language_id = (int) ($current_shop_language_id ?? 0);
+            }
+
+            if ($shop_language_id <= 0) {
+                $shop_language_id = (int) (ShopLanguage::query()
+                    ->where('is_active', true)
+                    ->orderByDesc('is_default')
+                    ->orderBy('id')
+                    ->value('id') ?? 0);
             }
 
             if ($shop_language_id <= 0) {

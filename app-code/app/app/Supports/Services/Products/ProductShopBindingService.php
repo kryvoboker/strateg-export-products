@@ -33,11 +33,7 @@ use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
 use App\Supports\Services\Products\Traits\NormalizesProductServiceInput;
-use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
-use App\Supports\Services\SeoSlug\DeSeoSlugService;
-use App\Supports\Services\SeoSlug\EnSeoSlugService;
-use App\Supports\Services\SeoSlug\RuSeoSlugService;
-use App\Supports\Services\SeoSlug\UaSeoSlugService;
+use App\Supports\Services\SeoSlug\ProductSeoKeywordService;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
@@ -666,9 +662,10 @@ class ProductShopBindingService
                         'query_value'      => (string) $duplicated_product->id,
                     ],
                     [
-                        'query_key'  => null,
-                        'keyword'    => $keyword,
-                        'sort_order' => $sort_order,
+                        'query_key'   => null,
+                        'query_value' => (string) $duplicated_product->id,
+                        'keyword'     => $keyword,
+                        'sort_order'  => $sort_order,
                     ]
                 );
 
@@ -2659,14 +2656,36 @@ class ProductShopBindingService
          * If source and target languages differ and existing text still equals source text,
          * treat it as non-translated data and force translation.
          */
+        $normalized_source_text   = $this->normalizeTextForComparison($source_text);
+        $normalized_existing_text = $this->normalizeTextForComparison($existing_text);
+
         if (
             $source_language_code !== $target_language_code
-            && $existing_text === $source_text
+            && $normalized_existing_text !== ''
+            && $normalized_source_text !== ''
+            && Str::lower($normalized_existing_text) === Str::lower($normalized_source_text)
         ) {
+            Log::channel('stack')->debug('[FIX] Forcing attribute text re-translation for copied source value', [
+                'source_language_code' => $source_language_code,
+                'target_language_code' => $target_language_code,
+            ]);
+
             return '';
         }
 
         return $existing_text;
+    }
+
+    private function normalizeTextForComparison(string $value): string
+    {
+        if (function_exists('normalize_str')) {
+            return normalize_str($value);
+        }
+
+        $normalized = html_entity_decode(Str::trim($value), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $normalized = Str::replace("\u{00a0}", ' ', $normalized);
+
+        return Str::replace('&nbsp;', ' ', $normalized);
     }
 
     /**
@@ -2797,50 +2816,7 @@ class ProductShopBindingService
 
     private function generateSeoKeywordForLanguage(string $base_text, string $language_code): string
     {
-        $normalized_language_code = $this->normalizeLanguageCode($language_code);
-        $base_slug                = $this->buildSeoBaseSlug($base_text, $normalized_language_code);
-
-        if ($base_slug === '') {
-            return '';
-        }
-
-        $keyword = in_array($normalized_language_code, ['uk', 'ua'], true)
-            ? $this->normalizeSeoKeyword($base_slug)
-            : $this->normalizeSeoKeyword($base_slug.'-'.$normalized_language_code);
-
-        return $keyword;
-    }
-
-    private function buildSeoBaseSlug(string $base_text, string $language_code): string
-    {
-        if (in_array($language_code, ['uk', 'ua'], true)) {
-            return UaSeoSlugService::make($base_text);
-        }
-
-        if ($language_code === 'en') {
-            return EnSeoSlugService::make($base_text);
-        }
-
-        if ($language_code === 'ru') {
-            return RuSeoSlugService::make($base_text);
-        }
-
-        if ($language_code === 'de') {
-            return DeSeoSlugService::make($base_text);
-        }
-
-        return DefaultSeoSlugService::make($base_text);
-    }
-
-    private function normalizeSeoKeyword(string $keyword): string
-    {
-        $keyword = Str::lower(Str::ascii(Str::trim($keyword)));
-        $keyword = Str::replace(' ', '-', $keyword);
-        $keyword = Str::replaceMatches('/[^a-z0-9\\-_]+/', '-', $keyword) ?? '';
-        $keyword = Str::replaceMatches('/-+/', '-', $keyword) ?? '';
-        $keyword = Str::replaceMatches('/_+/', '_', $keyword) ?? '';
-
-        return Str::trim($keyword, '-_');
+        return app(ProductSeoKeywordService::class)->make($base_text, $language_code);
     }
 
     /**

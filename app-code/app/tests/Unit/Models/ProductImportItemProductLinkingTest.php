@@ -144,6 +144,15 @@ namespace Tests\Unit\Models {
                 $table->string('external_attribute_id')->nullable();
                 $table->timestamps();
             });
+
+            $schema->create('product_to_manufacturer_brand', static function ($table): void {
+                $table->increments('id');
+                $table->unsignedInteger('product_id');
+                $table->unsignedInteger('manufacturer_id')->nullable();
+                $table->unsignedInteger('brand_id')->nullable();
+                $table->timestamps();
+                $table->unique('product_id');
+            });
         }
 
         protected function setUp(): void
@@ -162,6 +171,7 @@ namespace Tests\Unit\Models {
             Capsule::table('attribute_shop')->delete();
             Capsule::table('category_shop')->delete();
             Capsule::table('product_to_attributes')->delete();
+            Capsule::table('product_to_manufacturer_brand')->delete();
             Capsule::table('category_product')->delete();
             Capsule::table('product_shop')->delete();
             Capsule::table('shops')->delete();

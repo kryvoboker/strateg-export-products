@@ -13,13 +13,17 @@ use App\Models\Categories\CategoryDescription;
 use App\Models\Categories\CategoryProduct;
 use App\Models\Manufacturers\Manufacturer;
 use App\Models\Manufacturers\ManufacturerDescription;
+use App\Models\Products\Product;
 use App\Models\Products\ProductDescription;
 use App\Models\Products\ProductShop;
 use App\Models\Products\ProductToAttribute;
 use App\Models\Products\ProductToManufacturerBrand;
+use App\Models\Seo\SeoUrl;
+use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Products\ProductShopBindingService;
+use Illuminate\Cache\CacheManager;
 use Illuminate\Config\Repository;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Foundation\Application;
@@ -43,7 +47,12 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         Facade::setFacadeApplication($container);
         $container->instance('config', new Repository([
             'database.db_prefix' => '',
+            'cache.default'      => 'array',
+            'cache.stores.array' => [
+                'driver' => 'array',
+            ],
         ]));
+        $container->instance('cache', new CacheManager($container));
 
         $container->instance(AiTranslationPromptBuilderService::class, new AiTranslationPromptBuilderService());
         $container->instance(\App\Supports\Services\Ai\AiTranslationService::class, new FakeAiTranslationService());
@@ -59,6 +68,13 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         $container->instance('db', self::$capsule->getDatabaseManager());
 
         $schema = self::$capsule->schema();
+
+        $schema->create('shops', static function ($table): void {
+            $table->increments('id');
+            $table->string('name')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
 
         $schema->create('shop_languages', static function ($table): void {
             $table->increments('id');
@@ -83,8 +99,28 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
             $table->unique(['product_id', 'shop_language_id']);
         });
 
+        $schema->create('products', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('product_import_item_id')->nullable();
+            $table->string('family_ulid', 26)->nullable();
+            $table->string('marked_to_shop')->nullable();
+            $table->string('model')->nullable();
+            $table->string('sku')->nullable();
+            $table->string('ean')->nullable();
+            $table->integer('quantity')->default(0);
+            $table->integer('minimum')->default(1);
+            $table->string('image')->nullable();
+            $table->decimal('price', 15, 4)->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamp('date_available')->nullable();
+            $table->timestamp('date_added')->nullable();
+            $table->timestamps();
+        });
+
         $schema->create('attributes', static function ($table): void {
             $table->increments('id');
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedInteger('parent_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(1);
             $table->boolean('is_active')->default(true);
@@ -112,6 +148,8 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         $schema->create('categories', static function ($table): void {
             $table->increments('id');
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedInteger('parent_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(false);
@@ -141,6 +179,8 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         $schema->create('manufacturers', static function ($table): void {
             $table->increments('id');
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -157,6 +197,8 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         $schema->create('brands', static function ($table): void {
             $table->increments('id');
+            $table->string('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -211,6 +253,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         ProductToAttribute::query()->delete();
         ProductShop::query()->delete();
+        Product::query()->delete();
         AttributeDescription::query()->delete();
         Attribute::query()->delete();
         ProductToManufacturerBrand::query()->delete();
@@ -223,6 +266,7 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         Category::query()->delete();
         ProductDescription::query()->delete();
         ShopLanguage::query()->delete();
+        Shop::query()->delete();
     }
 
     public function test_it_applies_default_shop_language_to_category_descriptions_after_binding(): void
@@ -613,6 +657,108 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         self::assertSame(1, ProductToAttribute::query()->where('product_id', $product_id)->where('shop_language_id', (int) $ru_language->id)->count());
     }
 
+    public function test_it_retranslates_copied_attribute_values_when_existing_text_is_html_encoded_variant(): void
+    {
+        $shop_id    = 22;
+        $product_id = 1202;
+
+        $uk_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $en_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        ProductDescription::query()->create([
+            'product_id'       => $product_id,
+            'shop_language_id' => (int) $uk_language->id,
+            'name'             => 'Ноутбук',
+            'description'      => 'Опис',
+            'meta_title'       => 'Ноутбук',
+            'meta_description' => 'Опис',
+            'meta_keywords'    => 'ноутбук',
+        ]);
+
+        $attribute = Attribute::query()->create([
+            'parent_id'  => null,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+
+        AttributeDescription::query()->create([
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $uk_language->id,
+            'name'             => 'Країна виробництва',
+        ]);
+
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $uk_language->id,
+            'text'             => 'Німеччина',
+        ]);
+
+        // Simulate copied value with HTML entity variant from import/source normalization edge case.
+        ProductToAttribute::query()->create([
+            'product_id'       => $product_id,
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => (int) $en_language->id,
+            'text'             => 'Німеччина&nbsp;',
+        ]);
+
+        $service = new ProductShopBindingService();
+
+        $this->invokePrivateMethod(
+            $service,
+            'translateProductTextsForShopLanguages',
+            [$product_id, $shop_id]
+        );
+
+        $en_attribute_text = ProductToAttribute::query()
+            ->where('product_id', $product_id)
+            ->where('shop_language_id', (int) $en_language->id)
+            ->value('text');
+
+        self::assertSame('Німеччина [en]', (string) $en_attribute_text);
+    }
+
+    public function test_it_keeps_language_ids_when_loading_active_languages_from_cache(): void
+    {
+        $shop_id = 31;
+
+        $default_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $secondary_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        $cached_languages = ShopLanguage::getActiveByShopIdCached($shop_id);
+
+        self::assertSame(
+            [(int) $default_language->id, (int) $secondary_language->id],
+            $cached_languages->pluck('id')->map(static fn ($id): int => (int) $id)->all()
+        );
+    }
+
     public function test_it_uses_category_translation_method_for_category_name(): void
     {
         $shop_id    = 18;
@@ -680,6 +826,74 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
 
         self::assertInstanceOf(CategoryDescription::class, $uk_category_description);
         self::assertSame('category-Phones [uk]', (string) $uk_category_description->name);
+    }
+
+    public function test_it_creates_product_seo_urls_for_all_active_shop_languages(): void
+    {
+        $shop_id    = 80;
+        $product_id = 1800;
+
+        $uk_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $en_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        $de_language = ShopLanguage::query()->create([
+            'shop_id'    => $shop_id,
+            'code'       => 'de',
+            'name'       => 'Deutsch',
+            'is_active'  => true,
+            'is_default' => false,
+        ]);
+
+        $product = Product::query()->create([
+            'model'     => 'SEO-MODEL-1',
+            'sku'       => 'SEO-SKU-1',
+            'quantity'  => 1,
+            'minimum'   => 1,
+            'price'     => 100,
+            'is_active' => true,
+        ]);
+        $product_id = (int) ($product->id ?? 0);
+
+        ProductDescription::query()->create([
+            'product_id'       => $product_id,
+            'shop_language_id' => (int) $uk_language->id,
+            'name'             => 'Назва товару',
+            'description'      => 'Опис',
+            'meta_title'       => 'Назва товару',
+            'meta_description' => 'Опис',
+            'meta_keywords'    => 'ключ',
+        ]);
+
+        $service = new ProductShopBindingService();
+        $this->invokePrivateMethod($service, 'synchronizeSeoUrlsForShopLanguages', [$product_id, $shop_id]);
+
+        $seo_rows = SeoUrl::query()
+            ->where('seoable_type', Product::class)
+            ->where('seoable_id', $product_id)
+            ->orderBy('shop_language_id')
+            ->get();
+
+        self::assertCount(3, $seo_rows);
+        self::assertSame(
+            [(int) $uk_language->id, (int) $en_language->id, (int) $de_language->id],
+            $seo_rows->pluck('shop_language_id')->map(static fn ($id): int => (int) $id)->all()
+        );
+        self::assertSame('nazva-tovaru', (string) $seo_rows->firstWhere('shop_language_id', (int) $uk_language->id)?->keyword);
+        self::assertStringEndsWith('-en', (string) $seo_rows->firstWhere('shop_language_id', (int) $en_language->id)?->keyword);
+        self::assertStringEndsWith('-de', (string) $seo_rows->firstWhere('shop_language_id', (int) $de_language->id)?->keyword);
     }
 
     public function test_it_creates_manufacturer_and_brand_descriptions_for_all_active_shop_languages(): void

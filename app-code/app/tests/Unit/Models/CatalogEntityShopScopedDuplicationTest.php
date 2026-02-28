@@ -55,6 +55,16 @@ class CatalogEntityShopScopedDuplicationTest extends TestCase
             $table->timestamps();
         });
 
+        $schema->create('shop_languages', static function ($table): void {
+            $table->increments('id');
+            $table->unsignedInteger('shop_id')->nullable();
+            $table->string('code')->nullable();
+            $table->string('name')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
+            $table->timestamps();
+        });
+
         $schema->create('attributes', static function ($table): void {
             $table->increments('id');
             $table->char('family_ulid', 26)->nullable();
@@ -146,6 +156,7 @@ class CatalogEntityShopScopedDuplicationTest extends TestCase
         Category::query()->delete();
         AttributeDescription::query()->delete();
         Attribute::query()->delete();
+        Capsule::table('shop_languages')->delete();
         Shop::query()->delete();
     }
 
@@ -153,6 +164,27 @@ class CatalogEntityShopScopedDuplicationTest extends TestCase
     {
         $shop_a = Shop::query()->create(['name' => 'Shop A', 'is_active' => true]);
         $shop_b = Shop::query()->create(['name' => 'Shop B', 'is_active' => true]);
+
+        Capsule::table('shop_languages')->insert([
+            [
+                'shop_id'    => (int) $shop_a->id,
+                'code'       => 'uk',
+                'name'       => 'Ukrainian',
+                'is_active'  => true,
+                'is_default' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'shop_id'    => (int) $shop_b->id,
+                'code'       => 'uk',
+                'name'       => 'Ukrainian',
+                'is_active'  => true,
+                'is_default' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
 
         $attribute = Attribute::query()->create([
             'shop_id'    => null,
@@ -165,8 +197,8 @@ class CatalogEntityShopScopedDuplicationTest extends TestCase
             'name'             => 'Color',
         ]);
 
-        $attribute_shop_a = $attribute->duplicateForShop((int) $shop_a->id);
-        $attribute_shop_b = $attribute->duplicateForShop((int) $shop_b->id);
+        $attribute_shop_a       = $attribute->duplicateForShop((int) $shop_a->id);
+        $attribute_shop_b       = $attribute->duplicateForShop((int) $shop_b->id);
         $attribute_shop_a_again = $attribute->duplicateForShop((int) $shop_a->id);
 
         self::assertSame((int) $attribute->id, (int) $attribute_shop_a->id);
@@ -211,8 +243,8 @@ class CatalogEntityShopScopedDuplicationTest extends TestCase
             'meta_keywords'    => null,
         ]);
 
-        $parent_category_shop_a = $parent_category->duplicateForShop((int) $shop_a->id);
-        $child_category_shop_a = $child_category->duplicateForShop((int) $shop_a->id, (int) $parent_category_shop_a->id);
+        $parent_category_shop_a      = $parent_category->duplicateForShop((int) $shop_a->id);
+        $child_category_shop_a       = $child_category->duplicateForShop((int) $shop_a->id, (int) $parent_category_shop_a->id);
         $child_category_shop_a_again = $child_category->duplicateForShop((int) $shop_a->id, (int) $parent_category_shop_a->id);
 
         self::assertSame((int) $parent_category->id, (int) $parent_category_shop_a->id);

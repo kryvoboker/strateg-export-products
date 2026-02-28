@@ -261,8 +261,8 @@ class ProductTableActionService
         }
 
         $processing_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::PROCESSING->value)->status_total ?? 0);
-        $failed_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0);
-        $updated_count = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
+        $failed_count     = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0);
+        $updated_count    = (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0);
 
         $final_status = match (true) {
             $processing_count > 0                     => ProductUpdateBatchesStatusEnum::PROCESSING->value,
@@ -303,7 +303,7 @@ class ProductTableActionService
             ->get(['shop_id', 'external_product_id']);
 
         foreach ($product_shops as $product_shop) {
-            $shop_id = (int) ($product_shop->shop_id ?? 0);
+            $shop_id             = (int) ($product_shop->shop_id ?? 0);
             $external_product_id = (int) ($product_shop->external_product_id ?? 0);
 
             if ($shop_id <= 0 || $external_product_id <= 0) {
@@ -435,7 +435,7 @@ class ProductTableActionService
                     continue;
                 }
 
-                ProcessProductShopBindingJob::dispatchSync(
+                ProcessProductShopBindingJob::dispatch(
                     (int) $record->id,
                     $shop_ids,
                     $product_import_batch_id,

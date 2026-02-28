@@ -353,7 +353,7 @@ class ProductImportBatchesTable
                         continue;
                     }
 
-                    ProcessProductShopBindingJob::dispatchSync(
+                    ProcessProductShopBindingJob::dispatch(
                         (int) $product_id,
                         $shop_ids,
                         (int) $batch->id,

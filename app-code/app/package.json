@@ -2,13 +2,21 @@
     "$schema": "https://www.schemastore.org/package.json",
     "private": true,
     "type": "module",
+    "engines": {
+        "node": ">=25.6.1"
+    },
+    "author": {
+        "email": "fast.kamaz@gmail.com",
+        "name": "Roman Kryvobok"
+    },
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "build:filament-theme": "vite build --mode filament-theme",
+        "dev": "vite",
+        "dev:filament-theme": "vite --mode filament-theme"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
-        "axios": "^1.11.0",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^2.0.0",
         "tailwindcss": "^4.0.0",

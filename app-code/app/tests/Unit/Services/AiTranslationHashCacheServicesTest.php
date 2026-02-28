@@ -163,7 +163,7 @@ class AiTranslationHashCacheServicesTest extends TestCase
                 Product::class,
                 1001,
                 'Phone',
-                'translated-to-uk-Phone',
+                '[UK] Phone',
             ],
             'attribute_description' => [
                 AttributeDescriptionAiTranslatorService::class,
@@ -171,7 +171,7 @@ class AiTranslationHashCacheServicesTest extends TestCase
                 Attribute::class,
                 1002,
                 'Color',
-                'translated-to-uk-Color',
+                '[UK] Color',
             ],
             'category_description' => [
                 CategoryDescriptionAiTranslatorService::class,
@@ -179,7 +179,7 @@ class AiTranslationHashCacheServicesTest extends TestCase
                 Category::class,
                 1003,
                 'Electronics',
-                'translated-to-uk-Electronics',
+                '[UK] Electronics',
             ],
             'brand_name' => [
                 BrandNameAiTranslatorService::class,
@@ -187,7 +187,7 @@ class AiTranslationHashCacheServicesTest extends TestCase
                 Brand::class,
                 1004,
                 'Prime',
-                'translated-to-uk-Prime',
+                '[UK] Prime',
             ],
             'manufacturer_name' => [
                 ManufacturerNameAiTranslatorService::class,
@@ -195,7 +195,7 @@ class AiTranslationHashCacheServicesTest extends TestCase
                 Manufacturer::class,
                 1005,
                 'Acme',
-                'translated-to-uk-Acme',
+                '[UK] Acme',
             ],
         ];
     }

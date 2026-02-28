@@ -38,26 +38,26 @@ class OpaChirikPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->maxContentWidth(Width::Full)
-//            ->viteTheme('resources/assets/filament/alyo-admin/theme.css')
-// Show group menu list if user visited page from group
+            ->viteTheme('resources/assets/filament/opa-chirik/theme.css')
+            // Show group menu list if user visited page from group
             ->collapsibleNavigationGroups()
             // Show group menu list if user visited page from group
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::ProductManagement->getLabel())
+                    ->label(AdminNavigationGroupEnum::ProductManagement->getLabel())
                     ->collapsed(),
 
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Catalog->getLabel())
+                    ->label(AdminNavigationGroupEnum::Catalog->getLabel())
                     ->collapsed(),
 
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Shops->getLabel())
+                    ->label(AdminNavigationGroupEnum::Shops->getLabel())
                     ->collapsed(),
 
                 NavigationGroup::make()
-                    ->label(fn() => AdminNavigationGroupEnum::Users->getLabel())
+                    ->label(AdminNavigationGroupEnum::Users->getLabel())
                     ->collapsed(false),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')

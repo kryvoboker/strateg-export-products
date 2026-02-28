@@ -221,22 +221,21 @@ class Category extends Model
             return $this->fresh() ?? $this;
         }
 
-        $source_descriptions = $this->descriptions()->get();
+        $source_descriptions             = $this->descriptions()->get();
+        $source_default_shop_language_id = ShopLanguage::query()
+            ->where('shop_id', $source_shop_id)
+            ->where('is_default', true)
+            ->value('id') ?? 0;
+
+        if ($source_default_shop_language_id <= 0) {
+            throw new RuntimeException('Source shop language not found for shop ID: '.$source_shop_id);
+        }
 
         $source_description = $source_descriptions
-            ->where('shop_language_id', $source_shop_id)
+            ->where('shop_language_id', $source_default_shop_language_id)
             ->first();
 
         if (! $source_description instanceof CategoryDescription) {
-            $source_default_shop_language_id = ShopLanguage::query()
-                ->where('shop_id', $source_shop_id)
-                ->where('is_default', true)
-                ->value('id') ?? 0;
-
-            if ($source_default_shop_language_id <= 0) {
-                throw new RuntimeException('Source shop language not found for shop ID: '.$source_shop_id);
-            }
-
             $source_descriptions
                 ->whereNull('shop_language_id')
                 ->first()
@@ -244,8 +243,8 @@ class Category extends Model
                     'shop_language_id' => $source_default_shop_language_id,
                 ]);
 
-            $source_description = $source_descriptions
-                ->where('shop_language_id', $source_shop_id)
+            $source_description = $this->descriptions()
+                ->where('shop_language_id', $source_default_shop_language_id)
                 ->first();
         }
 

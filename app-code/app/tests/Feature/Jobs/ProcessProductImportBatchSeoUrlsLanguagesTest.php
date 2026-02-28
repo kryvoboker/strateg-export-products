@@ -10,6 +10,7 @@ use App\Jobs\ProcessProductImportBatchJob;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Product;
 use App\Models\Seo\SeoUrl;
+use App\Supports\Services\Products\ProductShopBindingService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -23,6 +24,9 @@ class ProcessProductImportBatchSeoUrlsLanguagesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        config()->set('app.ai_translation_enabled', false);
+        config()->set('open-ai.api_key', 'test-key');
 
         $this->recreateSchema();
         Storage::fake(config('filesystems.default'));
@@ -103,6 +107,8 @@ class ProcessProductImportBatchSeoUrlsLanguagesTest extends TestCase
             'shop_id'    => 1,
         ]);
 
+        app(ProductShopBindingService::class)->synchronizeProductTranslationsForShop($product_id, 1);
+
         $seo_rows = SeoUrl::query()
             ->where('seoable_type', Product::class)
             ->where('seoable_id', $product_id)
@@ -178,6 +184,7 @@ class ProcessProductImportBatchSeoUrlsLanguagesTest extends TestCase
         Schema::dropIfExists('product_import_batches');
         Schema::dropIfExists('shop_languages');
         Schema::dropIfExists('shops');
+        Schema::dropIfExists('ai_translation_caches');
 
         Schema::create('shops', static function (Blueprint $table): void {
             $table->id();
@@ -439,6 +446,17 @@ class ProcessProductImportBatchSeoUrlsLanguagesTest extends TestCase
             $table->timestamps();
             $table->unique(['brand_id', 'shop_id']);
         });
+
+        Schema::create('ai_translation_caches', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('translatable_type');
+            $table->unsignedBigInteger('translatable_id');
+            $table->string('hash', 64);
+            $table->longText('prompt');
+            $table->longText('answer');
+            $table->timestamps();
+            $table->unique(['translatable_type', 'translatable_id', 'hash'], 'ai_translation_caches_scope_hash_unique');
+        });
     }
 
     private function createSeoLanguageFixture(string $path): void
@@ -502,4 +520,3 @@ class ProcessProductImportBatchSeoUrlsLanguagesTest extends TestCase
         self::assertTrue(Storage::exists($path));
     }
 }
-

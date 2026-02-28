@@ -246,7 +246,17 @@ class ShopLanguage extends Model
 
         return (new self())->newCollection(
             collect($cached_rows)
-                ->map(static fn (array $row): self => new self($row))
+                ->map(static function (array $row): self {
+                    /**
+                     * Keep primary key and all loaded attributes from cache payload.
+                     * `new self($row)` respects `$fillable` and drops `id`, which then breaks
+                     * all downstream logic relying on language IDs (translations, SEO sync).
+                     */
+                    $shop_language = new self();
+                    $shop_language->setRawAttributes($row, true);
+
+                    return $shop_language;
+                })
                 ->all()
         );
     }

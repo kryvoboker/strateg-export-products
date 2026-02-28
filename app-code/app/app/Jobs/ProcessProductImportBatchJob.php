@@ -996,7 +996,7 @@ class ProcessProductImportBatchJob implements ShouldQueue
         }
 
         try {
-            ProcessProductShopBindingJob::dispatchSync(
+            ProcessProductShopBindingJob::dispatch(
                 $product_id,
                 [$resolved_shop_id],
                 (int) $product_import_item->product_import_batch_id,

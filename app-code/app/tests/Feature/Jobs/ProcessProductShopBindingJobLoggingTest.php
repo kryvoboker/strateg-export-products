@@ -15,7 +15,7 @@ class ProcessProductShopBindingJobLoggingTest extends TestCase
     {
         $original_log = $this->app->bound('log') ? $this->app->make('log') : null;
 
-        $fake_logger = new class
+        $fake_logger = new class()
         {
             /**
              * @var array<int, array{channel:string,level:string,message:string,context:array<string,mixed>}>
@@ -74,21 +74,21 @@ class ProcessProductShopBindingJobLoggingTest extends TestCase
         try {
             $this->app->instance('log', $fake_logger);
 
-            $service = new class extends ProductShopBindingService
+            $service = new class() extends ProductShopBindingService
             {
                 /**
                  * @return array<string, mixed>
                  */
                 public function bindProductToShopAndReturnTargetProduct(
-                    int   $product_id,
-                    int   $target_shop_id,
-                    int   $product_import_batch_id = 0,
+                    int $product_id,
+                    int $target_shop_id,
+                    int $product_import_batch_id = 0,
                     array $source_payload = []
                 ): array {
                     return [
-                        'product_id' => $product_id,
-                        'bound'      => 1,
-                        'duplicated' => 0,
+                        'product_id'           => $product_id,
+                        'bound'                => 1,
+                        'duplicated'           => 0,
                         'catalog_sync_summary' => [
                             'categories_relinked'    => 1,
                             'categories_assigned'    => 1,
@@ -113,7 +113,7 @@ class ProcessProductShopBindingJobLoggingTest extends TestCase
 
             $job = new ProcessProductShopBindingJob(
                 product_id: 501,
-                shop_id: 11,
+                shop_ids: [11],
                 product_import_batch_id: 0,
                 source_payload: [],
                 requested_by_user_id: 1,

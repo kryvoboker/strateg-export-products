@@ -57,6 +57,7 @@ class ProductSearchTablesTest extends TestCase
         $schema->create('products', static function ($table): void {
             $table->increments('id');
             $table->unsignedInteger('product_import_item_id')->nullable();
+            $table->string('family_ulid', 26)->nullable();
             $table->string('marked_to_shop')->nullable();
             $table->string('model')->nullable();
             $table->string('sku')->nullable();
@@ -94,6 +95,8 @@ class ProductSearchTablesTest extends TestCase
 
         $schema->create('categories', static function ($table): void {
             $table->increments('id');
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedInteger('parent_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
@@ -122,6 +125,8 @@ class ProductSearchTablesTest extends TestCase
 
         $schema->create('attributes', static function ($table): void {
             $table->increments('id');
+            $table->char('family_ulid', 26)->nullable();
+            $table->unsignedInteger('shop_id')->nullable();
             $table->unsignedSmallInteger('sort_order')->default(1);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
