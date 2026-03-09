@@ -333,6 +333,8 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->modalWidth('7xl')
                     ->modalHeading(__('admin/product_imports/batches.product_edit.heading'))
                     ->fillForm(function (ProductImportItem $record): array {
+                        $product_resource_options_service = app(ProductResourceOptionsService::class);
+
                         $product = Product::query()->with([
                             'descriptions',
                             'images',
@@ -400,28 +402,25 @@ class ProductImportItemsRelationManager extends RelationManager
                                 ->all())
                             ->toArray();
 
-                        $attribute_name_map = AttributeDescription::query()
-                            ->whereIn('attribute_id', $product->productToAttributes->pluck('attribute_id')->filter()->all())
-                            ->whereIn('shop_language_id', $product->productToAttributes->pluck('shop_language_id')->filter()->all())
-                            ->get()
-                            ->mapWithKeys(static fn (AttributeDescription $description): array => [
-                                $description->attribute_id.':'.$description->shop_language_id => (string) $description->name,
-                            ])
-                            ->toArray();
-
                         $attributes_custom_by_language = $product->productToAttributes
                             ->groupBy('shop_language_id')
-                            ->map(static fn (Collection $rows) => $rows
-                                ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
-                                    $attribute_key = $attribute->attribute_id.':'.$attribute->shop_language_id;
+                            ->map(function (Collection $rows, $shop_language_id) use ($product_resource_options_service): array {
+                                $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
+                                $attribute_name_map = $product_resource_options_service->getAttributeLabelsByIds(
+                                    $rows->pluck('attribute_id')->filter()->map(static fn ($attribute_id): int => (int) $attribute_id)->all(),
+                                    $resolved_shop_language_id,
+                                );
 
+                                return $rows
+                                ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
                                     return [
-                                        'attribute_name' => $attribute_name_map[$attribute_key] ?? '',
+                                        'attribute_name' => (string) ($attribute_name_map[(int) ($attribute->attribute_id ?? 0)] ?? ''),
                                         'text'           => $attribute->text,
                                     ];
                                 })
                                 ->values()
-                                ->all())
+                                ->all();
+                            })
                             ->toArray();
 
                         $seo_urls_by_language = [];
@@ -484,12 +483,15 @@ class ProductImportItemsRelationManager extends RelationManager
                                 ->all(),
                             'categories_custom_paths' => '',
                             'categories'              => $product->categories
-                                ->map(function (Category $category): array {
-                                    $name = $category->descriptions->first()?->name ?? ('#'.$category->id);
+                                ->map(function (Category $category) use ($product_resource_options_service, $current_shop_language_id): array {
+                                    $category_name_map = $product_resource_options_service->getCategoryLabelsByIds(
+                                        [(int) $category->id],
+                                        (int) ($current_shop_language_id ?? 0),
+                                    );
 
                                     return [
                                         'category_id'   => $category->id,
-                                        'category_name' => $name,
+                                        'category_name' => (string) ($category_name_map[(int) $category->id] ?? ('#'.$category->id)),
                                     ];
                                 })->values()->all(),
                             'attributes' => $product->productToAttributes
@@ -562,6 +564,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->options(fn (callable $get): array => $this->getManufacturerOptionsByScope(
                                                 (int) ($get('bind_shop_id') ?? 0),
                                                 (int) ($get('bind_shop_language_id') ?? 0),
+                                                [(int) ($get('manufacturer_id') ?? 0)],
                                             ))
                                             ->searchable()
                                             ->preload(),
@@ -570,6 +573,7 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->options(fn (callable $get): array => $this->getBrandOptionsByScope(
                                                 (int) ($get('bind_shop_id') ?? 0),
                                                 (int) ($get('bind_shop_language_id') ?? 0),
+                                                [(int) ($get('brand_id') ?? 0)],
                                             ))
                                             ->searchable()
                                             ->preload(),
@@ -618,7 +622,8 @@ class ProductImportItemsRelationManager extends RelationManager
                                             ->options(fn (callable $get): array => $this->getCategoryOptionsByScope(
                                                 (string) ($get('category_source_scope') ?? 'all'),
                                                 (int) ($get('bind_shop_id') ?? 0),
-                                                (int) ($get('bind_shop_language_id') ?? 0)
+                                                (int) ($get('bind_shop_language_id') ?? 0),
+                                                is_array($get('categories_existing_ids')) ? $get('categories_existing_ids') : [],
                                             ))
                                             ->multiple()
                                             ->searchable()
@@ -2512,9 +2517,19 @@ class ProductImportItemsRelationManager extends RelationManager
     /**
      * @return array<int, string>
      */
-    private function getCategoryOptionsByScope(string $scope, int $shop_id = 0, int $shop_language_id = 0): array
+    private function getCategoryOptionsByScope(
+        string $scope,
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_category_ids = []
+    ): array
     {
-        return app(ProductResourceOptionsService::class)->getCategoryOptionsByScope($scope, $shop_id, $shop_language_id);
+        return app(ProductResourceOptionsService::class)->getCategoryOptionsByScope(
+            $scope,
+            $shop_id,
+            $shop_language_id,
+            $selected_category_ids,
+        );
     }
 
     /**
@@ -2523,25 +2538,47 @@ class ProductImportItemsRelationManager extends RelationManager
     private function getAttributeOptionsByScope(
         string $scope,
         int $shop_id = 0,
-        int $shop_language_id = 0
+        int $shop_language_id = 0,
+        array $selected_attribute_ids = []
     ): array {
-        return app(ProductResourceOptionsService::class)->getAttributeOptionsByScope($scope, $shop_id, $shop_language_id);
+        return app(ProductResourceOptionsService::class)->getAttributeOptionsByScope(
+            $scope,
+            $shop_id,
+            $shop_language_id,
+            $selected_attribute_ids,
+        );
     }
 
     /**
      * @return array<int, string>
      */
-    private function getManufacturerOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    private function getManufacturerOptionsByScope(
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_manufacturer_ids = []
+    ): array
     {
-        return app(ProductResourceOptionsService::class)->getManufacturerOptionsByScope($shop_id, $shop_language_id);
+        return app(ProductResourceOptionsService::class)->getManufacturerOptionsByScope(
+            $shop_id,
+            $shop_language_id,
+            $selected_manufacturer_ids,
+        );
     }
 
     /**
      * @return array<int, string>
      */
-    private function getBrandOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    private function getBrandOptionsByScope(
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_brand_ids = []
+    ): array
     {
-        return app(ProductResourceOptionsService::class)->getBrandOptionsByScope($shop_id, $shop_language_id);
+        return app(ProductResourceOptionsService::class)->getBrandOptionsByScope(
+            $shop_id,
+            $shop_language_id,
+            $selected_brand_ids,
+        );
     }
 
     /**
@@ -2664,7 +2701,8 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->options(fn (callable $get): array => $this->getAttributeOptionsByScope(
                             $scope,
                             (int) ($get('bind_shop_id') ?? 0),
-                            $language_id
+                            $language_id,
+                            is_array($get("attributes_selected_by_language.$language_id")) ? $get("attributes_selected_by_language.$language_id") : [],
                         ))
                         ->multiple()
                         ->searchable()

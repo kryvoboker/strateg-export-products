@@ -26,6 +26,7 @@ use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductResourceOptionsService;
 use App\Services\Products\ProductEditPersistenceService;
 use Exception;
 use Filament\Actions\Action;
@@ -212,6 +213,8 @@ class EditProduct extends EditRecord
             return $data;
         }
 
+        $product_resource_options_service = app(ProductResourceOptionsService::class);
+
         $product = Product::query()->with([
             'descriptions',
             'images',
@@ -324,28 +327,25 @@ class EditProduct extends EditRecord
                 ->all())
             ->toArray();
 
-        $attribute_name_map = AttributeDescription::query()
-            ->whereIn('attribute_id', $product->productToAttributes->pluck('attribute_id')->filter()->all())
-            ->whereIn('shop_language_id', $product->productToAttributes->pluck('shop_language_id')->filter()->all())
-            ->get()
-            ->mapWithKeys(static fn (AttributeDescription $description): array => [
-                $description->attribute_id.':'.$description->shop_language_id => (string) $description->name,
-            ])
-            ->toArray();
-
         $attributes_custom_by_language = $product->productToAttributes
             ->groupBy('shop_language_id')
-            ->map(static fn ($rows) => $rows
-                ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
-                    $attribute_key = $attribute->attribute_id.':'.$attribute->shop_language_id;
+            ->map(function ($rows, $shop_language_id) use ($product_resource_options_service): array {
+                $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
+                $attribute_name_map = $product_resource_options_service->getAttributeLabelsByIds(
+                    $rows->pluck('attribute_id')->filter()->map(static fn ($attribute_id): int => (int) $attribute_id)->all(),
+                    $resolved_shop_language_id,
+                );
 
+                return $rows
+                ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
                     return [
-                        'attribute_name' => $attribute_name_map[$attribute_key] ?? '',
+                        'attribute_name' => (string) ($attribute_name_map[(int) ($attribute->attribute_id ?? 0)] ?? ''),
                         'text'           => $attribute->text,
                     ];
                 })
                 ->values()
-                ->all())
+                ->all();
+            })
             ->toArray();
 
         $seo_urls_by_language = [];

@@ -1272,6 +1272,214 @@ class ProductShopBindingServiceAttributeTranslationTest extends TestCase
         );
     }
 
+    public function test_it_uses_readable_fallback_labels_instead_of_raw_ids_for_pre_bind_options(): void
+    {
+        ShopLanguage::query()->create([
+            'id'         => 11,
+            'shop_id'    => 1,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+        ShopLanguage::query()->create([
+            'id'         => 12,
+            'shop_id'    => 2,
+            'code'       => 'en',
+            'name'       => 'English',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $manufacturer_generic = Manufacturer::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $manufacturer_generic->id,
+            'shop_language_id' => null,
+            'name'             => 'Strateg',
+        ]);
+
+        $manufacturer_shop_duplicate = Manufacturer::query()->create([
+            'shop_id'    => 2,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $manufacturer_shop_duplicate->id,
+            'shop_language_id' => 12,
+            'name'             => 'Strateg',
+        ]);
+
+        $brand_generic = Brand::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        BrandDescription::query()->create([
+            'brand_id'         => (int) $brand_generic->id,
+            'shop_language_id' => null,
+            'name'             => 'Boobon',
+        ]);
+
+        $brand_shop_duplicate = Brand::query()->create([
+            'shop_id'    => 2,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        BrandDescription::query()->create([
+            'brand_id'         => (int) $brand_shop_duplicate->id,
+            'shop_language_id' => 12,
+            'name'             => 'Boobon',
+        ]);
+
+        $category = Category::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $category->id,
+            'shop_language_id' => null,
+            'name'             => 'Board games',
+            'description'      => null,
+            'h1_title'         => 'Board games',
+            'meta_title'       => 'Board games',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+        ]);
+
+        $attribute = Attribute::query()->create([
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        AttributeDescription::query()->create([
+            'attribute_id'     => (int) $attribute->id,
+            'shop_language_id' => 12,
+            'name'             => 'Cable length',
+        ]);
+
+        $manufacturer_without_readable_name = Manufacturer::query()->create([
+            'sort_order' => 3,
+            'is_active'  => true,
+        ]);
+
+        $options_service = new ProductResourceOptionsService();
+
+        self::assertSame(
+            [
+                (int) $manufacturer_generic->id => 'Strateg',
+                (int) $manufacturer_without_readable_name->id => '#'.(int) $manufacturer_without_readable_name->id,
+            ],
+            $options_service->getManufacturerOptionsByScope(0, 11)
+        );
+        self::assertSame(
+            [(int) $brand_generic->id => 'Boobon'],
+            $options_service->getBrandOptionsByScope(0, 11)
+        );
+        self::assertSame(
+            [(int) $category->id => 'Board games'],
+            $options_service->getCategoryOptionsByScope('all', 0, 11)
+        );
+        self::assertSame(
+            [(int) $attribute->id => 'Cable length'],
+            $options_service->getAttributeOptionsByScope('all', 0, 11)
+        );
+        self::assertSame(
+            [(int) $manufacturer_without_readable_name->id => '#'.(int) $manufacturer_without_readable_name->id],
+            $options_service->getManufacturerLabelsByIds([(int) $manufacturer_without_readable_name->id], 11)
+        );
+    }
+
+    public function test_it_keeps_selected_entity_ids_visible_even_when_they_fall_outside_scope_filters(): void
+    {
+        ShopLanguage::query()->create([
+            'id'         => 21,
+            'shop_id'    => 1,
+            'code'       => 'uk',
+            'name'       => 'Українська',
+            'is_active'  => true,
+            'is_default' => true,
+        ]);
+
+        $shop_scoped_manufacturer = Manufacturer::query()->create([
+            'shop_id'    => 1,
+            'sort_order' => 1,
+            'is_active'  => true,
+        ]);
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $shop_scoped_manufacturer->id,
+            'shop_language_id' => 21,
+            'name'             => 'Strateg',
+        ]);
+        ManufacturerShop::query()->create([
+            'manufacturer_id' => (int) $shop_scoped_manufacturer->id,
+            'shop_id'         => 1,
+        ]);
+
+        $selected_unbound_manufacturer = Manufacturer::query()->create([
+            'sort_order' => 2,
+            'is_active'  => true,
+        ]);
+        ManufacturerDescription::query()->create([
+            'manufacturer_id'  => (int) $selected_unbound_manufacturer->id,
+            'shop_language_id' => null,
+            'name'             => 'Boobon',
+        ]);
+
+        $shop_scoped_category = Category::query()->create([
+            'shop_id'     => 1,
+            'sort_order'  => 1,
+            'is_active'   => true,
+        ]);
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $shop_scoped_category->id,
+            'shop_language_id' => 21,
+            'name'             => 'Toys',
+            'description'      => null,
+            'h1_title'         => 'Toys',
+            'meta_title'       => 'Toys',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+        ]);
+        CategoryShop::query()->create([
+            'category_id' => (int) $shop_scoped_category->id,
+            'shop_id'     => 1,
+        ]);
+
+        $selected_unbound_category = Category::query()->create([
+            'sort_order' => 2,
+            'is_active'  => true,
+        ]);
+        CategoryDescription::query()->create([
+            'category_id'      => (int) $selected_unbound_category->id,
+            'shop_language_id' => null,
+            'name'             => 'Books',
+            'description'      => null,
+            'h1_title'         => 'Books',
+            'meta_title'       => 'Books',
+            'meta_description' => null,
+            'meta_keywords'    => null,
+        ]);
+
+        $options_service = new ProductResourceOptionsService();
+
+        self::assertSame(
+            [
+                (int) $shop_scoped_manufacturer->id => 'Strateg',
+                (int) $selected_unbound_manufacturer->id => 'Boobon',
+            ],
+            $options_service->getManufacturerOptionsByScope(1, 21, [(int) $selected_unbound_manufacturer->id])
+        );
+
+        self::assertSame(
+            [
+                (int) $shop_scoped_category->id => 'Toys',
+                (int) $selected_unbound_category->id => 'Books',
+            ],
+            $options_service->getCategoryOptionsByScope('shop', 1, 21, [(int) $selected_unbound_category->id])
+        );
+    }
+
     /**
      * @param  array<int, mixed>  $arguments
      */

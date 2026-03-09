@@ -4,19 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Catalog\Products\Schemas;
 
-use App\Models\Attributes\Attribute;
-use App\Models\Attributes\AttributeShop;
-use App\Models\Brands\Brand;
-use App\Models\Brands\BrandShop;
-use App\Models\Categories\Category;
-use App\Models\Categories\CategoryDescription;
-use App\Models\Categories\CategoryShop;
-use App\Models\Manufacturers\Manufacturer;
-use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductResourceOptionsService;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -32,7 +24,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 
 class ProductForm
 {
@@ -96,6 +87,7 @@ class ProductForm
                                     ->options(fn (callable $get): array => self::getManufacturerOptionsByScope(
                                         (int) ($get('bind_shop_id') ?? 0),
                                         (int) ($get('bind_shop_language_id') ?? 0),
+                                        [(int) ($get('manufacturer_id') ?? 0)],
                                     ))
                                     ->searchable()
                                     ->preload(),
@@ -104,6 +96,7 @@ class ProductForm
                                     ->options(fn (callable $get): array => self::getBrandOptionsByScope(
                                         (int) ($get('bind_shop_id') ?? 0),
                                         (int) ($get('bind_shop_language_id') ?? 0),
+                                        [(int) ($get('brand_id') ?? 0)],
                                     ))
                                     ->searchable()
                                     ->preload(),
@@ -169,6 +162,7 @@ class ProductForm
                                         (string) ($get('category_source_scope') ?? 'all'),
                                         (int) ($get('bind_shop_id') ?? 0),
                                         (int) ($get('bind_shop_language_id') ?? 0),
+                                        is_array($get('categories_existing_ids')) ? $get('categories_existing_ids') : [],
                                     ))
                                     ->multiple()
                                     ->searchable()
@@ -546,7 +540,8 @@ class ProductForm
                         ->options(fn (callable $get): array => self::getAttributeOptionsByScope(
                             $scope,
                             (int) ($get('bind_shop_id') ?? 0),
-                            $shop_language_id
+                            $shop_language_id,
+                            is_array($get("attributes_selected_by_language.$shop_language_id")) ? $get("attributes_selected_by_language.$shop_language_id") : [],
                         ))
                         ->multiple()
                         ->searchable()
@@ -655,45 +650,19 @@ class ProductForm
     /**
      * @return array<int, string>
      */
-    private static function getCategoryOptionsByScope(string $scope, int $shop_id = 0, int $shop_language_id = 0): array
+    private static function getCategoryOptionsByScope(
+        string $scope,
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_category_ids = []
+    ): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $descriptions_query = CategoryDescription::query()->orderBy('name')->select('category_id', 'name');
-
-        if ($scope === 'shop' && $shop_id > 0) {
-            $shop_category_ids = CategoryShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('category_id')
-                ->map(static fn ($category_id): int => (int) $category_id)
-                ->all();
-
-            if ($shop_category_ids === []) {
-                return [];
-            }
-
-            $descriptions_query->whereIn('category_id', $shop_category_ids);
-        }
-
-        if ($default_language_id > 0) {
-            $descriptions_query->where('shop_language_id', $default_language_id);
-        }
-
-        $options = $descriptions_query
-            ->pluck('name', 'category_id')
-            ->toArray();
-
-        if ($options !== []) {
-            return $options;
-        }
-
-        return Category::query()
-            ->orderBy('id')
-            ->get()
-            ->mapWithKeys(static fn (Category $category): array => [(int) $category->id => '#'.(int) $category->id])
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getCategoryOptionsByScope(
+            $scope,
+            $shop_id,
+            $shop_language_id,
+            $selected_category_ids,
+        );
     }
 
     /**
@@ -702,130 +671,46 @@ class ProductForm
     private static function getAttributeOptionsByScope(
         string $scope,
         int $shop_id = 0,
-        int $shop_language_id = 0
+        int $shop_language_id = 0,
+        array $selected_attribute_ids = []
     ): array {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $query = Attribute::query()
-            ->with(['descriptions' => static function ($query) use ($default_language_id): void {
-                if ($default_language_id > 0) {
-                    $query->where('shop_language_id', $default_language_id);
-                }
-            }]);
-
-        if ($scope === 'shop' && $shop_id > 0) {
-            $shop_attribute_ids = AttributeShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('attribute_id')
-                ->map(static fn ($attribute_id): int => (int) $attribute_id)
-                ->all();
-
-            if ($shop_attribute_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_attribute_ids);
-        }
-
-        $query->orderBy('id');
-
-        return $query->get()
-            ->mapWithKeys(static function (Attribute $attribute): array {
-                $name = Str::trim((string) ($attribute->descriptions->first()?->name ?? ''));
-                if ($name === '') {
-                    $name = '#'.(int) $attribute->id;
-                }
-
-                return [(int) $attribute->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getAttributeOptionsByScope(
+            $scope,
+            $shop_id,
+            $shop_language_id,
+            $selected_attribute_ids,
+        );
     }
 
     /**
      * @return array<int, string>
      */
-    private static function getManufacturerOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    private static function getManufacturerOptionsByScope(
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_manufacturer_ids = []
+    ): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $query = Manufacturer::query()
-            ->with(['descriptions' => static function ($query) use ($default_language_id): void {
-                if ($default_language_id > 0) {
-                    $query->where('shop_language_id', $default_language_id);
-                }
-            }]);
-
-        if ($shop_id > 0) {
-            $shop_manufacturer_ids = ManufacturerShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('manufacturer_id')
-                ->map(static fn ($manufacturer_id): int => (int) $manufacturer_id)
-                ->all();
-
-            if ($shop_manufacturer_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_manufacturer_ids);
-        }
-
-        return $query->orderBy('id')
-            ->get()
-            ->mapWithKeys(static function (Manufacturer $manufacturer): array {
-                $name = Str::trim((string) ($manufacturer->descriptions->first()?->name ?? ''));
-                if ($name === '') {
-                    $name = '#'.(int) $manufacturer->id;
-                }
-
-                return [(int) $manufacturer->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getManufacturerOptionsByScope(
+            $shop_id,
+            $shop_language_id,
+            $selected_manufacturer_ids,
+        );
     }
 
     /**
      * @return array<int, string>
      */
-    private static function getBrandOptionsByScope(int $shop_id = 0, int $shop_language_id = 0): array
+    private static function getBrandOptionsByScope(
+        int $shop_id = 0,
+        int $shop_language_id = 0,
+        array $selected_brand_ids = []
+    ): array
     {
-        $default_language_id = $shop_language_id > 0
-            ? $shop_language_id
-            : (int) (ShopLanguage::query()->orderBy('id')->value('id') ?? 0);
-
-        $query = Brand::query()
-            ->with(['descriptions' => static function ($query) use ($default_language_id): void {
-                if ($default_language_id > 0) {
-                    $query->where('shop_language_id', $default_language_id);
-                }
-            }]);
-
-        if ($shop_id > 0) {
-            $shop_brand_ids = BrandShop::query()
-                ->where('shop_id', $shop_id)
-                ->pluck('brand_id')
-                ->map(static fn ($brand_id): int => (int) $brand_id)
-                ->all();
-
-            if ($shop_brand_ids === []) {
-                return [];
-            }
-
-            $query->whereIn('id', $shop_brand_ids);
-        }
-
-        return $query->orderBy('id')
-            ->get()
-            ->mapWithKeys(static function (Brand $brand): array {
-                $name = Str::trim((string) ($brand->descriptions->first()?->name ?? ''));
-                if ($name === '') {
-                    $name = '#'.(int) $brand->id;
-                }
-
-                return [(int) $brand->id => $name];
-            })
-            ->toArray();
+        return app(ProductResourceOptionsService::class)->getBrandOptionsByScope(
+            $shop_id,
+            $shop_language_id,
+            $selected_brand_ids,
+        );
     }
 }
