@@ -32,7 +32,9 @@ use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductEditStateBuilderService;
 use App\Services\Products\ProductEditPersistenceService;
+use App\Services\Products\ProductShopBindingQueueService;
 use App\Services\Products\ProductResourceOptionsService;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use App\Supports\Services\Products\ProductDeleteQueueService;
@@ -333,8 +335,6 @@ class ProductImportItemsRelationManager extends RelationManager
                     ->modalWidth('7xl')
                     ->modalHeading(__('admin/product_imports/batches.product_edit.heading'))
                     ->fillForm(function (ProductImportItem $record): array {
-                        $product_resource_options_service = app(ProductResourceOptionsService::class);
-
                         $product = Product::query()->with([
                             'descriptions',
                             'images',
@@ -349,180 +349,10 @@ class ProductImportItemsRelationManager extends RelationManager
                             return [];
                         }
 
-                        $current_shop_id = ProductShop::query()
-                            ->where('product_id', $product->id)
-                            ->orderBy('id')
-                            ->value('shop_id');
-
-                        $current_shop_language_id = null;
-                        if ($current_shop_id !== null) {
-                            $current_shop_language_id = ShopLanguage::query()
-                                ->where('shop_id', (int) $current_shop_id)
-                                ->where('is_active', true)
-                                ->orderBy('id')
-                                ->value('id');
-                        }
-
-                        /** @var Collection<int, SeoUrl> $seo_urls */
-                        $seo_urls = SeoUrl::query()
-                            ->where('seoable_type', Product::class)
-                            ->where('seoable_id', $product->id)
-                            ->orderBy('id')
-                            ->get();
-
-                        $descriptions_by_language = $product->descriptions
-                            ->mapWithKeys(static fn (ProductDescription $description): array => [
-                                (int) $description->shop_language_id => [
-                                    'name'             => $description->name,
-                                    'description'      => $description->description,
-                                    'meta_title'       => $description->meta_title,
-                                    'meta_description' => $description->meta_description,
-                                    'meta_keywords'    => $description->meta_keywords,
-                                ],
-                            ])
-                            ->toArray();
-
-                        $attributes_by_language = $product->productToAttributes
-                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
-                            ->map(static fn (Collection $rows): array => $rows
-                                ->map(static fn (ProductToAttribute $attribute): array => [
-                                    'attribute_id' => $attribute->attribute_id,
-                                    'text'         => $attribute->text,
-                                ])->values()->all())
-                            ->toArray();
-
-                        $attributes_selected_by_language = $product->productToAttributes
-                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
-                            ->map(static fn (Collection $rows): array => $rows
-                                ->pluck('attribute_id')
-                                ->filter()
-                                ->map(static fn ($attribute_id): int => (int) $attribute_id)
-                                ->unique()
-                                ->values()
-                                ->all())
-                            ->toArray();
-
-                        $attributes_custom_by_language = $product->productToAttributes
-                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
-                            ->map(function (Collection $rows, $shop_language_id) use ($product_resource_options_service): array {
-                                $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
-                                $attribute_name_map = $product_resource_options_service->getAttributeLabelsByIds(
-                                    $rows->pluck('attribute_id')->filter()->map(static fn ($attribute_id): int => (int) $attribute_id)->all(),
-                                    $resolved_shop_language_id,
-                                );
-
-                                return $rows
-                                ->map(static function (ProductToAttribute $attribute) use ($attribute_name_map): array {
-                                    return [
-                                        'attribute_name' => (string) ($attribute_name_map[(int) ($attribute->attribute_id ?? 0)] ?? ''),
-                                        'text'           => $attribute->text,
-                                    ];
-                                })
-                                ->values()
-                                ->all();
-                            })
-                            ->toArray();
-
-                        $seo_urls_by_language = [];
-                        foreach ($seo_urls as $seo_url) {
-                            $shop_language_id = (int) ($seo_url->shop_language_id ?? 0);
-                            if ($shop_language_id <= 0) {
-                                $shop_language_id = (int) ($current_shop_language_id ?? 0);
-                            }
-
-                            if ($shop_language_id <= 0) {
-                                continue;
-                            }
-
-                            $seo_urls_by_language[$shop_language_id][] = [
-                                'query_key'   => $seo_url->query_key,
-                                'query_value' => $seo_url->query_value,
-                                'keyword'     => $seo_url->keyword,
-                                'sort_order'  => $seo_url->sort_order,
-                            ];
-                        }
-
-                        return [
-                            'bind_shop_id'          => $current_shop_id !== null ? (int) $current_shop_id : null,
-                            'bind_shop_language_id' => $current_shop_language_id !== null ? (int) $current_shop_language_id : null,
-                            'product_id'            => $product->id,
-                            'model'                 => $product->model,
-                            'sku'                   => $product->sku,
-                            'ean'                   => $product->ean,
-                            'quantity'              => $product->quantity,
-                            'minimum'               => $product->minimum,
-                            'image'                 => $product->image,
-                            'price'                 => $product->price,
-                            'manufacturer_id'       => (int) ($product->productToManufacturerBrand?->manufacturer_id ?? 0) ?: null,
-                            'brand_id'              => (int) ($product->productToManufacturerBrand?->brand_id ?? 0) ?: null,
-                            'is_active'             => (bool) $product->is_active,
-                            'date_available'        => $product->date_available,
-                            'date_added'            => $product->date_added,
-                            'descriptions'          => $product->descriptions
-                                ->map(static fn (ProductDescription $description): array => [
-                                    'shop_language_id' => $description->shop_language_id,
-                                    'name'             => $description->name,
-                                    'description'      => $description->description,
-                                    'meta_title'       => $description->meta_title,
-                                    'meta_description' => $description->meta_description,
-                                    'meta_keywords'    => $description->meta_keywords,
-                                ])->values()->all(),
-                            'descriptions_by_language' => $descriptions_by_language,
-                            'images'                   => $product->images
-                                ->map(static fn (ProductImage $image): array => [
-                                    'image'      => $image->image,
-                                    'sort_order' => $image->sort_order,
-                                ])->values()->all(),
-                            'category_source_scope'   => $current_shop_id !== null ? 'shop' : 'all',
-                            'categories_existing_ids' => $product->categories
-                                ->pluck('id')
-                                ->filter()
-                                ->map(static fn ($category_id): int => (int) $category_id)
-                                ->unique()
-                                ->values()
-                                ->all(),
-                            'categories_custom_paths' => '',
-                            'categories'              => $product->categories
-                                ->map(function (Category $category) use ($product_resource_options_service, $current_shop_language_id): array {
-                                    $category_name_map = $product_resource_options_service->getCategoryLabelsByIds(
-                                        [(int) $category->id],
-                                        (int) ($current_shop_language_id ?? 0),
-                                    );
-
-                                    return [
-                                        'category_id'   => $category->id,
-                                        'category_name' => (string) ($category_name_map[(int) $category->id] ?? ('#'.$category->id)),
-                                    ];
-                                })->values()->all(),
-                            'attributes' => $product->productToAttributes
-                                ->map(static fn (ProductToAttribute $attribute): array => [
-                                    'attribute_id'     => $attribute->attribute_id,
-                                    'shop_language_id' => $attribute->shop_language_id,
-                                    'text'             => $attribute->text,
-                                ])->values()->all(),
-                            'attribute_source_scope'          => $current_shop_id !== null ? 'shop' : 'all',
-                            'attributes_selected_by_language' => $attributes_selected_by_language,
-                            'attributes_custom_by_language'   => $attributes_custom_by_language,
-                            'attributes_by_language'          => $attributes_by_language,
-                            'seo_urls_by_language'            => $seo_urls_by_language,
-                            'specials'                        => $product->specials
-                                ->map(static fn (ProductSpecial $special): array => [
-                                    'user_group_id' => $special->user_group_id,
-                                    'price'         => $special->price,
-                                    'priority'      => $special->priority,
-                                    'date_start'    => $special->date_start,
-                                    'date_end'      => $special->date_end,
-                                ])->values()->all(),
-                            'discounts' => $product->discounts
-                                ->map(static fn (ProductDiscount $discount): array => [
-                                    'user_group_id' => $discount->user_group_id,
-                                    'quantity'      => $discount->quantity,
-                                    'price'         => $discount->price,
-                                    'priority'      => $discount->priority,
-                                    'date_start'    => $discount->date_start,
-                                    'date_end'      => $discount->date_end,
-                                ])->values()->all(),
-                        ];
+                        return app(ProductEditStateBuilderService::class)->buildForProduct(
+                            $product,
+                            include_named_categories: true,
+                        );
                     })
                     ->schema([
                         Tabs::make('product_edit_tabs')
@@ -1017,77 +847,11 @@ class ProductImportItemsRelationManager extends RelationManager
                                 return;
                             }
 
-                            $records_collection = collect($records);
-                            $summary            = [
-                                'items_selected'                => $records_collection->count(),
-                                'items_skipped_processing'      => 0,
-                                'items_skipped_without_product' => 0,
-                                'products_total'                => 0,
-                                'jobs_queued'                   => 0,
-                                'items_skipped_already_bound'   => 0,
-                                'products_skipped'              => 0,
-                            ];
-
-                            $processed_keys = [];
-
-                            foreach ($records_collection as $record) {
-                                if (! $record instanceof ProductImportItem) {
-                                    continue;
-                                }
-
-                                if ($record->status === ProductImportItemsStatusEnum::PROCESSING->value) {
-                                    $summary['items_skipped_processing']++;
-
-                                    continue;
-                                }
-
-                                $product_id = (int) ($record->product_id ?? 0);
-                                if ($product_id <= 0) {
-                                    $summary['items_skipped_without_product']++;
-
-                                    continue;
-                                }
-
-                                $batch_id = (int) ($record->product_import_batch_id ?? 0);
-                                if ($batch_id <= 0) {
-                                    $summary['products_skipped']++;
-
-                                    continue;
-                                }
-
-                                $record_key = $batch_id.':'.$product_id;
-                                if (in_array($record_key, $processed_keys, true)) {
-                                    continue;
-                                }
-
-                                $processed_keys[] = $record_key;
-                                $summary['products_total']++;
-
-                                $source_payload = is_array($record->payload) ? $record->payload : [];
-                                foreach ($shop_ids as $shop_id) {
-                                    $already_bound = ProductShop::query()
-                                        ->where('product_id', $product_id)
-                                        ->where('shop_id', (int) $shop_id)
-                                        ->exists();
-
-                                    if ($already_bound) {
-                                        $summary['items_skipped_already_bound']++;
-
-                                        continue;
-                                    }
-
-                                    ProcessProductShopBindingJob::dispatch(
-                                        $product_id,
-                                        $shop_ids,
-                                        $batch_id,
-                                        $source_payload,
-                                        auth()->id()
-                                    );
-
-                                    $summary['jobs_queued']++;
-                                    break;
-                                }
-                            }
+                            $summary = app(ProductShopBindingQueueService::class)->queueForImportItems(
+                                collect($records),
+                                $shop_ids,
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null,
+                            );
 
                             if ($summary['products_total'] <= 0) {
                                 Notification::make()

@@ -15,6 +15,7 @@ use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
+use App\Services\Products\ProductShopBindingQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -222,7 +223,11 @@ class ProductImportBatchesTable
                                 return;
                             }
 
-                            $summary = self::bindSelectedBatchesToShops($records, $shop_ids);
+                            $summary = app(ProductShopBindingQueueService::class)->queueForImportBatches(
+                                $records,
+                                $shop_ids,
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null,
+                            );
 
                             Notification::make()
                                 ->title(__('admin/product_imports/batches.messages.bulk_bind_queued'))
@@ -296,78 +301,6 @@ class ProductImportBatchesTable
                     ->dropdownWidth(Width::Large),
             ])
             ->defaultSort('id', 'desc');
-    }
-
-    /**
-     * @param  Collection<int, ProductImportBatch>  $records
-     * @param  list<int>  $shop_ids
-     * @return array<string, int>
-     */
-    private static function bindSelectedBatchesToShops(Collection $records, array $shop_ids): array
-    {
-        $summary = [
-            'batches_selected'           => $records->count(),
-            'batches_skipped_processing' => 0,
-            'products_total'             => 0,
-            'jobs_queued'                => 0,
-            'skipped_already_bound'      => 0,
-        ];
-
-        foreach ($records as $batch) {
-            if ($batch->isProcessing()) {
-                $summary['batches_skipped_processing']++;
-
-                continue;
-            }
-
-            $batch_product_ids = $batch->items()
-                ->whereNotNull('product_id')
-                ->pluck('product_id')
-                ->map(static fn ($product_id): int => (int) $product_id)
-                ->filter(static fn (int $product_id): bool => $product_id > 0)
-                ->unique()
-                ->values()
-                ->all();
-
-            $summary['products_total'] += count($batch_product_ids);
-
-            foreach ($batch_product_ids as $product_id) {
-                $source_item = $batch->items()
-                    ->where('product_id', $product_id)
-                    ->orderBy('id')
-                    ->first();
-
-                $source_payload = $source_item !== null && is_array($source_item->payload)
-                    ? $source_item->payload
-                    : [];
-
-                foreach ($shop_ids as $shop_id) {
-                    $already_bound = ProductShop::query()
-                        ->where('product_id', (int) $product_id)
-                        ->where('shop_id', (int) $shop_id)
-                        ->exists();
-
-                    if ($already_bound) {
-                        $summary['skipped_already_bound']++;
-
-                        continue;
-                    }
-
-                    ProcessProductShopBindingJob::dispatch(
-                        (int) $product_id,
-                        $shop_ids,
-                        (int) $batch->id,
-                        $source_payload,
-                        auth()->id()
-                    );
-
-                    $summary['jobs_queued']++;
-                    break;
-                }
-            }
-        }
-
-        return $summary;
     }
 
     /**
