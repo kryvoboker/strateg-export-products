@@ -154,16 +154,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             return '';
                         }
 
-                        return ProductShop::query()
-                            ->where('product_id', $product_id)
-                            ->where('product_import_batch_id', $batch_id)
-                            ->whereNotNull('external_product_id')
-                            ->pluck('external_product_id')
-                            ->map(static fn ($external_product_id): string => (string) $external_product_id)
-                            ->filter(static fn (string $external_product_id): bool => $external_product_id !== '')
-                            ->unique()
-                            ->values()
-                            ->implode(', ');
+                        return implode(', ', ProductShop::resolveExternalProductIds($product_id, $batch_id));
                     })
                     ->toggleable(),
                 TextColumn::make('export_status')
@@ -191,15 +182,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             return __('admin/product_imports/batches.messages.no_bound_shops');
                         }
 
-                        $shop_names = ProductShop::query()
-                            ->where('product_id', $product_id)
-                            ->where('product_import_batch_id', $batch_id)
-                            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
-                            ->orderBy('shops.name')
-                            ->pluck('shops.name')
-                            ->unique()
-                            ->values()
-                            ->all();
+                        $shop_names = ProductShop::resolveBoundShopNames($product_id, $batch_id);
 
                         if ($shop_names === []) {
                             return __('admin/product_imports/batches.messages.no_bound_shops');
@@ -263,11 +246,7 @@ class ProductImportItemsRelationManager extends RelationManager
                     ]),
                 SelectFilter::make('shop_id')
                     ->label(__('admin/product_imports/batches.filters.shop'))
-                    ->options(fn (): array => Shop::query()
-                        ->where('is_active', true)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->toArray())
+                                            ->options(fn (): array => Shop::resolveActiveOptions())
                     ->query(static function ($query, array $data) {
                         $shop_id = (int) Arr::get($data, 'value', 0);
                         if ($shop_id <= 0) {
@@ -608,15 +587,10 @@ class ProductImportItemsRelationManager extends RelationManager
                     })
                     ->disabled(fn (ProductImportItem $record): bool => $record->status === ProductImportItemsStatusEnum::PROCESSING->value)
                     ->action(function (ProductImportItem $record): void {
-                        $shop_ids = ProductShop::query()
-                            ->where('product_import_batch_id', (int) ($record->product_import_batch_id ?? 0))
-                            ->where('product_id', (int) ($record->product_id ?? 0))
-                            ->pluck('shop_id')
-                            ->map(static fn ($shop_id): int => (int) $shop_id)
-                            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-                            ->unique()
-                            ->values()
-                            ->all();
+                        $shop_ids = ProductShop::resolveBoundShopIds(
+                            (int) ($record->product_id ?? 0),
+                            (int) ($record->product_import_batch_id ?? 0),
+                        );
 
                         if ($shop_ids === []) {
                             Notification::make()
@@ -754,11 +728,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.filters.shop'))
-                                ->options(fn (): array => Shop::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray())
+                                ->options(fn (): array => Shop::resolveActiveOptions())
                                 ->multiple()
                                 ->required()
                                 ->searchable()
@@ -814,11 +784,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn (): array => Shop::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray())
+                                ->options(fn (): array => Shop::resolveActiveOptions())
                                 ->multiple()
                                 ->required()
                                 ->searchable()
@@ -875,11 +841,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn (): array => Shop::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray())
+                                ->options(fn (): array => Shop::resolveActiveOptions())
                                 ->multiple()
                                 ->required()
                                 ->searchable()
@@ -1200,18 +1162,11 @@ class ProductImportItemsRelationManager extends RelationManager
             return false;
         }
 
-        $query = ProductShop::query()
-            ->where('product_id', $product_id);
-
-        if ($batch_id > 0) {
-            $query->where(function ($inner_query) use ($batch_id): void {
-                $inner_query
-                    ->where('product_import_batch_id', $batch_id)
-                    ->orWhereNotNull('product_import_batch_id');
-            });
+        if ($batch_id > 0 && ProductShop::resolveBoundShopIds($product_id, $batch_id) !== []) {
+            return true;
         }
 
-        return $query->exists();
+        return ProductShop::resolveBoundShopIds($product_id) !== [];
     }
 
     private function hasBoundShopsForRecord(ProductImportItem $record): bool
@@ -1228,41 +1183,14 @@ class ProductImportItemsRelationManager extends RelationManager
             return [];
         }
 
-        $shop_ids_for_batch = ProductShop::query()
-            ->where('product_id', $product_id)
-            ->when(
-                $batch_id > 0,
-                static fn ($query) => $query->where('product_import_batch_id', $batch_id)
-            )
-            ->pluck('shop_id')
-            ->map(static fn ($shop_id): int => (int) $shop_id)
-            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        $shop_ids_for_batch = ProductShop::resolveBoundShopIds($product_id, $batch_id);
 
         $shop_ids = $shop_ids_for_batch;
         if ($shop_ids === []) {
-            $shop_ids = ProductShop::query()
-                ->where('product_id', $product_id)
-                ->pluck('shop_id')
-                ->map(static fn ($shop_id): int => (int) $shop_id)
-                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-                ->unique()
-                ->values()
-                ->all();
+            $shop_ids = ProductShop::resolveBoundShopIds($product_id);
         }
 
-        if ($shop_ids === []) {
-            return [];
-        }
-
-        return Shop::query()
-            ->whereIn('id', $shop_ids)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        return Shop::resolveOptionsByIds($shop_ids);
     }
 
     /**
@@ -1275,12 +1203,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return [];
         }
 
-        return Shop::query()
-            ->whereIn('id', $shop_ids)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        return Shop::resolveOptionsByIds($shop_ids);
     }
 
     /**
@@ -1293,14 +1216,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return [];
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->pluck('shop_id')
-            ->map(static fn ($shop_id): int => (int) $shop_id)
-            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        return ProductShop::resolveBoundShopIds($product_id);
     }
 
     /**
@@ -1342,7 +1258,10 @@ class ProductImportItemsRelationManager extends RelationManager
             }
 
             if ($bind_shop_id > 0) {
-                $shop_name = (string) (Shop::query()->whereKey($bind_shop_id)->value('name') ?? $bind_shop_id);
+                $shop_name = Shop::resolveNameById($bind_shop_id);
+                if ($shop_name === '') {
+                    $shop_name = (string) $bind_shop_id;
+                }
                 ProductShop::query()->updateOrCreate([
                     'product_id' => $target_product->id,
                     'shop_id'    => $bind_shop_id,
@@ -2050,22 +1969,16 @@ class ProductImportItemsRelationManager extends RelationManager
             return [];
         }
 
-        $already_bound_shop_ids = ProductShop::query()
-            ->where('product_id', $product_id)
-            ->pluck('shop_id')
-            ->map(static fn ($shop_id): int => (int) $shop_id)
-            ->all();
+        $already_bound_shop_ids = ProductShop::resolveBoundShopIds($product_id);
+        $options                = Shop::resolveActiveOptions();
 
-        $options = Shop::query()
-            ->where('is_active', true)
-            ->when($already_bound_shop_ids !== [], fn ($query) => $query->whereNotIn('id', $already_bound_shop_ids))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->toArray();
+        if ($already_bound_shop_ids !== []) {
+            $options = Arr::except($options, $already_bound_shop_ids);
+        }
 
         if ($current_shop_id > 0 && ! array_key_exists($current_shop_id, $options)) {
-            $current_shop_name = Shop::query()->whereKey($current_shop_id)->value('name');
-            if (is_string($current_shop_name) && $current_shop_name !== '') {
+            $current_shop_name = Shop::resolveNameById($current_shop_id);
+            if ($current_shop_name !== '') {
                 $options[$current_shop_id] = $current_shop_name;
             }
         }
@@ -2288,11 +2201,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return false;
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->exists();
+        return ProductShop::hasAnyExternalBinding($product_id);
     }
 
     /**
@@ -2305,14 +2214,7 @@ class ProductImportItemsRelationManager extends RelationManager
             return [];
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name', 'product_shop.shop_id')
-            ->toArray();
+        return ProductShop::resolveDeletableShopOptions($product_id);
     }
 
     private function getTypedOwnerRecord(): ProductImportBatch

@@ -9,6 +9,7 @@ use App\Models\Shops\Shop;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class ProductShop extends Model
@@ -143,5 +144,107 @@ class ProductShop extends Model
             ->where('product_id', $product_id)
             ->orderByDesc('id')
             ->value('product_import_batch_id') ?? 0);
+    }
+
+    /**
+     * @param  int|null  $product_import_batch_id
+     * @return list<int>
+     */
+    public static function resolveBoundShopIds(int $product_id, ?int $product_import_batch_id = null): array
+    {
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return self::baseBindingsQuery($product_id, $product_import_batch_id)
+            ->pluck('shop_id')
+            ->map(static fn (int|string|null $shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function resolveBoundShopNames(int $product_id, ?int $product_import_batch_id = null): array
+    {
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return self::baseBindingsQuery($product_id, $product_import_batch_id)
+            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
+            ->orderBy('shops.name')
+            ->pluck('shops.name')
+            ->map(static fn (mixed $shop_name): string => Str::squish((string) $shop_name))
+            ->filter(static fn (string $shop_name): bool => $shop_name !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  int|null  $product_import_batch_id
+     * @return list<string>
+     */
+    public static function resolveExternalProductIds(int $product_id, ?int $product_import_batch_id = null): array
+    {
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return self::baseBindingsQuery($product_id, $product_import_batch_id)
+            ->whereNotNull('external_product_id')
+            ->pluck('external_product_id')
+            ->map(static fn (int|string|null $external_product_id): string => Str::trim((string) $external_product_id))
+            ->filter(static fn (string $external_product_id): bool => $external_product_id !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function hasAnyExternalBinding(int $product_id): bool
+    {
+        if ($product_id <= 0) {
+            return false;
+        }
+
+        return static::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->exists();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function resolveDeletableShopOptions(int $product_id): array
+    {
+        if ($product_id <= 0) {
+            return [];
+        }
+
+        return static::query()
+            ->where('product_id', $product_id)
+            ->whereNotNull('external_product_id')
+            ->where('external_product_id', '>', 0)
+            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
+            ->orderBy('shops.name')
+            ->pluck('shops.name', 'product_shop.shop_id')
+            ->mapWithKeys(static fn (string $shop_name, int|string $shop_id): array => [(int) $shop_id => Str::squish($shop_name)])
+            ->toArray();
+    }
+
+    private static function baseBindingsQuery(int $product_id, ?int $product_import_batch_id = null): Builder
+    {
+        return static::query()
+            ->where('product_id', $product_id)
+            ->when(
+                $product_import_batch_id !== null && $product_import_batch_id > 0,
+                static fn (Builder $query): Builder => $query->where('product_import_batch_id', $product_import_batch_id)
+            );
     }
 }

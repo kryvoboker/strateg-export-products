@@ -87,7 +87,7 @@ class ProductDeleteItemsRelationManager extends RelationManager
                             return '';
                         }
 
-                        return (string) (Shop::query()->whereKey($shop_id)->value('name') ?? '');
+                        return Shop::resolveNameById($shop_id);
                     }),
                 TextColumn::make('error_message')
                     ->label(__('admin/product_imports/batches.columns.item_error'))

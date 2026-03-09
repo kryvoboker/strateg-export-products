@@ -175,11 +175,7 @@ class ProductsTable
 
                 SelectFilter::make('shop_id')
                     ->label(__('admin/products/products.filters.shop'))
-                    ->options(static fn (): array => Shop::query()
-                        ->where('is_active', true)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->toArray())
+                    ->options(static fn (): array => Shop::resolveActiveOptions())
                     ->query(static function (Builder $query, array $data): Builder {
                         $shop_id = (int) ($data['value'] ?? 0);
 
@@ -732,14 +728,7 @@ class ProductsTable
             ->all();
 
         if ($shop_names === []) {
-            $shop_names = ProductShop::query()
-                ->where('product_id', (int) $product->id)
-                ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
-                ->orderBy('shops.name')
-                ->pluck('shops.name')
-                ->map(static fn ($shop_name): string => Str::squish((string) $shop_name))
-                ->filter(static fn (string $shop_name): bool => $shop_name !== '')
-                ->all();
+            $shop_names = ProductShop::resolveBoundShopNames((int) $product->id);
         }
 
         $unique_shop_names = [];
@@ -812,11 +801,7 @@ class ProductsTable
             );
         }
 
-        return ProductShop::query()
-            ->where('product_id', (int) $product->id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->exists();
+        return ProductShop::hasAnyExternalBinding((int) $product->id);
     }
 
     /**
@@ -884,11 +869,7 @@ class ProductsTable
 
     private static function hasAnyExternalBinding(Product $product): bool
     {
-        return ProductShop::query()
-            ->where('product_id', (int) $product->id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->exists();
+        return ProductShop::hasAnyExternalBinding((int) $product->id);
     }
 
     /**
@@ -896,14 +877,7 @@ class ProductsTable
      */
     private static function resolveDeletableShopOptions(Product $product): array
     {
-        return ProductShop::query()
-            ->where('product_id', (int) $product->id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name', 'product_shop.shop_id')
-            ->toArray();
+        return ProductShop::resolveDeletableShopOptions((int) $product->id);
     }
 
     /**

@@ -103,21 +103,13 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             return '';
                         }
 
-                        $product_shop_query = ProductShop::query()
-                            ->where('product_id', $product_id)
-                            ->whereNotNull('external_product_id');
-
                         if ($shop_id > 0) {
-                            $product_shop_query->where('shop_id', $shop_id);
+                            $external_product_id = ProductShop::resolveExternalProductId($product_id, $shop_id);
+
+                            return $external_product_id > 0 ? (string) $external_product_id : '';
                         }
 
-                        return $product_shop_query
-                            ->pluck('external_product_id')
-                            ->map(static fn ($external_product_id): string => (string) $external_product_id)
-                            ->filter(static fn (string $external_product_id): bool => $external_product_id !== '')
-                            ->unique()
-                            ->values()
-                            ->implode(', ');
+                        return implode(', ', ProductShop::resolveExternalProductIds($product_id));
                     })
                     ->toggleable(),
                 TextColumn::make('shop_name')
@@ -133,7 +125,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                             return '';
                         }
 
-                        return (string) (Shop::query()->whereKey($shop_id)->value('name') ?? '');
+                        return Shop::resolveNameById($shop_id);
                     }),
                 TextColumn::make('error_message')
                     ->label(__('admin/product_imports/batches.columns.item_error'))
@@ -182,11 +174,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                     ]),
                 SelectFilter::make('shop_id')
                     ->label(__('admin/product_imports/batches.filters.shop'))
-                    ->options(fn (): array => Shop::query()
-                        ->where('is_active', true)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->toArray())
+                    ->options(fn (): array => Shop::resolveActiveOptions())
                     ->query(static function ($query, array $data) {
                         $shop_id = (int) Arr::get($data, 'value', 0);
                         if ($shop_id <= 0) {
@@ -324,11 +312,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/product_imports/batches.product_edit.fields.bind_shop_id'))
-                                ->options(fn (): array => Shop::query()
-                                    ->where('is_active', true)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->toArray())
+                                ->options(fn (): array => Shop::resolveActiveOptions())
                                 ->multiple()
                                 ->required()
                                 ->searchable()
@@ -617,14 +601,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             return [];
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->pluck('shop_id')
-            ->map(static fn ($shop_id): int => (int) $shop_id)
-            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        return ProductShop::resolveBoundShopIds($product_id);
     }
 
     private function hasExternalProductIdForRecord(ProductUpdateItem $record): bool
@@ -634,11 +611,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             return false;
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->exists();
+        return ProductShop::hasAnyExternalBinding($product_id);
     }
 
     /**
@@ -651,14 +624,7 @@ class ProductUpdateItemsRelationManager extends RelationManager
             return [];
         }
 
-        return ProductShop::query()
-            ->where('product_id', $product_id)
-            ->whereNotNull('external_product_id')
-            ->where('external_product_id', '>', 0)
-            ->join('shops', 'shops.id', '=', 'product_shop.shop_id')
-            ->orderBy('shops.name')
-            ->pluck('shops.name', 'product_shop.shop_id')
-            ->toArray();
+        return ProductShop::resolveDeletableShopOptions($product_id);
     }
 
     private function getTypedOwnerRecord(): ProductUpdateBatch

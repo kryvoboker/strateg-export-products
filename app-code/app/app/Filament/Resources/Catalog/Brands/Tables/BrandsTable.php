@@ -75,7 +75,7 @@ class BrandsTable
             ->filters([
                 SelectFilter::make('shop_id')
                     ->label(__('admin/brands/brands.filters.shop'))
-                    ->options(fn (): array => Shop::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->toArray())
+                    ->options(fn (): array => Shop::resolveActiveOptions())
                     ->query(static function (Builder $query, array $data): Builder {
                         $shop_id = (int) ($data['value'] ?? 0);
                         if ($shop_id <= 0) {
@@ -112,7 +112,7 @@ class BrandsTable
                         ->schema([
                             Select::make('shop_ids')
                                 ->label(__('admin/brands/brands.labels.shops'))
-                                ->options(fn (): array => Shop::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->toArray())
+                                ->options(fn (): array => Shop::resolveActiveOptions())
                                 ->multiple()
                                 ->required()
                                 ->searchable()

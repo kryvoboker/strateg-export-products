@@ -14,9 +14,11 @@ use App\Models\Manufacturers\Manufacturer;
 use App\Models\Manufacturers\ManufacturerShop;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
+use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Shop extends Model
 {
@@ -150,5 +152,57 @@ class Shop extends Model
         return $this->belongsToMany(Brand::class, 'brand_shop', 'shop_id', 'brand_id')
             ->withPivot('external_brand_id')
             ->withTimestamps();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function resolveActiveOptions(): array
+    {
+        return static::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->mapWithKeys(static fn (string $name, int|string $id): array => [(int) $id => Str::squish($name)])
+            ->toArray();
+    }
+
+    /**
+     * @param  list<int>  $shop_ids
+     * @param  bool  $only_active
+     * @return array<int, string>
+     */
+    public static function resolveOptionsByIds(array $shop_ids, bool $only_active = true): array
+    {
+        $normalized_shop_ids = collect($shop_ids)
+            ->map(static fn (int|string $shop_id): int => (int) $shop_id)
+            ->filter(static fn (int $shop_id): bool => $shop_id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($normalized_shop_ids === []) {
+            return [];
+        }
+
+        return static::query()
+            ->whereIn('id', $normalized_shop_ids)
+            ->when(
+                $only_active,
+                static fn ($query) => $query->where('is_active', true)
+            )
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->mapWithKeys(static fn (string $name, int|string $id): array => [(int) $id => Str::squish($name)])
+            ->toArray();
+    }
+
+    public static function resolveNameById(int $shop_id): string
+    {
+        if ($shop_id <= 0) {
+            return '';
+        }
+
+        return Str::squish((string) (static::query()->whereKey($shop_id)->value('name') ?? ''));
     }
 }
