@@ -6,7 +6,6 @@ namespace App\Filament\Resources\ProductImports\RelationManagers;
 
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
-use App\Jobs\ProcessProductRestoreBatchJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Attributes\AttributeShop;
@@ -32,6 +31,7 @@ use App\Models\Shops\ShopLanguage;
 use App\Services\Products\ProductEditStateBuilderService;
 use App\Services\Products\ProductEditPersistenceService;
 use App\Services\Products\ProductExportQueueService;
+use App\Services\Products\ProductRestoreQueueService;
 use App\Services\Products\ProductShopBindingQueueService;
 use App\Services\Products\ProductResourceOptionsService;
 use App\Supports\Services\Products\ProductBackupRestoreService;
@@ -725,15 +725,12 @@ class ProductImportItemsRelationManager extends RelationManager
                         ->modalHeading(__('admin/product_imports/batches.actions.restore_products_from_backups'))
                         ->modalDescription(__('admin/product_imports/batches.messages.restore_products_bulk_confirmation'))
                         ->action(function ($records): void {
-                            $record_ids = collect($records)
-                                ->filter(static fn ($record): bool => $record instanceof ProductImportItem)
-                                ->map(static fn (ProductImportItem $record): int => (int) $record->id)
-                                ->filter(static fn (int $id): bool => $id > 0)
-                                ->unique()
-                                ->values()
-                                ->all();
+                            $summary = app(ProductRestoreQueueService::class)->queueForImportItems(
+                                $records,
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null,
+                            );
 
-                            if ($record_ids === []) {
+                            if (($summary['items_selected'] ?? 0) <= 0) {
                                 Notification::make()
                                     ->title(__('admin/product_imports/batches.messages.restore_products_bulk_no_items'))
                                     ->danger()
@@ -742,13 +739,9 @@ class ProductImportItemsRelationManager extends RelationManager
                                 return;
                             }
 
-                            ProcessProductRestoreBatchJob::dispatch($record_ids, auth()->id());
-
                             Notification::make()
                                 ->title(__('admin/product_imports/batches.messages.restore_products_bulk_queued'))
-                                ->body(__('admin/product_imports/batches.messages.restore_products_bulk_result', [
-                                    'items_selected' => count($record_ids),
-                                ]))
+                                ->body(__('admin/product_imports/batches.messages.restore_products_bulk_result', $summary))
                                 ->success()
                                 ->send();
                         }),

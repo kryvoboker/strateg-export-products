@@ -6,9 +6,6 @@ namespace App\Services\Products;
 
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
-use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
-use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
-use App\Jobs\ProcessCatalogProductRestoreBatchJob;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductShopBindingJob;
 use App\Models\Products\Exports\ProductExportItem;
@@ -16,7 +13,6 @@ use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
-use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
@@ -77,72 +73,12 @@ class ProductTableActionService
      */
     public function queueRestoreForSelectedProducts(Collection $records, array $shop_ids): array
     {
-        $summary = [
-            'products_total'         => 0,
-            'shops_total'            => count($shop_ids),
-            'restore_batches_queued' => 0,
-            'errors'                 => 0,
-        ];
-
-        $product_ids = $records
-            ->filter(static fn ($record): bool => $record instanceof Product)
-            ->map(static fn (Product $record): int => (int) $record->id)
-            ->filter(static fn (int $product_id): bool => $product_id > 0)
-            ->unique()
-            ->values()
-            ->all();
-
-        $summary['products_total'] = count($product_ids);
-
-        if ($product_ids === [] || $shop_ids === []) {
-            return $summary;
-        }
-
         $requested_by_user_id = is_numeric(auth()->id()) ? (int) auth()->id() : null;
-
-        try {
-            $batch = ProductUpdateBatch::query()->create([
-                'user_id'         => $requested_by_user_id,
-                'source_type'     => ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value,
-                'source_name'     => 'Catalog products restore API',
-                'source_path'     => null,
-                'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-                'total_items'     => 0,
-                'processed_items' => 0,
-                'failed_items'    => 0,
-                'options'         => [
-                    'triggered_from'       => 'catalog_products_restore',
-                    'requested_by_user_id' => $requested_by_user_id,
-                    'restore_state'        => 'processing',
-                    'restore_started_at'   => now()->toDateTimeString(),
-                    'restore_finished_at'  => null,
-                ],
-                'started_at'  => now(),
-                'finished_at' => null,
-            ]);
-
-            ProcessCatalogProductRestoreBatchJob::dispatch(
-                (int) $batch->id,
-                $product_ids,
-                $shop_ids,
-                $requested_by_user_id
-            );
-
-            $summary['restore_batches_queued']++;
-        } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to queue catalog products restore batch', [
-                'product_ids'          => $product_ids,
-                'shop_ids'             => $shop_ids,
-                'requested_by_user_id' => $requested_by_user_id,
-                'error_msg'            => $exception->getMessage(),
-                'file'                 => $exception->getFile(),
-                'line'                 => $exception->getLine(),
-            ]);
-
-            $summary['errors']++;
-        }
-
-        return $summary;
+        return app(ProductRestoreQueueService::class)->queueForCatalogProducts(
+            $records,
+            $shop_ids,
+            $requested_by_user_id,
+        );
     }
 
     /**
