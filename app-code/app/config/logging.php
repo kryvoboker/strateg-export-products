@@ -173,8 +173,8 @@ return [
                 MemoryUsageProcessor::class,
             ],
             'handler_with' => [
-                'apiKey'               => config('buggregator.telegram_token'),
-                'channel'              => config('buggregator.kamaz_id'),
+                'apiKey'               => config('monolog.telegram_token'),
+                'channel'              => config('monolog.kamaz_id'),
                 'splitLongMessages'    => true,
                 'delayBetweenMessages' => 1,
             ],

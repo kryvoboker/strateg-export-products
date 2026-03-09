@@ -30,7 +30,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             }
 
             // Return null to let Laravel handle other errors by default
-
+            return null;
         });
     })->create();
 

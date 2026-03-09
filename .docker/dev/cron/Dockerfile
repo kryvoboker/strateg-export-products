@@ -36,10 +36,19 @@ RUN install-php-extensions gd \
 
 FROM php-cli AS supercronic
 
+ARG TARGETARCH
+
 # Install supercronic (cron for containers)
-RUN curl -fsSLO "https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64" \
-  && chmod +x supercronic-linux-amd64 \
-  && mv supercronic-linux-amd64 /usr/local/bin/supercronic
+# Latest releases available at https://github.com/aptible/supercronic/releases
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.43/supercronic-linux-${TARGETARCH} \
+    SUPERCRONIC_SHA1SUM=f97b92132b61a8f827c3faf67106dc0e4467ccf2 \
+    SUPERCRONIC=supercronic-linux-${TARGETARCH}
+
+RUN curl -fsSLO "$SUPERCRONIC_URL" \
+  && echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - \
+  && chmod +x "$SUPERCRONIC" \
+  && mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" \
+  && ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic
 
 FROM php-cli AS development
 

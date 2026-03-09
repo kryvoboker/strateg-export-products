@@ -41,7 +41,7 @@ RUN echo "xhprof.output_dir = /tmp/xhprof" >> /usr/local/etc/php/conf.d/docker-p
 
 RUN docker-php-ext-enable xdebug xhprof
 
-FROM node:24.11.0-bookworm-slim AS nodejs
+FROM node:25.6.1-bookworm-slim AS nodejs
 
 FROM php-fpm AS development
 
