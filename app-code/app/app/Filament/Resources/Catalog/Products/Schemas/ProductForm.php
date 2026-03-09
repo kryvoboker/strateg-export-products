@@ -189,6 +189,7 @@ class ProductForm
                                     ->tabs(fn (callable $get): array => self::getAttributeLanguageTabs(
                                         (int) ($get('bind_shop_id') ?? 0),
                                         (string) ($get('attribute_source_scope') ?? 'all'),
+                                        self::resolveAttributeLanguageIdsFromState($get),
                                     ))
                                     ->columnSpanFull(),
                             ]),
@@ -510,12 +511,17 @@ class ProductForm
     }
 
     /**
+     * @param  list<int>  $attribute_language_ids
      * @return array<Tab>
      */
-    private static function getAttributeLanguageTabs(int $shop_id, string $scope): array
+    private static function getAttributeLanguageTabs(int $shop_id, string $scope, array $attribute_language_ids = []): array
     {
-        $shop_languages = self::getShopLanguages($shop_id);
-        if ($shop_languages->isEmpty()) {
+        $attribute_tab_contexts = app(ProductResourceOptionsService::class)->getAttributeTabContexts(
+            $shop_id,
+            $attribute_language_ids,
+        );
+
+        if ($attribute_tab_contexts->isEmpty()) {
             return [
                 Tab::make('empty_attributes')
                     ->label(__('admin/product_imports/batches.product_edit.tabs.attributes'))
@@ -528,12 +534,11 @@ class ProductForm
         }
 
         $tabs = [];
-        foreach ($shop_languages as $shop_language) {
-            $shop_language_id = (int) $shop_language->id;
+        foreach ($attribute_tab_contexts as $attribute_tab_context) {
+            $shop_language_id = (int) $attribute_tab_context['id'];
 
-            $tabs[] = Tab::make('attribute_language_'.$shop_language_id)
-                ->label((string) $shop_language->name)
-                ->badge((string) $shop_language->code)
+            $tab = Tab::make('attribute_language_'.$shop_language_id)
+                ->label((string) $attribute_tab_context['name'])
                 ->schema([
                     Select::make("attributes_selected_by_language.$shop_language_id")
                         ->label(__('admin/product_imports/batches.product_edit.fields.attributes_existing_ids'))
@@ -561,9 +566,31 @@ class ProductForm
                         ])
                         ->columns(),
                 ]);
+
+            if ($attribute_tab_context['code'] !== '') {
+                $tab->badge((string) $attribute_tab_context['code']);
+            }
+
+            $tabs[] = $tab;
         }
 
         return $tabs;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function resolveAttributeLanguageIdsFromState(callable $get): array
+    {
+        return collect([
+            ...array_keys(is_array($get('attributes_selected_by_language')) ? $get('attributes_selected_by_language') : []),
+            ...array_keys(is_array($get('attributes_custom_by_language')) ? $get('attributes_custom_by_language') : []),
+            ...array_keys(is_array($get('attributes_by_language')) ? $get('attributes_by_language') : []),
+        ])
+            ->map(static fn ($shop_language_id): int => is_numeric($shop_language_id) ? (int) $shop_language_id : 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

@@ -383,7 +383,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->toArray();
 
                         $attributes_by_language = $product->productToAttributes
-                            ->groupBy('shop_language_id')
+                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
                             ->map(static fn (Collection $rows): array => $rows
                                 ->map(static fn (ProductToAttribute $attribute): array => [
                                     'attribute_id' => $attribute->attribute_id,
@@ -392,7 +392,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->toArray();
 
                         $attributes_selected_by_language = $product->productToAttributes
-                            ->groupBy('shop_language_id')
+                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
                             ->map(static fn (Collection $rows): array => $rows
                                 ->pluck('attribute_id')
                                 ->filter()
@@ -403,7 +403,7 @@ class ProductImportItemsRelationManager extends RelationManager
                             ->toArray();
 
                         $attributes_custom_by_language = $product->productToAttributes
-                            ->groupBy('shop_language_id')
+                            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
                             ->map(function (Collection $rows, $shop_language_id) use ($product_resource_options_service): array {
                                 $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
                                 $attribute_name_map = $product_resource_options_service->getAttributeLabelsByIds(
@@ -649,7 +649,8 @@ class ProductImportItemsRelationManager extends RelationManager
                                         Tabs::make('attribute_language_tabs')
                                             ->tabs(fn (callable $get): array => $this->getAttributeLanguageTabs(
                                                 (int) ($get('bind_shop_id') ?? 0),
-                                                (string) ($get('attribute_source_scope') ?? 'all')
+                                                (string) ($get('attribute_source_scope') ?? 'all'),
+                                                $this->resolveAttributeLanguageIdsFromState($get),
                                             ))
                                             ->columnSpanFull(),
                                     ]),
@@ -2171,12 +2172,9 @@ class ProductImportItemsRelationManager extends RelationManager
         $attributes_selected_by_language = Arr::get($data, 'attributes_selected_by_language', []);
         if (is_array($attributes_selected_by_language)) {
             foreach ($attributes_selected_by_language as $shop_language_id => $attribute_ids) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
+                $resolved_shop_language_id = $this->resolveAttributeRowLanguageId($shop_language_id, $default_shop_language_id);
 
-                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_ids)) {
+                if (! is_array($attribute_ids)) {
                     continue;
                 }
 
@@ -2186,7 +2184,7 @@ class ProductImportItemsRelationManager extends RelationManager
                         continue;
                     }
 
-                    $pair_key = $resolved_shop_language_id.':'.$resolved_attribute_id;
+                    $pair_key = ($resolved_shop_language_id ?? 0).':'.$resolved_attribute_id;
                     if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                         throw ValidationException::withMessages([
                             "attributes_selected_by_language.$shop_language_id" => __('admin/product_imports/batches.product_edit.errors.duplicate_attribute'),
@@ -2206,12 +2204,9 @@ class ProductImportItemsRelationManager extends RelationManager
         $attributes_custom_by_language = Arr::get($data, 'attributes_custom_by_language', []);
         if (is_array($attributes_custom_by_language)) {
             foreach ($attributes_custom_by_language as $shop_language_id => $attribute_rows) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
+                $resolved_shop_language_id = $this->resolveAttributeRowLanguageId($shop_language_id, $default_shop_language_id);
 
-                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_rows)) {
+                if (! is_array($attribute_rows)) {
                     continue;
                 }
 
@@ -2234,7 +2229,7 @@ class ProductImportItemsRelationManager extends RelationManager
 
                     foreach ($attribute_paths as $attribute_path) {
                         $attribute_id = $this->resolveOrCreateAttributeIdByPath($attribute_path, $resolved_shop_language_id);
-                        $pair_key     = $resolved_shop_language_id.':'.$attribute_id;
+                        $pair_key     = ($resolved_shop_language_id ?? 0).':'.$attribute_id;
 
                         if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                             throw ValidationException::withMessages([
@@ -2256,12 +2251,9 @@ class ProductImportItemsRelationManager extends RelationManager
         $legacy_attributes_by_language = Arr::get($data, 'attributes_by_language', []);
         if (is_array($legacy_attributes_by_language)) {
             foreach ($legacy_attributes_by_language as $shop_language_id => $attribute_rows) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
+                $resolved_shop_language_id = $this->resolveAttributeRowLanguageId($shop_language_id, $default_shop_language_id);
 
-                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_rows)) {
+                if (! is_array($attribute_rows)) {
                     continue;
                 }
 
@@ -2294,7 +2286,9 @@ class ProductImportItemsRelationManager extends RelationManager
             ProductToAttribute::query()->create([
                 'product_id'       => $product_id,
                 'attribute_id'     => (int) $attribute_row_to_create['attribute_id'],
-                'shop_language_id' => (int) $attribute_row_to_create['shop_language_id'],
+                'shop_language_id' => $attribute_row_to_create['shop_language_id'] !== null
+                    ? (int) $attribute_row_to_create['shop_language_id']
+                    : null,
                 'text'             => (string) $attribute_row_to_create['text'],
             ]);
         }
@@ -2464,7 +2458,7 @@ class ProductImportItemsRelationManager extends RelationManager
     /**
      * @param  list<string>  $attribute_path
      */
-    private function resolveOrCreateAttributeIdByPath(array $attribute_path, int $shop_language_id): int
+    private function resolveOrCreateAttributeIdByPath(array $attribute_path, ?int $shop_language_id): int
     {
         $attribute_path = array_values(array_filter(
             array_map(static fn ($segment): string => Str::trim((string) $segment), $attribute_path),
@@ -2480,10 +2474,15 @@ class ProductImportItemsRelationManager extends RelationManager
         $resolved_attribute_id = null;
 
         foreach ($attribute_path as $attribute_name) {
-            $existing_attribute_id = AttributeDescription::query()
-                ->where('shop_language_id', $shop_language_id)
+            $existing_attribute_query = AttributeDescription::query()
                 ->whereRaw('LOWER(name) = ?', [Str::lower($attribute_name)])
-                ->value('attribute_id');
+                ->when(
+                    $shop_language_id !== null,
+                    static fn ($query) => $query->where('shop_language_id', $shop_language_id),
+                    static fn ($query) => $query->whereNull('shop_language_id'),
+                );
+
+            $existing_attribute_id = $existing_attribute_query->value('attribute_id');
 
             if ($existing_attribute_id !== null) {
                 $resolved_attribute_id = (int) $existing_attribute_id;
@@ -2512,6 +2511,21 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         return $resolved_attribute_id;
+    }
+
+    private function resolveAttributeRowLanguageId(int|string|null $shop_language_id, int $default_shop_language_id): ?int
+    {
+        $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
+
+        if ($resolved_shop_language_id > 0) {
+            return $resolved_shop_language_id;
+        }
+
+        if ($default_shop_language_id > 0) {
+            return $default_shop_language_id;
+        }
+
+        return null;
     }
 
     /**
@@ -2671,12 +2685,17 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
+     * @param  list<int>  $attribute_language_ids
      * @return array<Tab>
      */
-    private function getAttributeLanguageTabs(int $shop_id, string $scope): array
+    private function getAttributeLanguageTabs(int $shop_id, string $scope, array $attribute_language_ids = []): array
     {
-        $shop_languages = $this->getShopLanguages($shop_id);
-        if ($shop_languages->isEmpty()) {
+        $attribute_tab_contexts = app(ProductResourceOptionsService::class)->getAttributeTabContexts(
+            $shop_id,
+            $attribute_language_ids,
+        );
+
+        if ($attribute_tab_contexts->isEmpty()) {
             return [
                 Tab::make('empty_attributes')
                     ->label(__('admin/product_imports/batches.product_edit.tabs.attributes'))
@@ -2689,12 +2708,11 @@ class ProductImportItemsRelationManager extends RelationManager
         }
 
         $tabs = [];
-        foreach ($shop_languages as $shop_language) {
-            $language_id = (int) $shop_language->id;
+        foreach ($attribute_tab_contexts as $attribute_tab_context) {
+            $language_id = (int) $attribute_tab_context['id'];
 
-            $tabs[] = Tab::make('attribute_language_'.$language_id)
-                ->label((string) $shop_language->name)
-                ->badge((string) $shop_language->code)
+            $tab = Tab::make('attribute_language_'.$language_id)
+                ->label((string) $attribute_tab_context['name'])
                 ->schema([
                     Select::make("attributes_selected_by_language.$language_id")
                         ->label(__('admin/product_imports/batches.product_edit.fields.attributes_existing_ids'))
@@ -2721,9 +2739,31 @@ class ProductImportItemsRelationManager extends RelationManager
                                 ->maxLength(3000),
                         ])->columns(),
                 ]);
+
+            if ($attribute_tab_context['code'] !== '') {
+                $tab->badge((string) $attribute_tab_context['code']);
+            }
+
+            $tabs[] = $tab;
         }
 
         return $tabs;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveAttributeLanguageIdsFromState(callable $get): array
+    {
+        return collect([
+            ...array_keys(is_array($get('attributes_selected_by_language')) ? $get('attributes_selected_by_language') : []),
+            ...array_keys(is_array($get('attributes_custom_by_language')) ? $get('attributes_custom_by_language') : []),
+            ...array_keys(is_array($get('attributes_by_language')) ? $get('attributes_by_language') : []),
+        ])
+            ->map(static fn ($shop_language_id): int => is_numeric($shop_language_id) ? (int) $shop_language_id : 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

@@ -322,6 +322,63 @@ class ProductResourceOptionsService
     }
 
     /**
+     * @param  list<int>  $attribute_language_ids
+     * @return Collection<int, array{id:int, name:string, code:string}>
+     */
+    public function getAttributeTabContexts(int $shop_id, array $attribute_language_ids = []): Collection
+    {
+        $shop_languages = $this->getShopLanguages($shop_id);
+        if ($shop_languages->isNotEmpty()) {
+            return $shop_languages
+                ->map(static fn (ShopLanguage $shop_language): array => [
+                    'id'   => (int) $shop_language->id,
+                    'name' => (string) $shop_language->name,
+                    'code' => (string) $shop_language->code,
+                ])
+                ->values();
+        }
+
+        $normalized_language_ids = collect($attribute_language_ids)
+            ->map(static fn (int $shop_language_id): int => $shop_language_id)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id >= 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $persisted_language_ids = collect($normalized_language_ids)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
+            ->values()
+            ->all();
+
+        if ($persisted_language_ids !== []) {
+            $persisted_shop_languages = ShopLanguage::query()
+                ->whereIn('id', $persisted_language_ids)
+                ->orderBy('name')
+                ->get();
+
+            if ($persisted_shop_languages->isNotEmpty()) {
+                return $persisted_shop_languages
+                    ->map(static fn (ShopLanguage $shop_language): array => [
+                        'id'   => (int) $shop_language->id,
+                        'name' => (string) $shop_language->name,
+                        'code' => (string) $shop_language->code,
+                    ])
+                    ->values();
+            }
+        }
+
+        if (in_array(0, $normalized_language_ids, true)) {
+            return collect([[
+                'id'   => 0,
+                'name' => (string) __('admin/product_imports/batches.product_edit.tabs.attributes'),
+                'code' => '',
+            ]]);
+        }
+
+        return collect();
+    }
+
+    /**
      * @return list<string>
      */
     private function resolveCatalogOptionCacheKeysForShop(int $shop_id): array

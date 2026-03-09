@@ -308,7 +308,7 @@ class EditProduct extends EditRecord
             ->toArray();
 
         $attributes_by_language = $product->productToAttributes
-            ->groupBy('shop_language_id')
+            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
             ->map(static fn ($rows): array => $rows
                 ->map(static fn (ProductToAttribute $attribute): array => [
                     'attribute_id' => $attribute->attribute_id,
@@ -317,7 +317,7 @@ class EditProduct extends EditRecord
             ->toArray();
 
         $attributes_selected_by_language = $product->productToAttributes
-            ->groupBy('shop_language_id')
+            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
             ->map(static fn ($rows): array => $rows
                 ->pluck('attribute_id')
                 ->filter()
@@ -328,7 +328,7 @@ class EditProduct extends EditRecord
             ->toArray();
 
         $attributes_custom_by_language = $product->productToAttributes
-            ->groupBy('shop_language_id')
+            ->groupBy(static fn (ProductToAttribute $attribute): int => (int) ($attribute->shop_language_id ?? 0))
             ->map(function ($rows, $shop_language_id) use ($product_resource_options_service): array {
                 $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
                 $attribute_name_map = $product_resource_options_service->getAttributeLabelsByIds(
@@ -594,12 +594,9 @@ class EditProduct extends EditRecord
         $attributes_selected_by_language = Arr::get($data, 'attributes_selected_by_language', []);
         if (is_array($attributes_selected_by_language)) {
             foreach ($attributes_selected_by_language as $shop_language_id => $attribute_ids) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
+                $resolved_shop_language_id = $this->resolveAttributeRowLanguageId($shop_language_id, $default_shop_language_id);
 
-                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_ids)) {
+                if (! is_array($attribute_ids)) {
                     continue;
                 }
 
@@ -609,7 +606,7 @@ class EditProduct extends EditRecord
                         continue;
                     }
 
-                    $pair_key = $resolved_shop_language_id.':'.$resolved_attribute_id;
+                    $pair_key = ($resolved_shop_language_id ?? 0).':'.$resolved_attribute_id;
                     if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                         throw ValidationException::withMessages([
                             "attributes_selected_by_language.$shop_language_id" => __('admin/product_imports/batches.product_edit.errors.duplicate_attribute'),
@@ -629,12 +626,9 @@ class EditProduct extends EditRecord
         $attributes_custom_by_language = Arr::get($data, 'attributes_custom_by_language', []);
         if (is_array($attributes_custom_by_language)) {
             foreach ($attributes_custom_by_language as $shop_language_id => $attribute_rows) {
-                $resolved_shop_language_id = (int) $shop_language_id;
-                if ($resolved_shop_language_id <= 0) {
-                    $resolved_shop_language_id = $default_shop_language_id;
-                }
+                $resolved_shop_language_id = $this->resolveAttributeRowLanguageId($shop_language_id, $default_shop_language_id);
 
-                if ($resolved_shop_language_id <= 0 || ! is_array($attribute_rows)) {
+                if (! is_array($attribute_rows)) {
                     continue;
                 }
 
@@ -657,7 +651,7 @@ class EditProduct extends EditRecord
 
                     foreach ($attribute_paths as $attribute_path) {
                         $attribute_id = $this->resolveOrCreateAttributeIdByPath($attribute_path, $resolved_shop_language_id);
-                        $pair_key     = $resolved_shop_language_id.':'.$attribute_id;
+                        $pair_key     = ($resolved_shop_language_id ?? 0).':'.$attribute_id;
 
                         if (array_key_exists($pair_key, $seen_attribute_pairs)) {
                             throw ValidationException::withMessages([
@@ -680,7 +674,9 @@ class EditProduct extends EditRecord
             ProductToAttribute::query()->create([
                 'product_id'       => $product_id,
                 'attribute_id'     => (int) $attribute_row_to_create['attribute_id'],
-                'shop_language_id' => (int) $attribute_row_to_create['shop_language_id'],
+                'shop_language_id' => $attribute_row_to_create['shop_language_id'] !== null
+                    ? (int) $attribute_row_to_create['shop_language_id']
+                    : null,
                 'text'             => (string) $attribute_row_to_create['text'],
             ]);
         }
@@ -849,7 +845,7 @@ class EditProduct extends EditRecord
     /**
      * @param  list<string>  $attribute_path
      */
-    private function resolveOrCreateAttributeIdByPath(array $attribute_path, int $shop_language_id): int
+    private function resolveOrCreateAttributeIdByPath(array $attribute_path, ?int $shop_language_id): int
     {
         $attribute_path = array_values(array_filter(
             array_map(static fn ($segment): string => Str::trim((string) $segment), $attribute_path),
@@ -865,10 +861,15 @@ class EditProduct extends EditRecord
         $resolved_attribute_id = null;
 
         foreach ($attribute_path as $attribute_name) {
-            $existing_attribute_id = AttributeDescription::query()
-                ->where('shop_language_id', $shop_language_id)
+            $existing_attribute_query = AttributeDescription::query()
                 ->whereRaw('LOWER(name) = ?', [Str::lower($attribute_name)])
-                ->value('attribute_id');
+                ->when(
+                    $shop_language_id !== null,
+                    static fn ($query) => $query->where('shop_language_id', $shop_language_id),
+                    static fn ($query) => $query->whereNull('shop_language_id'),
+                );
+
+            $existing_attribute_id = $existing_attribute_query->value('attribute_id');
 
             if ($existing_attribute_id !== null) {
                 $resolved_attribute_id = (int) $existing_attribute_id;
@@ -898,6 +899,21 @@ class EditProduct extends EditRecord
         }
 
         return $resolved_attribute_id;
+    }
+
+    private function resolveAttributeRowLanguageId(int|string|null $shop_language_id, int $default_shop_language_id): ?int
+    {
+        $resolved_shop_language_id = is_numeric($shop_language_id) ? (int) $shop_language_id : 0;
+
+        if ($resolved_shop_language_id > 0) {
+            return $resolved_shop_language_id;
+        }
+
+        if ($default_shop_language_id > 0) {
+            return $default_shop_language_id;
+        }
+
+        return null;
     }
 
     /**
