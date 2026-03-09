@@ -205,7 +205,7 @@ class ProductForm
                                     ->tabs(function (callable $get): array {
                                         $seo_urls_by_language = $get('seo_urls_by_language');
                                         $seo_language_ids     = is_array($seo_urls_by_language)
-                                            ? Arr::map(Arr::keys($seo_urls_by_language), static fn ($shop_language_id): int => (int) $shop_language_id)
+                                            ? Arr::map(array_keys($seo_urls_by_language), static fn ($shop_language_id): int => (int) $shop_language_id)
                                             : [];
 
                                         return self::getSeoUrlLanguageTabs((int) ($get('bind_shop_id') ?? 0), $seo_language_ids);

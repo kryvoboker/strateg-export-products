@@ -80,6 +80,7 @@
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
+            "@php artisan livewire:publish --assets --no-interaction",
             "@php artisan lang:update",
             "@php artisan boost:update --ansi"
         ],
