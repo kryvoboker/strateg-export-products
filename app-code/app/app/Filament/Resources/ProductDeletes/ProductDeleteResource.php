@@ -21,8 +21,6 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use UnitEnum;
 
 class ProductDeleteResource extends Resource
@@ -78,13 +76,10 @@ class ProductDeleteResource extends Resource
                                     ->placeholder(__('admin/product_imports/batches.columns.empty_value')),
                                 TextEntry::make('options.error_log_path')
                                     ->label(__('admin/product_imports/batches.columns.error_log'))
-                                    ->url(fn (ProductDeleteBatch $record): ?string => $record->hasErrorLog()
-                                        ? Storage::url((string) $record->getErrorLogPath())
-                                        : null)
+                                    ->url(fn (ProductDeleteBatch $record): ?string => $record->getErrorLogUrl())
                                     ->openUrlInNewTab()
-                                    ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
-                                        ? __('admin/product_deletes/batches.actions.download_error_log')
-                                        : __('admin/product_imports/batches.columns.empty_value')),
+                                    ->formatStateUsing(fn (mixed $state, ProductDeleteBatch $record): string => $record->getErrorLogFileName() ?? __('admin/product_imports/batches.columns.empty_value'))
+                                    ->placeholder(__('admin/product_imports/batches.columns.empty_value')),
                                 TextEntry::make('created_at')
                                     ->label(__('admin/default.columns.created_at'))
                                     ->dateTime(config('app.datetime_format'), config('app.timezone')),

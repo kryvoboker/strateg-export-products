@@ -31,6 +31,7 @@ use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductBatchErrorAuditService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -189,12 +190,17 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
             ]);
 
             $product_update_batch->update([
-                'status'      => ProductUpdateBatchesStatusEnum::FAILED->value,
-                'finished_at' => now(),
-                'options'     => [
+                'status'       => ProductUpdateBatchesStatusEnum::FAILED->value,
+                'failed_items' => max((int) ($product_update_batch->failed_items ?? 0), 1),
+                'finished_at'  => now(),
+                'options'      => [
                     ...($product_update_batch->options ?? []),
                     'prepare_finished_at' => now()->toDateTimeString(),
-                    'last_error'          => Str::limit(Str::trim($exception->getMessage()), 10000),
+                    ...app(ProductBatchErrorAuditService::class)->syncUpdateBatchAudit(
+                        $product_update_batch,
+                        [],
+                        $exception,
+                    ),
                 ],
             ]);
         }
@@ -1810,6 +1816,12 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
         };
 
         $is_finished = $batch_status !== ProductUpdateBatchesStatusEnum::PROCESSING->value;
+        $audit_metadata = app(ProductBatchErrorAuditService::class)->syncUpdateBatchAudit(
+            $product_update_batch,
+            $batch_status === ProductUpdateBatchesStatusEnum::COMPLETED->value
+                ? []
+                : $this->collectFailedBatchAuditDetails((int) $product_update_batch->id),
+        );
 
         $product_update_batch->update([
             'status'          => $batch_status,
@@ -1823,9 +1835,47 @@ class ProcessProductUpdateBatchJob implements ShouldQueue
                 'prepared_items_total'     => $total_items,
                 'prepared_items_processed' => $processed_items,
                 'prepared_items_failed'    => $failed_items,
-                'last_error'               => null,
+                'last_error'               => $audit_metadata['last_error'],
+                'error_log_path'           => $audit_metadata['error_log_path'],
             ],
         ]);
+
+        Log::channel('daily')->info('Product update batch finalization summary', [
+            'job'             => self::class,
+            'batch_id'        => (int) $product_update_batch->id,
+            'status'          => $batch_status,
+            'total_items'     => $total_items,
+            'processed_items' => $processed_items,
+            'failed_items'    => $failed_items,
+            'last_error'      => $audit_metadata['last_error'],
+            'error_log_path'  => $audit_metadata['error_log_path'],
+        ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectFailedBatchAuditDetails(int $product_update_batch_id): array
+    {
+        return ProductUpdateItem::query()
+            ->where('product_update_batch_id', $product_update_batch_id)
+            ->where('status', ProductUpdateItemsStatusEnum::FAILED->value)
+            ->orderBy('id')
+            ->get()
+            ->map(static function (ProductUpdateItem $item): array {
+                return [
+                    'status'      => (string) $item->status,
+                    'item_id'     => (int) $item->id,
+                    'product_id'  => $item->product_id !== null ? (int) $item->product_id : null,
+                    'shop_id'     => is_numeric($item->getPayloadValue('shop_id')) ? (int) $item->getPayloadValue('shop_id') : null,
+                    'sheet'       => 'Product',
+                    'row'         => $item->getSourceRowNumber(),
+                    'source_path' => $item->getSourceFilePath(),
+                    'message'     => Str::limit(Str::trim((string) $item->error_message), 10000),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
 }

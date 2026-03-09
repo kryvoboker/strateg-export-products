@@ -29,6 +29,7 @@ use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductBatchErrorAuditService;
 use App\Supports\Services\SeoSlug\DefaultSeoSlugService;
 use App\Supports\Services\SeoSlug\DeSeoSlugService;
 use App\Supports\Services\SeoSlug\EnSeoSlugService;
@@ -41,7 +42,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -231,11 +231,12 @@ class ProcessProductImportBatchJob implements ShouldQueue
                 default            => ProductImportBatchesStatusEnum::COMPLETED,
             };
 
-            $error_log_path = null;
-
-            if ($failed_details !== [] || $batch_status === ProductImportBatchesStatusEnum::FAILED) {
-                $error_log_path = $this->writeBatchErrorLog($batch, $failed_details);
-            }
+            $audit_metadata = app(ProductBatchErrorAuditService::class)->syncImportBatchAudit(
+                $batch,
+                $failed_details,
+                null,
+                $batch_status === ProductImportBatchesStatusEnum::FAILED ? 'No import items were prepared for the batch' : null,
+            );
 
             $batch->update([
                 'status'          => $batch_status->value,
@@ -248,8 +249,20 @@ class ProcessProductImportBatchJob implements ShouldQueue
                     'prepare_finished_at' => now()->toDateTimeString(),
                     'prepared_items'      => $total_items,
                     'prepare_failed_rows' => $failed_rows,
-                    'error_log_path'      => $error_log_path,
+                    'last_error'          => $audit_metadata['last_error'],
+                    'error_log_path'      => $audit_metadata['error_log_path'],
                 ],
+            ]);
+
+            Log::channel('daily')->info('Product import batch finalization summary', [
+                'job'             => self::class,
+                'batch_id'        => (int) $batch->id,
+                'status'          => $batch_status->value,
+                'total_items'     => $total_items,
+                'processed_items' => 0,
+                'failed_items'    => $failed_rows,
+                'last_error'      => $audit_metadata['last_error'],
+                'error_log_path'  => $audit_metadata['error_log_path'],
             ]);
         } catch (Throwable $e) {
             Log::channel('stack')->error($e->getMessage(), $e->getTrace());
@@ -2178,16 +2191,22 @@ class ProcessProductImportBatchJob implements ShouldQueue
 
     private function markBatchFailed(ProductImportBatch $batch, string $reason, ?Throwable $exception = null): void
     {
-        $error_log_path = $this->writeBatchErrorLog($batch, [], $exception, $reason);
+        $audit_metadata = app(ProductBatchErrorAuditService::class)->syncImportBatchAudit(
+            $batch,
+            [],
+            $exception,
+            $reason,
+        );
 
         $batch->update([
-            'status'      => ProductImportBatchesStatusEnum::FAILED->value,
-            'finished_at' => now(),
-            'options'     => [
+            'status'       => ProductImportBatchesStatusEnum::FAILED->value,
+            'failed_items' => max((int) ($batch->failed_items ?? 0), 1),
+            'finished_at'  => now(),
+            'options'      => [
                 ...($batch->options ?? []),
                 'prepare_finished_at' => now()->toDateTimeString(),
-                'last_error'          => $reason,
-                'error_log_path'      => $error_log_path,
+                'last_error'          => $audit_metadata['last_error'],
+                'error_log_path'      => $audit_metadata['error_log_path'],
             ],
         ]);
 
@@ -2198,65 +2217,4 @@ class ProcessProductImportBatchJob implements ShouldQueue
         ]);
     }
 
-    /**
-     * @param  list<array<string, mixed>>  $failed_details
-     */
-    private function writeBatchErrorLog(
-        ProductImportBatch $batch,
-        array $failed_details,
-        ?Throwable $exception = null,
-        ?string $reason = null
-    ): ?string {
-        $log_lines   = [];
-        $log_lines[] = 'datetime: '.now()->toDateTimeString();
-        $log_lines[] = 'batch_id: '.$batch->id;
-        $log_lines[] = 'source_type: '.$batch->source_type;
-
-        $trimmed_reason = Str::trim((string) $reason);
-        if ($trimmed_reason !== '') {
-            $log_lines[] = 'reason: '.$trimmed_reason;
-        }
-
-        if ($exception !== null) {
-            $log_lines[] = 'exception: '.Str::trim($exception->getMessage());
-        }
-
-        if ($failed_details !== []) {
-            $log_lines[] = 'failed_rows: '.count($failed_details);
-
-            foreach ($failed_details as $index => $failed_detail) {
-                $line_number = $index + 1;
-                $sheet       = Str::trim((string) Arr::get($failed_detail, 'sheet', ''));
-                $row         = Arr::get($failed_detail, 'row');
-                $source_path = Str::trim((string) Arr::get($failed_detail, 'source_path', ''));
-                $message     = Str::trim((string) Arr::get($failed_detail, 'message', 'Unknown error'));
-
-                $log_lines[] = "$line_number. sheet=$sheet; row=$row; source=$source_path; message=$message";
-            }
-        }
-
-        if ($trimmed_reason === '' && $exception === null && $failed_details === []) {
-            return null;
-        }
-
-        $log_path = storage_path($this->buildBatchErrorLogPath((int) $batch->id));
-
-        if (FIle::exists(File::dirname($log_path)) === false) {
-            File::makeDirectory(File::dirname($log_path), recursive: true);
-        }
-
-        File::put($log_path, implode(PHP_EOL, $log_lines).PHP_EOL);
-        //        Storage::put($log_path, implode(PHP_EOL, $log_lines).PHP_EOL);
-
-        return $log_path;
-    }
-
-    private function buildBatchErrorLogPath(int $batch_id): string
-    {
-        $now_date  = now();
-        $directory = 'logs/product-imports/'.$now_date->format('Y/m');
-        $file_name = 'product-import-batch-'.$batch_id.'-errors-'.$now_date->format('Ymd_His').'.log';
-
-        return $directory.'/'.$file_name;
-    }
 }

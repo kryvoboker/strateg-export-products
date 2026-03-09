@@ -21,9 +21,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-
 class ProductUpdateBatchesTable
 {
     public static function configure(Table $table): Table
@@ -59,16 +56,16 @@ class ProductUpdateBatchesTable
                 TextColumn::make('total_items')->label(__('admin/product_imports/batches.columns.total_items'))->sortable(),
                 TextColumn::make('processed_items')->label(__('admin/product_imports/batches.columns.processed_items'))->sortable(),
                 TextColumn::make('failed_items')->label(__('admin/product_imports/batches.columns.failed_items'))->sortable(),
+                TextColumn::make('options.last_error')
+                    ->label(__('admin/product_imports/batches.columns.last_error'))
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('options.error_log_path')
                     ->label(__('admin/product_imports/batches.columns.error_log'))
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->url(fn (ProductUpdateBatch $record): ?string => $record->hasErrorLog()
-                        ? Storage::url((string) $record->getErrorLogPath())
-                        : null)
+                    ->url(fn (ProductUpdateBatch $record): ?string => $record->getErrorLogUrl())
                     ->openUrlInNewTab()
-                    ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
-                        ? __('admin/product_updates/batches.actions.download_error_log')
-                        : __('admin/product_imports/batches.columns.empty_value')),
+                    ->formatStateUsing(fn (mixed $state, ProductUpdateBatch $record): string => $record->getErrorLogFileName() ?? __('admin/product_imports/batches.columns.empty_value')),
                 TextColumn::make('created_at')
                     ->label(__('admin/default.columns.created_at'))
                     ->date(config('app.datetime_format'), config('app.timezone'))

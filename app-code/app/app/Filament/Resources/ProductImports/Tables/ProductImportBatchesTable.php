@@ -93,13 +93,9 @@ class ProductImportBatchesTable
                 TextColumn::make('options.error_log_path')
                     ->label(__('admin/product_imports/batches.columns.error_log'))
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
-                        ? Storage::url((string) $record->getErrorLogPath())
-                        : null)
+                    ->url(fn (ProductImportBatch $record): ?string => $record->getErrorLogUrl())
                     ->openUrlInNewTab()
-                    ->formatStateUsing(fn (mixed $state): string => Str::trim((string) $state) !== ''
-                        ? __('admin/product_imports/batches.actions.download_error_log')
-                        : __('admin/product_imports/batches.columns.empty_value')),
+                    ->formatStateUsing(fn (mixed $state, ProductImportBatch $record): string => $record->getErrorLogFileName() ?? __('admin/product_imports/batches.columns.empty_value')),
                 TextColumn::make('created_at')
                     ->label(__('admin/default.columns.created_at'))
                     ->date(config('app.datetime_format'), config('app.timezone'))
@@ -143,9 +139,7 @@ class ProductImportBatchesTable
                     ->label(__('admin/product_imports/batches.actions.download_error_log'))
                     ->icon(Heroicon::DocumentArrowDown)
                     ->visible(fn (ProductImportBatch $record): bool => $record->hasErrorLog())
-                    ->url(fn (ProductImportBatch $record): ?string => $record->hasErrorLog()
-                        ? Storage::url((string) $record->getErrorLogPath())
-                        : null)
+                    ->url(fn (ProductImportBatch $record): ?string => $record->getErrorLogUrl())
                     ->openUrlInNewTab(),
                 Action::make('deleteErrorLog')
                     ->label(__('admin/product_imports/batches.actions.delete_error_log'))
@@ -166,8 +160,8 @@ class ProductImportBatchesTable
                         }
 
                         $error_log_path = $record->getErrorLogPath();
-                        if ($error_log_path !== null && Storage::exists($error_log_path)) {
-                            Storage::delete($error_log_path);
+                        if ($error_log_path !== null && Storage::disk('public')->exists($error_log_path)) {
+                            Storage::disk('public')->delete($error_log_path);
                         }
 
                         $record->mergeOptions([

@@ -19,7 +19,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 class ProductDeletesTable
 {
@@ -47,6 +46,16 @@ class ProductDeletesTable
                 TextColumn::make('total_items')->label(__('admin/product_imports/batches.columns.total_items'))->sortable(),
                 TextColumn::make('processed_items')->label(__('admin/product_imports/batches.columns.processed_items'))->sortable(),
                 TextColumn::make('failed_items')->label(__('admin/product_imports/batches.columns.failed_items'))->sortable(),
+                TextColumn::make('options.last_error')
+                    ->label(__('admin/product_imports/batches.columns.last_error'))
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('options.error_log_path')
+                    ->label(__('admin/product_imports/batches.columns.error_log'))
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->url(fn (ProductDeleteBatch $record): ?string => $record->getErrorLogUrl())
+                    ->openUrlInNewTab()
+                    ->formatStateUsing(fn (mixed $state, ProductDeleteBatch $record): string => $record->getErrorLogFileName() ?? __('admin/product_imports/batches.columns.empty_value')),
                 TextColumn::make('created_at')
                     ->label(__('admin/default.columns.created_at'))
                     ->date(config('app.datetime_format'), config('app.timezone'))

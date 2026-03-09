@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductUpdateBatch extends Model
@@ -108,6 +109,22 @@ class ProductUpdateBatch extends Model
 
     public function hasErrorLog(): bool
     {
-        return $this->getErrorLogPath() !== null;
+        $path = $this->getErrorLogPath();
+
+        return $path !== null && Storage::disk('public')->exists($path);
+    }
+
+    public function getErrorLogFileName(): ?string
+    {
+        $path = $this->getErrorLogPath();
+
+        return $path !== null ? basename($path) : null;
+    }
+
+    public function getErrorLogUrl(): ?string
+    {
+        $path = $this->getErrorLogPath();
+
+        return $path !== null ? Storage::disk('public')->url($path) : null;
     }
 }

@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\Enums\Product\Delete\ProductDeleteBatchesSourceTypeEnum;
 use App\Enums\Product\Delete\ProductDeleteBatchesStatusEnum;
 use App\Enums\Product\Delete\ProductDeleteItemsStatusEnum;
+use App\Services\Products\ProductBatchErrorAuditService;
 use App\Models\Products\Deletes\ProductDeleteBatch;
 use App\Models\Products\Deletes\ProductDeleteItem;
 use App\Models\Products\Product;
@@ -83,12 +84,17 @@ class ProcessProductDeleteBatchJob implements ShouldQueue
             ]);
 
             $product_delete_batch->update([
-                'status'      => ProductDeleteBatchesStatusEnum::FAILED->value,
-                'finished_at' => now(),
-                'options'     => [
+                'status'       => ProductDeleteBatchesStatusEnum::FAILED->value,
+                'failed_items' => max((int) ($product_delete_batch->failed_items ?? 0), 1),
+                'finished_at'  => now(),
+                'options'      => [
                     ...($product_delete_batch->options ?? []),
                     'prepare_finished_at' => now()->toDateTimeString(),
-                    'last_error'          => Str::limit(Str::trim($exception->getMessage()), 10000),
+                    ...app(ProductBatchErrorAuditService::class)->syncDeleteBatchAudit(
+                        $product_delete_batch,
+                        [],
+                        $exception,
+                    ),
                 ],
             ]);
         }
@@ -521,10 +527,18 @@ class ProcessProductDeleteBatchJob implements ShouldQueue
             ->count();
 
         $status = match (true) {
-            $total_items === 0 => ProductDeleteBatchesStatusEnum::FAILED->value,
-            $failed_items > 0  => ProductDeleteBatchesStatusEnum::PARTIAL_FAILED->value,
-            default            => ProductDeleteBatchesStatusEnum::COMPLETED->value,
+            $total_items === 0                         => ProductDeleteBatchesStatusEnum::FAILED->value,
+            $failed_items > 0 && $failed_items < $total_items => ProductDeleteBatchesStatusEnum::PARTIAL_FAILED->value,
+            $failed_items >= $total_items             => ProductDeleteBatchesStatusEnum::FAILED->value,
+            default                                   => ProductDeleteBatchesStatusEnum::COMPLETED->value,
         };
+
+        $audit_metadata = app(ProductBatchErrorAuditService::class)->syncDeleteBatchAudit(
+            $product_delete_batch,
+            $status === ProductDeleteBatchesStatusEnum::COMPLETED->value
+                ? []
+                : $this->collectFailedBatchAuditDetails((int) $product_delete_batch->id),
+        );
 
         $product_delete_batch->update([
             'status'          => $status,
@@ -535,8 +549,47 @@ class ProcessProductDeleteBatchJob implements ShouldQueue
             'options'         => [
                 ...($product_delete_batch->options ?? []),
                 'prepare_finished_at' => now()->toDateTimeString(),
+                'last_error'          => $audit_metadata['last_error'],
+                'error_log_path'      => $audit_metadata['error_log_path'],
             ],
         ]);
+
+        Log::channel('daily')->info('Product delete batch finalization summary', [
+            'job'             => self::class,
+            'batch_id'        => (int) $product_delete_batch->id,
+            'status'          => $status,
+            'total_items'     => $total_items,
+            'processed_items' => 0,
+            'failed_items'    => $failed_items,
+            'last_error'      => $audit_metadata['last_error'],
+            'error_log_path'  => $audit_metadata['error_log_path'],
+        ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectFailedBatchAuditDetails(int $product_delete_batch_id): array
+    {
+        return ProductDeleteItem::query()
+            ->where('product_delete_batch_id', $product_delete_batch_id)
+            ->where('status', ProductDeleteItemsStatusEnum::FAILED->value)
+            ->orderBy('id')
+            ->get()
+            ->map(static function (ProductDeleteItem $item): array {
+                return [
+                    'status'      => (string) $item->status,
+                    'item_id'     => (int) $item->id,
+                    'product_id'  => $item->product_id !== null ? (int) $item->product_id : null,
+                    'shop_id'     => is_numeric($item->getPayloadValue('shop_id')) ? (int) $item->getPayloadValue('shop_id') : null,
+                    'sheet'       => 'Product',
+                    'row'         => $item->getSourceRowNumber(),
+                    'source_path' => $item->getSourceFilePath(),
+                    'message'     => Str::limit(Str::trim((string) $item->error_message), 10000),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function resolveExcelPath(string $source_path): string

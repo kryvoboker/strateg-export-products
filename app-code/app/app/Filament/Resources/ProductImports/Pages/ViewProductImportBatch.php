@@ -8,8 +8,6 @@ use App\Filament\Resources\ProductImports\ProductImportBatchResource;
 use App\Models\Products\Imports\ProductImportBatch;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Support\Facades\Storage;
-
 class ViewProductImportBatch extends ViewRecord
 {
     protected static string $resource = ProductImportBatchResource::class;
@@ -20,9 +18,7 @@ class ViewProductImportBatch extends ViewRecord
             Action::make('downloadErrorLog')
                 ->label(__('admin/product_imports/batches.actions.download_error_log'))
                 ->visible(fn (): bool => $this->getTypedRecord()->hasErrorLog())
-                ->url(fn (): ?string => $this->getTypedRecord()->hasErrorLog()
-                    ? Storage::url((string) $this->getTypedRecord()->getErrorLogPath())
-                    : null)
+                ->url(fn (): ?string => $this->getTypedRecord()->getErrorLogUrl())
                 ->openUrlInNewTab(),
             Action::make('back')
                 ->label(__('actions.close'))

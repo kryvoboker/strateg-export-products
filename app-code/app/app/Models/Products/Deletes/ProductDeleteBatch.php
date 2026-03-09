@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ProductDeleteBatch extends Model
@@ -98,6 +99,22 @@ class ProductDeleteBatch extends Model
 
     public function hasErrorLog(): bool
     {
-        return $this->getErrorLogPath() !== null;
+        $path = $this->getErrorLogPath();
+
+        return $path !== null && Storage::disk('public')->exists($path);
+    }
+
+    public function getErrorLogFileName(): ?string
+    {
+        $path = $this->getErrorLogPath();
+
+        return $path !== null ? basename($path) : null;
+    }
+
+    public function getErrorLogUrl(): ?string
+    {
+        $path = $this->getErrorLogPath();
+
+        return $path !== null ? Storage::disk('public')->url($path) : null;
     }
 }

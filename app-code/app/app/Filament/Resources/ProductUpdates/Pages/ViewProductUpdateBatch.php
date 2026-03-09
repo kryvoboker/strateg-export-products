@@ -8,8 +8,6 @@ use App\Filament\Resources\ProductUpdates\ProductUpdateBatchResource;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ViewRecord;
-use Illuminate\Support\Facades\Storage;
-
 class ViewProductUpdateBatch extends ViewRecord
 {
     protected static string $resource = ProductUpdateBatchResource::class;
@@ -20,9 +18,7 @@ class ViewProductUpdateBatch extends ViewRecord
             Action::make('downloadErrorLog')
                 ->label(__('admin/product_updates/batches.actions.download_error_log'))
                 ->visible(fn (): bool => $this->getTypedRecord()->hasErrorLog())
-                ->url(fn (): ?string => $this->getTypedRecord()->hasErrorLog()
-                    ? Storage::url((string) $this->getTypedRecord()->getErrorLogPath())
-                    : null)
+                ->url(fn (): ?string => $this->getTypedRecord()->getErrorLogUrl())
                 ->openUrlInNewTab(),
             Action::make('back')
                 ->label(__('actions.close'))
