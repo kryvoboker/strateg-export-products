@@ -86,6 +86,26 @@ class ProductUpdateQueueService
     }
 
     /**
+     * @return array<string, int>
+     */
+    public function queueSingleCatalogProductUpdate(
+        int $batch_id,
+        int $product_id,
+        int $shop_id,
+        ?int $requested_by_user_id = null,
+    ): array {
+        return $this->queueUpdateForBatchProductShop(
+            $batch_id,
+            $product_id,
+            $shop_id,
+            $requested_by_user_id,
+            'catalog_products',
+            [],
+            true,
+        );
+    }
+
+    /**
      * @param  list<int>  $shop_ids
      * @param  array<string, mixed>  $update_instructions
      * @return array<string, int>
@@ -446,6 +466,18 @@ class ProductUpdateQueueService
         ];
 
         try {
+            $existing_update_item = ProductUpdateItem::resolveLatestUpdateOperationItem($batch_id, $product_id, $shop_id);
+
+            if ($existing_update_item instanceof ProductUpdateItem) {
+                if ($existing_update_item->status === ProductUpdateItemsStatusEnum::FAILED->value) {
+                    $summary['already_failed']++;
+                } else {
+                    $summary['already_queued_or_exported']++;
+                }
+
+                return $summary;
+            }
+
             $product_shop = ProductShop::resolveLatestByProductAndShop($product_id, $shop_id);
 
             if (! $product_shop instanceof ProductShop) {
@@ -483,18 +515,6 @@ class ProductUpdateQueueService
                 }
 
                 $summary['skipped_without_external_id']++;
-
-                return $summary;
-            }
-
-            $existing_update_item = ProductUpdateItem::resolveLatestUpdateOperationItem($batch_id, $product_id, $shop_id);
-
-            if ($existing_update_item instanceof ProductUpdateItem) {
-                if ($existing_update_item->status === ProductUpdateItemsStatusEnum::FAILED->value) {
-                    $summary['already_failed']++;
-                } else {
-                    $summary['already_queued_or_exported']++;
-                }
 
                 return $summary;
             }

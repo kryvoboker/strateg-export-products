@@ -26,6 +26,7 @@ use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
 use App\Services\Products\ProductResourceOptionsService;
 use App\Services\Products\ProductTableActionService;
+use App\Services\Products\ProductUpdateQueueService;
 use App\Supports\Services\Products\ProductBackupRestoreService;
 use App\Supports\Services\Products\ProductDeleteQueueService;
 use Filament\Actions\Action;
@@ -888,6 +889,23 @@ class ProductsTable
     private static function queueUpdateForSelectedProducts(iterable $records, array $shop_ids): array
     {
         return app(ProductTableActionService::class)->queueUpdateForSelectedProducts($records, $shop_ids);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private static function createLocalUpdateItemAndDispatch(
+        int $batch_id,
+        int $product_id,
+        int $shop_id,
+        ?int $requested_by_user_id = null
+    ): array {
+        return app(ProductUpdateQueueService::class)->queueSingleCatalogProductUpdate(
+            $batch_id,
+            $product_id,
+            $shop_id,
+            $requested_by_user_id,
+        );
     }
 
     private static function hasValidExternalBackupForAnyBoundShop(Product $record): bool

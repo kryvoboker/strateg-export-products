@@ -1248,7 +1248,7 @@ class ProductShopBindingService
     private function ensureShopLinksForProduct(int $product_id, int $shop_id): void
     {
         if (! $this->hasProductShopBinding($product_id, $shop_id)) {
-            Log::channel('stack')->warning('Catalog external mapping skipped because product is not bound to shop', [
+            $this->safeLog('stack', 'warning', 'Catalog external mapping skipped because product is not bound to shop', [
                 'product_id' => $product_id,
                 'shop_id'    => $shop_id,
             ]);
@@ -1392,6 +1392,17 @@ class ProductShopBindingService
         }
 
         return (int) $entity_shop_id === $shop_id;
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function safeLog(string $channel, string $method_name, string $message, array $context = []): void
+    {
+        try {
+            Log::channel($channel)->{$method_name}($message, $context);
+        } catch (Throwable) {
+        }
     }
 
     private function hasProductShopBinding(int $product_id, int $target_shop_id): bool
