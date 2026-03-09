@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Services\Products;
 
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
+use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Filament\Resources\ProductUpdates\Pages\ListProductUpdateBatches;
 use App\Jobs\ProcessProductUpdateItemJob;
+use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
@@ -17,6 +19,133 @@ use Illuminate\Support\Facades\Log;
 
 class ProductUpdateQueueService
 {
+    /**
+     * @param  iterable<mixed>  $records
+     * @param  list<int>  $shop_ids
+     * @return array<string, int>
+     */
+    public function queueForCatalogProducts(iterable $records, array $shop_ids, ?int $requested_by_user_id = null): array
+    {
+        $normalized_shop_ids = $this->normalizeShopIds($shop_ids);
+
+        $summary = [
+            'products_total'              => 0,
+            'shops_total'                 => count($normalized_shop_ids),
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
+            'skipped_without_external_id' => 0,
+            'failed_created'              => 0,
+            'errors'                      => 0,
+        ];
+
+        if ($normalized_shop_ids === []) {
+            return $summary;
+        }
+
+        $batch = $this->createUpdateBatch(
+            ProductUpdateBatchesSourceTypeEnum::LOCAL_PRODUCTS->value,
+            'Catalog products local update',
+            ['triggered_from' => 'catalog_products'],
+            $requested_by_user_id,
+        );
+
+        foreach ($records as $record) {
+            if (! $record instanceof Product) {
+                continue;
+            }
+
+            $summary['products_total']++;
+            $product_id = (int) ($record->id ?? 0);
+
+            foreach ($normalized_shop_ids as $shop_id) {
+                $queued_result = $this->queueUpdateForBatchProductShop(
+                    (int) $batch->id,
+                    $product_id,
+                    $shop_id,
+                    $requested_by_user_id,
+                    'catalog_products',
+                    [],
+                    true,
+                );
+
+                $summary['updates_queued'] += (int) Arr::get($queued_result, 'updates_queued', 0);
+                $summary['already_failed'] += (int) Arr::get($queued_result, 'already_failed', 0);
+                $summary['already_queued_or_exported'] += (int) Arr::get($queued_result, 'already_queued_or_exported', 0);
+                $summary['skipped_not_bound'] += (int) Arr::get($queued_result, 'skipped_not_bound', 0);
+                $summary['skipped_without_external_id'] += (int) Arr::get($queued_result, 'skipped_without_external_id', 0);
+                $summary['failed_created'] += (int) Arr::get($queued_result, 'failed_created', 0);
+                $summary['errors'] += (int) Arr::get($queued_result, 'errors', 0);
+            }
+        }
+
+        $this->syncBatchStatus($batch);
+
+        return $summary;
+    }
+
+    /**
+     * @param  list<int>  $shop_ids
+     * @param  array<string, mixed>  $update_instructions
+     * @return array<string, int>
+     */
+    public function queueForEditProductApi(Product $product, array $shop_ids, array $update_instructions, ?int $requested_by_user_id = null): array
+    {
+        $normalized_shop_ids = $this->normalizeShopIds($shop_ids);
+
+        $summary = [
+            'products_total'              => 1,
+            'shops_total'                 => count($normalized_shop_ids),
+            'updates_queued'              => 0,
+            'already_failed'              => 0,
+            'already_queued_or_exported'  => 0,
+            'skipped_not_bound'           => 0,
+            'skipped_without_external_id' => 0,
+            'failed_created'              => 0,
+            'errors'                      => 0,
+        ];
+
+        if ($normalized_shop_ids === []) {
+            $summary['skipped_not_bound'] = 1;
+
+            return $summary;
+        }
+
+        $batch = $this->createUpdateBatch(
+            ProductUpdateBatchesSourceTypeEnum::EDIT_PRODUCT_API->value,
+            'Edit product API update #'.(int) $product->id,
+            [
+                'triggered_from' => 'edit_product_page',
+                'product_id'     => (int) $product->id,
+            ],
+            $requested_by_user_id,
+        );
+
+        foreach ($normalized_shop_ids as $shop_id) {
+            $queued_result = $this->queueUpdateForBatchProductShop(
+                (int) $batch->id,
+                (int) $product->id,
+                $shop_id,
+                $requested_by_user_id,
+                'edit_product_page',
+                $update_instructions,
+                false,
+            );
+
+            $summary['updates_queued'] += (int) Arr::get($queued_result, 'updates_queued', 0);
+            $summary['already_failed'] += (int) Arr::get($queued_result, 'already_failed', 0);
+            $summary['already_queued_or_exported'] += (int) Arr::get($queued_result, 'already_queued_or_exported', 0);
+            $summary['skipped_not_bound'] += (int) Arr::get($queued_result, 'skipped_not_bound', 0);
+            $summary['skipped_without_external_id'] += (int) Arr::get($queued_result, 'skipped_without_external_id', 0);
+            $summary['failed_created'] += (int) Arr::get($queued_result, 'failed_created', 0);
+            $summary['errors'] += (int) Arr::get($queued_result, 'errors', 0);
+        }
+
+        $this->syncBatchStatus($batch);
+
+        return $summary;
+    }
     /**
      * @param  Collection<int, ProductUpdateBatch>  $records
      * @param  list<int>  $shop_ids
@@ -301,7 +430,10 @@ class ProductUpdateQueueService
         int $batch_id,
         int $product_id,
         int $shop_id,
-        ?int $requested_by_user_id = null
+        ?int $requested_by_user_id = null,
+        string $triggered_from = 'product_update_items',
+        array $update_instructions = [],
+        bool $resolve_prepared_update_instructions = true,
     ): array {
         $summary = [
             'updates_queued'              => 0,
@@ -309,6 +441,7 @@ class ProductUpdateQueueService
             'already_queued_or_exported'  => 0,
             'skipped_not_bound'           => 0,
             'skipped_without_external_id' => 0,
+            'failed_created'              => 0,
             'errors'                      => 0,
         ];
 
@@ -316,6 +449,19 @@ class ProductUpdateQueueService
             $product_shop = ProductShop::resolveLatestByProductAndShop($product_id, $shop_id);
 
             if (! $product_shop instanceof ProductShop) {
+                if ($triggered_from !== 'product_update_items') {
+                    $this->createFailedUpdateItem(
+                        $batch_id,
+                        $product_id,
+                        $shop_id,
+                        'Product is not bound to selected shop',
+                        $requested_by_user_id,
+                        $triggered_from,
+                        $update_instructions,
+                    );
+                    $summary['failed_created']++;
+                }
+
                 $summary['skipped_not_bound']++;
 
                 return $summary;
@@ -323,6 +469,19 @@ class ProductUpdateQueueService
 
             $external_product_id = (int) ($product_shop->external_product_id ?? 0);
             if ($external_product_id <= 0) {
+                if ($triggered_from !== 'product_update_items') {
+                    $this->createFailedUpdateItem(
+                        $batch_id,
+                        $product_id,
+                        $shop_id,
+                        'External product id is missing for update',
+                        $requested_by_user_id,
+                        $triggered_from,
+                        $update_instructions,
+                    );
+                    $summary['failed_created']++;
+                }
+
                 $summary['skipped_without_external_id']++;
 
                 return $summary;
@@ -350,7 +509,10 @@ class ProductUpdateQueueService
                     'target_product_id'    => $product_id,
                     'external_product_id'  => $external_product_id,
                     'requested_by_user_id' => $requested_by_user_id,
-                    'update_instructions'  => $this->resolvePreparedUpdateInstructions($batch_id, $product_id),
+                    'triggered_from'       => $triggered_from,
+                    'update_instructions'  => $resolve_prepared_update_instructions
+                        ? $this->resolvePreparedUpdateInstructions($batch_id, $product_id)
+                        : $update_instructions,
                 ],
                 'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
                 'error_message' => null,
@@ -376,6 +538,44 @@ class ProductUpdateQueueService
         }
 
         return $summary;
+    }
+
+    /**
+     * @param  array<string, mixed>  $update_instructions
+     */
+    private function createFailedUpdateItem(
+        int $batch_id,
+        int $product_id,
+        int $shop_id,
+        string $error_message,
+        ?int $requested_by_user_id,
+        string $triggered_from,
+        array $update_instructions,
+    ): void {
+        Log::channel('stack')->error('Product update skipped', [
+            'service'    => self::class,
+            'batch_id'   => $batch_id,
+            'product_id' => $product_id,
+            'shop_id'    => $shop_id,
+            'message'    => $error_message,
+        ]);
+
+        ProductUpdateItem::query()->create([
+            'product_update_batch_id' => $batch_id,
+            'product_id'              => $product_id,
+            'payload'                 => [
+                'operation'            => 'update',
+                'shop_id'              => $shop_id,
+                'requested_product_id' => $product_id,
+                'target_product_id'    => $product_id,
+                'requested_by_user_id' => $requested_by_user_id,
+                'triggered_from'       => $triggered_from,
+                'update_instructions'  => $update_instructions,
+            ],
+            'status'        => ProductUpdateItemsStatusEnum::FAILED->value,
+            'error_message' => str($error_message)->trim()->limit(10000)->value(),
+            'processed_at'  => now(),
+        ]);
     }
 
     /**
@@ -426,6 +626,72 @@ class ProductUpdateQueueService
                 'update_state'       => 'processing',
                 'update_started_at'  => now()->toDateTimeString(),
                 'update_finished_at' => null,
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra_options
+     */
+    private function createUpdateBatch(
+        string $source_type,
+        string $source_name,
+        array $extra_options,
+        ?int $requested_by_user_id,
+    ): ProductUpdateBatch {
+        return ProductUpdateBatch::query()->create([
+            'user_id'         => $requested_by_user_id,
+            'source_type'     => $source_type,
+            'source_name'     => $source_name,
+            'source_path'     => null,
+            'status'          => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            'total_items'     => 0,
+            'processed_items' => 0,
+            'failed_items'    => 0,
+            'options'         => [
+                ...$extra_options,
+                'requested_by_user_id' => $requested_by_user_id,
+                'update_state'         => 'processing',
+                'update_started_at'    => now()->toDateTimeString(),
+                'update_finished_at'   => null,
+            ],
+            'started_at'  => now(),
+            'finished_at' => null,
+        ]);
+    }
+
+    private function syncBatchStatus(ProductUpdateBatch $batch): void
+    {
+        $status_counters = ProductUpdateItem::resolveStatusCountersByBatchId((int) $batch->id);
+        $total_items     = $status_counters['total'];
+        if ($total_items <= 0) {
+            return;
+        }
+
+        $processing_count = $status_counters['processing'];
+        $failed_count     = $status_counters['failed'];
+        $updated_count    = $status_counters['successed'];
+
+        $final_status = match (true) {
+            $processing_count > 0                     => ProductUpdateBatchesStatusEnum::PROCESSING->value,
+            $failed_count > 0 && $updated_count > 0   => ProductUpdateBatchesStatusEnum::PARTIAL_FAILED->value,
+            $failed_count > 0 && $updated_count === 0 => ProductUpdateBatchesStatusEnum::FAILED->value,
+            default                                   => ProductUpdateBatchesStatusEnum::COMPLETED->value,
+        };
+
+        $batch->update([
+            'status'          => $final_status,
+            'total_items'     => $total_items,
+            'processed_items' => max($updated_count + $failed_count, 0),
+            'failed_items'    => max($failed_count, 0),
+            'finished_at'     => $processing_count > 0 ? null : now(),
+            'options'         => [
+                ...($batch->options ?? []),
+                'update_state'         => $processing_count > 0 ? 'processing' : 'finished',
+                'update_total_items'   => $total_items,
+                'update_success_items' => $updated_count,
+                'update_failed_items'  => $failed_count,
+                'update_finished_at'   => $processing_count > 0 ? null : now()->toDateTimeString(),
             ],
         ]);
     }

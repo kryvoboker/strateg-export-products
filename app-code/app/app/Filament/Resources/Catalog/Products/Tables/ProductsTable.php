@@ -7,13 +7,9 @@ namespace App\Filament\Resources\Catalog\Products\Tables;
 use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
-use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
-use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
-use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Jobs\ProcessCatalogProductRestoreBatchJob;
 use App\Jobs\ProcessProductExportItemJob;
 use App\Jobs\ProcessProductShopBindingJob;
-use App\Jobs\ProcessProductUpdateItemJob;
 use App\Models\Attributes\Attribute;
 use App\Models\Attributes\AttributeDescription;
 use App\Models\Brands\Brand;
@@ -27,8 +23,6 @@ use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\Product;
 use App\Models\Products\ProductShop;
-use App\Models\Products\Updates\ProductUpdateBatch;
-use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
 use App\Services\Products\ProductResourceOptionsService;
 use App\Services\Products\ProductTableActionService;
@@ -52,9 +46,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -915,66 +907,13 @@ class ProductsTable
     }
 
     /**
+     * @param  iterable<mixed>  $records
      * @param  list<int>  $shop_ids
      * @return array<string, int>
      */
-    private static function queueUpdateForSelectedProducts(Collection $records, array $shop_ids): array
+    private static function queueUpdateForSelectedProducts(iterable $records, array $shop_ids): array
     {
         return app(ProductTableActionService::class)->queueUpdateForSelectedProducts($records, $shop_ids);
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private static function createLocalUpdateItemAndDispatch(
-        int $batch_id,
-        int $product_id,
-        int $shop_id,
-        ?int $requested_by_user_id = null
-    ): array {
-        return app(ProductTableActionService::class)->createLocalUpdateItemAndDispatch(
-            $batch_id,
-            $product_id,
-            $shop_id,
-            $requested_by_user_id
-        );
-    }
-
-    private static function createLocalFailedUpdateItem(
-        int $batch_id,
-        int $product_id,
-        int $shop_id,
-        string $error_message,
-        ?int $requested_by_user_id = null
-    ): void {
-        Log::channel('stack')->error('Local product update skipped', [
-            'batch_id'   => $batch_id,
-            'product_id' => $product_id,
-            'shop_id'    => $shop_id,
-            'message'    => $error_message,
-        ]);
-
-        ProductUpdateItem::query()->create([
-            'product_update_batch_id' => $batch_id,
-            'product_id'              => $product_id,
-            'payload'                 => [
-                'operation'            => 'update',
-                'shop_id'              => $shop_id,
-                'requested_product_id' => $product_id,
-                'target_product_id'    => $product_id,
-                'requested_by_user_id' => $requested_by_user_id,
-                'triggered_from'       => 'catalog_products',
-                'update_instructions'  => [],
-            ],
-            'status'        => ProductUpdateItemsStatusEnum::FAILED->value,
-            'error_message' => Str::limit(Str::trim($error_message), 10000),
-            'processed_at'  => now(),
-        ]);
-    }
-
-    private static function syncLocalUpdateBatchStatus(int $batch_id): void
-    {
-        app(ProductTableActionService::class)->syncLocalUpdateBatchStatus($batch_id);
     }
 
     private static function hasValidExternalBackupForAnyBoundShop(Product $record): bool

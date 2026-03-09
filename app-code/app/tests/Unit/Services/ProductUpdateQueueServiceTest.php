@@ -7,6 +7,7 @@ namespace Tests\Unit\Services;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
 use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Jobs\ProcessProductUpdateItemJob;
+use App\Models\Products\Product;
 use App\Models\Products\Updates\ProductUpdateBatch;
 use App\Models\Products\Updates\ProductUpdateItem;
 use App\Services\Products\ProductUpdateQueueService;
@@ -24,6 +25,7 @@ class ProductUpdateQueueServiceTest extends TestCase
         Schema::dropIfExists('product_shop');
         Schema::dropIfExists('product_update_items');
         Schema::dropIfExists('product_update_batches');
+        Schema::dropIfExists('products');
 
         Schema::create('product_update_batches', static function (Blueprint $table): void {
             $table->id();
@@ -59,6 +61,63 @@ class ProductUpdateQueueServiceTest extends TestCase
             $table->unsignedBigInteger('shop_id');
             $table->unsignedBigInteger('external_product_id')->nullable();
             $table->timestamps();
+        });
+
+        Schema::create('products', static function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('product_import_item_id')->nullable();
+            $table->string('family_ulid')->nullable();
+            $table->unsignedBigInteger('marked_to_shop')->nullable();
+            $table->string('model')->nullable();
+            $table->string('sku')->nullable();
+            $table->string('ean')->nullable();
+            $table->integer('quantity')->default(0);
+            $table->integer('minimum')->default(0);
+            $table->string('image')->nullable();
+            $table->decimal('price', 15, 4)->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamp('date_available')->nullable();
+            $table->timestamp('date_added')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function test_it_queues_catalog_product_updates_through_shared_service(): void
+    {
+        Queue::fake();
+
+        $product = Product::query()->create([
+            'model' => 'MODEL-501',
+        ]);
+
+        Schema::getConnection()->table('product_shop')->insert([
+            'product_import_batch_id' => null,
+            'product_id'              => (int) $product->id,
+            'shop_id'                 => 4,
+            'external_product_id'     => 9401,
+            'created_at'              => now(),
+            'updated_at'              => now(),
+        ]);
+
+        $summary = app(ProductUpdateQueueService::class)->queueForCatalogProducts(
+            Product::query()->whereKey((int) $product->id)->get(),
+            [4],
+            31,
+        );
+
+        self::assertSame(1, $summary['products_total']);
+        self::assertSame(1, $summary['updates_queued']);
+        self::assertSame(0, $summary['failed_created']);
+
+        $batch = ProductUpdateBatch::query()->firstOrFail();
+        $update_item = ProductUpdateItem::query()->firstOrFail();
+
+        self::assertSame('catalog_products', $batch->options['triggered_from'] ?? null);
+        self::assertSame('catalog_products', $update_item->payload['triggered_from'] ?? null);
+        self::assertSame(9401, (int) ($update_item->payload['external_product_id'] ?? 0));
+
+        Queue::assertPushed(ProcessProductUpdateItemJob::class, static function (ProcessProductUpdateItemJob $job) use ($update_item): bool {
+            return $job->product_update_item_id === (int) $update_item->id;
         });
     }
 
@@ -169,5 +228,51 @@ class ProductUpdateQueueServiceTest extends TestCase
         $batch->refresh();
         self::assertSame(ProductUpdateBatchesStatusEnum::PROCESSING->value, $batch->status);
         self::assertSame('processing', $batch->options['update_state'] ?? null);
+    }
+
+    public function test_it_creates_failed_edit_product_update_item_when_external_id_is_missing(): void
+    {
+        Queue::fake();
+
+        $product = Product::query()->create([
+            'model' => 'MODEL-777',
+        ]);
+
+        Schema::getConnection()->table('product_shop')->insert([
+            'product_import_batch_id' => null,
+            'product_id'              => (int) $product->id,
+            'shop_id'                 => 7,
+            'external_product_id'     => null,
+            'created_at'              => now(),
+            'updated_at'              => now(),
+        ]);
+
+        $summary = app(ProductUpdateQueueService::class)->queueForEditProductApi(
+            $product,
+            [7],
+            [
+                'Product' => [
+                    'fields' => [
+                        'price' => ['action' => 'set', 'value' => 55.5],
+                    ],
+                ],
+            ],
+            44,
+        );
+
+        self::assertSame(0, $summary['updates_queued']);
+        self::assertSame(1, $summary['skipped_without_external_id']);
+        self::assertSame(1, $summary['failed_created']);
+
+        $batch = ProductUpdateBatch::query()->firstOrFail();
+        $update_item = ProductUpdateItem::query()->firstOrFail();
+
+        self::assertSame('edit_product_page', $batch->options['triggered_from'] ?? null);
+        self::assertSame(ProductUpdateItemsStatusEnum::FAILED->value, $update_item->status);
+        self::assertSame('edit_product_page', $update_item->payload['triggered_from'] ?? null);
+        self::assertSame(44, (int) ($update_item->payload['requested_by_user_id'] ?? 0));
+        self::assertSame('External product id is missing for update', $update_item->error_message);
+
+        Queue::assertNotPushed(ProcessProductUpdateItemJob::class);
     }
 }
