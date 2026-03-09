@@ -235,6 +235,17 @@ class ProductResourceOptionsService
         return $cached;
     }
 
+    public function forgetShopScopedCatalogOptionCaches(int $shop_id): void
+    {
+        if ($shop_id <= 0) {
+            return;
+        }
+
+        foreach ($this->resolveCatalogOptionCacheKeysForShop($shop_id) as $cache_key) {
+            Cache::forget($cache_key);
+        }
+    }
+
     /**
      * @return array<int, string>
      */
@@ -441,5 +452,47 @@ class ProductResourceOptionsService
         });
 
         return $cached;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveCatalogOptionCacheKeysForShop(int $shop_id): array
+    {
+        $shop_language_ids = ShopLanguage::query()
+            ->where('is_active', true)
+            ->pluck('id')
+            ->map(static fn ($shop_language_id): int => (int) $shop_language_id)
+            ->filter(static fn (int $shop_language_id): bool => $shop_language_id > 0)
+            ->values()
+            ->all();
+
+        $cache_keys = [
+            'products:options:filters:categories',
+            'products:options:filters:attributes',
+            'products:options:filters:manufacturers',
+            'products:options:filters:brands',
+            "products:options:categories:all:shop:0:lang:0",
+            "products:options:categories:shop:shop:{$shop_id}:lang:0",
+            'products:options:attributes:all:shop:0:lang:0',
+            "products:options:attributes:shop:shop:{$shop_id}:lang:0",
+            'products:options:manufacturers:shop:0:lang:0',
+            "products:options:manufacturers:shop:{$shop_id}:lang:0",
+            'products:options:brands:shop:0:lang:0',
+            "products:options:brands:shop:{$shop_id}:lang:0",
+        ];
+
+        foreach ($shop_language_ids as $shop_language_id) {
+            $cache_keys[] = "products:options:categories:all:shop:0:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:categories:shop:shop:{$shop_id}:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:attributes:all:shop:0:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:attributes:shop:shop:{$shop_id}:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:manufacturers:shop:0:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:manufacturers:shop:{$shop_id}:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:brands:shop:0:lang:{$shop_language_id}";
+            $cache_keys[] = "products:options:brands:shop:{$shop_id}:lang:{$shop_language_id}";
+        }
+
+        return array_values(array_unique($cache_keys));
     }
 }

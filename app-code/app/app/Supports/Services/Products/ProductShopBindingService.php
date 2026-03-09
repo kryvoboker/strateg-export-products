@@ -30,6 +30,7 @@ use App\Models\Products\ProductToManufacturerBrand;
 use App\Models\Seo\SeoUrl;
 use App\Models\Shops\Shop;
 use App\Models\Shops\ShopLanguage;
+use App\Services\Products\ProductResourceOptionsService;
 use App\Supports\Services\Ai\AiTranslationPromptBuilderService;
 use App\Supports\Services\Ai\AiTranslationService;
 use App\Supports\Services\Products\Traits\NormalizesProductServiceInput;
@@ -111,6 +112,7 @@ class ProductShopBindingService
 
         if ($target_product_id > 0) {
             $this->synchronizeProductTranslationsForShop($target_product_id, $target_shop_id);
+            $this->invalidateProductResourceOptionCaches($target_shop_id, $target_product_id);
         }
 
         return [
@@ -1418,6 +1420,25 @@ class ProductShopBindingService
         }
 
         return ProductShop::resolveLatestBatchIdByProductId((int) $source_product->id);
+    }
+
+    private function invalidateProductResourceOptionCaches(int $target_shop_id, int $product_id): void
+    {
+        if ($target_shop_id <= 0) {
+            return;
+        }
+
+        /**
+         * The cache must be cleared only after the binding transaction has been committed.
+         * Otherwise another request can repopulate the same keys from the pre-commit state
+         * and Filament will continue showing stale manufacturer / brand / category / attribute options.
+         */
+        app(ProductResourceOptionsService::class)->forgetShopScopedCatalogOptionCaches($target_shop_id);
+
+        Log::channel('daily')->info('Product resource option caches invalidated after shop binding', [
+            'product_id' => $product_id,
+            'shop_id'    => $target_shop_id,
+        ]);
     }
 
     public function applyDefaultLanguageToProductTranslations(int $product_id, int $target_shop_id): void
