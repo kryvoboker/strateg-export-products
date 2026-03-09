@@ -8,6 +8,7 @@ use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
 use App\Models\Products\Product;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
@@ -100,5 +101,60 @@ class ProductUpdateItem extends Model
             'error_message'           => null,
             'processed_at'            => now(),
         ]);
+    }
+
+    public static function resolveLatestUpdateOperationItem(
+        int $product_update_batch_id,
+        int $product_id,
+        int $shop_id
+    ): ?self {
+        if ($product_update_batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
+            return null;
+        }
+
+        $product_update_item = static::query()
+            ->where('product_update_batch_id', $product_update_batch_id)
+            ->where('product_id', $product_id)
+            ->where('payload->operation', 'update')
+            ->where('payload->shop_id', $shop_id)
+            ->orderByDesc('id')
+            ->first();
+
+        return $product_update_item instanceof self ? $product_update_item : null;
+    }
+
+    /**
+     * @return array{
+     *     total:int,
+     *     processing:int,
+     *     successed:int,
+     *     failed:int
+     * }
+     */
+    public static function resolveStatusCountersByBatchId(int $product_update_batch_id): array
+    {
+        if ($product_update_batch_id <= 0) {
+            return [
+                'total'      => 0,
+                'processing' => 0,
+                'successed'  => 0,
+                'failed'     => 0,
+            ];
+        }
+
+        /** @var Collection<int, object{status:string,status_total:int}> $status_rows */
+        $status_rows = static::query()
+            ->selectRaw('status, COUNT(*) AS status_total')
+            ->where('product_update_batch_id', $product_update_batch_id)
+            ->where('payload->operation', 'update')
+            ->groupBy('status')
+            ->get();
+
+        return [
+            'total'      => (int) $status_rows->sum('status_total'),
+            'processing' => (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::PROCESSING->value)->status_total ?? 0),
+            'successed'  => (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::SUCCESSED->value)->status_total ?? 0),
+            'failed'     => (int) ($status_rows->firstWhere('status', ProductUpdateItemsStatusEnum::FAILED->value)->status_total ?? 0),
+        ];
     }
 }

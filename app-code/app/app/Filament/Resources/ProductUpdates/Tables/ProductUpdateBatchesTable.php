@@ -6,14 +6,10 @@ namespace App\Filament\Resources\ProductUpdates\Tables;
 
 use App\Enums\Product\Update\ProductUpdateBatchesSourceTypeEnum;
 use App\Enums\Product\Update\ProductUpdateBatchesStatusEnum;
-use App\Enums\Product\Update\ProductUpdateItemsStatusEnum;
-use App\Filament\Resources\ProductUpdates\Pages\ListProductUpdateBatches;
 use App\Filament\Resources\ProductUpdates\ProductUpdateBatchResource;
-use App\Jobs\ProcessProductUpdateItemJob;
-use App\Models\Products\ProductShop;
 use App\Models\Products\Updates\ProductUpdateBatch;
-use App\Models\Products\Updates\ProductUpdateItem;
 use App\Models\Shops\Shop;
+use App\Services\Products\ProductUpdateQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -24,9 +20,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -145,7 +139,11 @@ class ProductUpdateBatchesTable
                                 return;
                             }
 
-                            $summary = self::queueUpdateForSelectedBatches($records, $shop_ids);
+                            $summary = app(ProductUpdateQueueService::class)->queueForUpdateBatches(
+                                $records,
+                                $shop_ids,
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null,
+                            );
 
                             Notification::make()
                                 ->title(__('admin/product_updates/batches.messages.bulk_update_queued'))
@@ -160,7 +158,7 @@ class ProductUpdateBatchesTable
                         ->deselectRecordsAfterCompletion()
                         ->modalHeading(__('admin/product_updates/batches.actions.retry_failed_updates'))
                         ->action(function (Collection $records): void {
-                            $summary = self::retryFailedUpdatesForBatches($records);
+                            $summary = app(ProductUpdateQueueService::class)->retryFailedForUpdateBatches($records);
 
                             Notification::make()
                                 ->title(__('admin/product_updates/batches.messages.bulk_retry_queued'))
@@ -185,262 +183,4 @@ class ProductUpdateBatchesTable
         };
     }
 
-    /**
-     * @param  Collection<int, ProductUpdateBatch>  $records
-     * @param  list<int>  $shop_ids
-     * @return array<string, int>
-     */
-    private static function queueUpdateForSelectedBatches(Collection $records, array $shop_ids): array
-    {
-        $summary = [
-            'batches_selected'            => $records->count(),
-            'batches_skipped_processing'  => 0,
-            'products_total'              => 0,
-            'updates_queued'              => 0,
-            'already_failed'              => 0,
-            'already_queued_or_exported'  => 0,
-            'skipped_not_bound'           => 0,
-            'skipped_without_external_id' => 0,
-            'errors'                      => 0,
-        ];
-
-        foreach ($records as $batch) {
-            if ($batch->isProcessing()) {
-                $summary['batches_skipped_processing']++;
-
-                continue;
-            }
-
-            $product_ids = $batch->items()
-                ->whereNotNull('product_id')
-                ->whereIn('status', [
-                    ProductUpdateItemsStatusEnum::SUCCESSED->value,
-                    ProductUpdateItemsStatusEnum::NORMALIZED->value,
-                    ProductUpdateItemsStatusEnum::NEW->value,
-                ])
-                ->pluck('product_id')
-                ->map(static fn ($product_id): int => (int) $product_id)
-                ->filter(static fn (int $product_id): bool => $product_id > 0)
-                ->unique()
-                ->values()
-                ->all();
-
-            $summary['products_total'] += count($product_ids);
-
-            foreach ($product_ids as $product_id) {
-                foreach ($shop_ids as $shop_id) {
-                    $queued = self::createUpdateItemAndDispatch((int) $batch->id, (int) $product_id, (int) $shop_id);
-
-                    $summary['updates_queued'] += (int) Arr::get($queued, 'updates_queued', 0);
-                    $summary['already_failed'] += (int) Arr::get($queued, 'already_failed', 0);
-                    $summary['already_queued_or_exported'] += (int) Arr::get($queued, 'already_queued_or_exported', 0);
-                    $summary['skipped_not_bound'] += (int) Arr::get($queued, 'skipped_not_bound', 0);
-                    $summary['skipped_without_external_id'] += (int) Arr::get($queued, 'skipped_without_external_id', 0);
-                    $summary['errors'] += (int) Arr::get($queued, 'errors', 0);
-                }
-            }
-        }
-
-        return $summary;
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private static function createUpdateItemAndDispatch(int $batch_id, int $product_id, int $shop_id): array
-    {
-        $summary = [
-            'updates_queued'              => 0,
-            'already_failed'              => 0,
-            'already_queued_or_exported'  => 0,
-            'skipped_not_bound'           => 0,
-            'skipped_without_external_id' => 0,
-            'errors'                      => 0,
-        ];
-
-        try {
-            $product_shop = ProductShop::query()
-                ->where('product_id', $product_id)
-                ->where('shop_id', $shop_id)
-                ->orderByDesc('id')
-                ->first();
-
-            if (! $product_shop instanceof ProductShop) {
-                $summary['skipped_not_bound']++;
-
-                return $summary;
-            }
-
-            $external_product_id = (int) ($product_shop->external_product_id ?? 0);
-            if ($external_product_id <= 0) {
-                $summary['skipped_without_external_id']++;
-
-                return $summary;
-            }
-
-            $existing_update_item = ProductUpdateItem::query()
-                ->where('product_update_batch_id', $batch_id)
-                ->where('product_id', $product_id)
-                ->whereRaw("(payload->>'operation') = 'update'")
-                ->whereRaw("(payload->>'shop_id')::int = ?", [$shop_id])
-                ->orderByDesc('id')
-                ->first();
-
-            if ($existing_update_item instanceof ProductUpdateItem) {
-                if ($existing_update_item->status === ProductUpdateItemsStatusEnum::FAILED->value) {
-                    $summary['already_failed']++;
-                } else {
-                    $summary['already_queued_or_exported']++;
-                }
-
-                return $summary;
-            }
-
-            $update_item = ProductUpdateItem::query()->create([
-                'product_update_batch_id' => $batch_id,
-                'product_id'              => $product_id,
-                'payload'                 => [
-                    'operation'            => 'update',
-                    'shop_id'              => $shop_id,
-                    'requested_product_id' => $product_id,
-                    'target_product_id'    => $product_id,
-                    'external_product_id'  => $external_product_id,
-                    'requested_by_user_id' => auth()->id(),
-                    'update_instructions'  => self::resolvePreparedUpdateInstructions($batch_id, $product_id),
-                ],
-                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
-                'error_message' => null,
-                'processed_at'  => null,
-            ]);
-
-            ProcessProductUpdateItemJob::dispatch((int) $update_item->id);
-            $summary['updates_queued']++;
-
-            self::markBatchAsUpdating($batch_id);
-        } catch (\Throwable) {
-            $summary['errors']++;
-        }
-
-        return $summary;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private static function resolvePreparedUpdateInstructions(int $batch_id, int $product_id): array
-    {
-        if ($batch_id <= 0 || $product_id <= 0) {
-            return [];
-        }
-
-        $prepared_item = ProductUpdateItem::query()
-            ->where('product_update_batch_id', $batch_id)
-            ->where('product_id', $product_id)
-            ->whereRaw("(payload->>'operation') = 'prepare_update'")
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $prepared_item instanceof ProductUpdateItem) {
-            return [];
-        }
-
-        $prepared_payload    = is_array($prepared_item->payload) ? $prepared_item->payload : [];
-        $update_instructions = Arr::get($prepared_payload, 'update_instructions', []);
-
-        if (! is_array($update_instructions)) {
-            return [];
-        }
-
-        return ListProductUpdateBatches::sanitizeImmutableProductFieldsFromUpdateInstructions($update_instructions);
-    }
-
-    /**
-     * @param  Collection<int, ProductUpdateBatch>  $records
-     * @return array<string, int>
-     */
-    private static function retryFailedUpdatesForBatches(Collection $records): array
-    {
-        $batch_ids = $records
-            ->map(static fn (ProductUpdateBatch $batch): int => (int) $batch->id)
-            ->filter(static fn (int $batch_id): bool => $batch_id > 0)
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($batch_ids === []) {
-            return [
-                'failed_found' => 0,
-                'queued'       => 0,
-            ];
-        }
-
-        $failed_update_items = ProductUpdateItem::query()
-            ->whereIn('product_update_batch_id', $batch_ids)
-            ->where('status', ProductUpdateItemsStatusEnum::FAILED->value)
-            ->whereRaw("(payload->>'operation') = 'update'")
-            ->orderBy('id')
-            ->get();
-
-        $queued = 0;
-        foreach ($failed_update_items as $failed_update_item) {
-            $failed_update_item->update([
-                'status'        => ProductUpdateItemsStatusEnum::PROCESSING->value,
-                'error_message' => null,
-                'processed_at'  => null,
-            ]);
-
-            ProcessProductUpdateItemJob::dispatch((int) $failed_update_item->id);
-            $queued++;
-        }
-
-        if ($queued > 0) {
-            ProductUpdateBatch::query()
-                ->whereIn('id', $batch_ids)
-                ->update([
-                    'status' => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-                ]);
-
-            foreach (ProductUpdateBatch::query()->whereIn('id', $batch_ids)->get() as $batch) {
-                $batch->update([
-                    'options' => [
-                        ...($batch->options ?? []),
-                        'update_state'       => 'processing',
-                        'update_started_at'  => now()->toDateTimeString(),
-                        'update_finished_at' => null,
-                    ],
-                ]);
-            }
-        }
-
-        return [
-            'failed_found' => $failed_update_items->count(),
-            'queued'       => $queued,
-        ];
-    }
-
-    private static function markBatchAsUpdating(int $batch_id): void
-    {
-        if ($batch_id <= 0) {
-            return;
-        }
-
-        $batch = ProductUpdateBatch::query()->find($batch_id);
-        if (! $batch instanceof ProductUpdateBatch) {
-            return;
-        }
-
-        $batch->update([
-            'status'  => ProductUpdateBatchesStatusEnum::PROCESSING->value,
-            'options' => [
-                ...($batch->options ?? []),
-                'update_state'       => 'processing',
-                'update_started_at'  => now()->toDateTimeString(),
-                'update_finished_at' => null,
-            ],
-        ]);
-
-        Log::channel('daily')->info('Product update batch marked as processing', [
-            'batch_id' => $batch_id,
-        ]);
-    }
 }

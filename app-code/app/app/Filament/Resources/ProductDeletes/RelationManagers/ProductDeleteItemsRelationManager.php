@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Resources\ProductDeletes\RelationManagers;
 
 use App\Enums\Product\Delete\ProductDeleteItemsStatusEnum;
-use App\Filament\Resources\ProductDeletes\Tables\ProductDeletesTable;
 use App\Models\Products\Deletes\ProductDeleteBatch;
 use App\Models\Products\Deletes\ProductDeleteItem;
 use App\Models\Shops\Shop;
+use App\Supports\Services\Products\ProductDeleteQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -147,7 +147,7 @@ class ProductDeleteItemsRelationManager extends RelationManager
                         ProductDeleteItemsStatusEnum::FAILED->value,
                     ], true))
                     ->action(function (ProductDeleteItem $record): void {
-                        $queued = ProductDeletesTable::queueDeleteForItem($record, true);
+                        $queued = app(ProductDeleteQueueService::class)->queueDeleteItem($record, true);
 
                         Notification::make()
                             ->title(__('admin/product_deletes/batches.messages.item_delete_queued'))
@@ -161,7 +161,7 @@ class ProductDeleteItemsRelationManager extends RelationManager
                     ->color('warning')
                     ->visible(fn (ProductDeleteItem $record): bool => $record->status === ProductDeleteItemsStatusEnum::FAILED->value)
                     ->action(function (ProductDeleteItem $record): void {
-                        $queued = ProductDeletesTable::queueDeleteForItem($record, true);
+                        $queued = app(ProductDeleteQueueService::class)->queueDeleteItem($record, true);
 
                         Notification::make()
                             ->title(__('admin/product_deletes/batches.messages.item_retry_queued'))
@@ -178,27 +178,7 @@ class ProductDeleteItemsRelationManager extends RelationManager
                         ->requiresConfirmation()
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records): void {
-                            $summary = [
-                                'items_total'              => $records->count(),
-                                'deletes_queued'           => 0,
-                                'already_failed'           => 0,
-                                'already_queued_or_deleted'=> 0,
-                                'skipped_missing_payload'  => 0,
-                                'errors'                   => 0,
-                            ];
-
-                            foreach ($records as $record) {
-                                if (! $record instanceof ProductDeleteItem) {
-                                    continue;
-                                }
-
-                                $queued = ProductDeletesTable::queueDeleteForItem($record, true);
-                                $summary['deletes_queued'] += (int) ($queued['deletes_queued'] ?? 0);
-                                $summary['already_failed'] += (int) ($queued['already_failed'] ?? 0);
-                                $summary['already_queued_or_deleted'] += (int) ($queued['already_queued_or_deleted'] ?? 0);
-                                $summary['skipped_missing_payload'] += (int) ($queued['skipped_missing_payload'] ?? 0);
-                                $summary['errors'] += (int) ($queued['errors'] ?? 0);
-                            }
+                            $summary = app(ProductDeleteQueueService::class)->queueForDeleteItems($records, true);
 
                             Notification::make()
                                 ->title(__('admin/product_deletes/batches.messages.bulk_delete_queued'))
@@ -212,26 +192,7 @@ class ProductDeleteItemsRelationManager extends RelationManager
                         ->requiresConfirmation()
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records): void {
-                            $summary = [
-                                'failed_found' => 0,
-                                'queued'       => 0,
-                                'errors'       => 0,
-                            ];
-
-                            foreach ($records as $record) {
-                                if (! $record instanceof ProductDeleteItem) {
-                                    continue;
-                                }
-
-                                if ($record->status !== ProductDeleteItemsStatusEnum::FAILED->value) {
-                                    continue;
-                                }
-
-                                $summary['failed_found']++;
-                                $queued = ProductDeletesTable::queueDeleteForItem($record, true);
-                                $summary['queued'] += (int) ($queued['deletes_queued'] ?? 0);
-                                $summary['errors'] += (int) ($queued['errors'] ?? 0);
-                            }
+                            $summary = app(ProductDeleteQueueService::class)->retryFailedForDeleteItems($records);
 
                             Notification::make()
                                 ->title(__('admin/product_deletes/batches.messages.bulk_retry_queued'))
