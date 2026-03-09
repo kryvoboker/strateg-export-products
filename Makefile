@@ -27,11 +27,14 @@ build-prod:
 restart-prod: down-prod up-prod
 rebuild-prod: down-prod build-prod up-prod
 
-vite:
-	cd httpdocs/app && npm run dev
+set-node:
+	bash -c "source ~/.nvm/nvm.sh && nvm use 25.6.1"
 
-vite-build:
-	cd httpdocs/app \
+vite: set-node
+	cd app-code/app && npm run dev
+
+vite-build: set-node
+	cd app-code/app \
 	&& npm run build
 
 # Docker Slim optimization commands
