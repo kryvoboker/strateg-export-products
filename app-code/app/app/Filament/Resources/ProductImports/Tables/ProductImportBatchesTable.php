@@ -8,13 +8,12 @@ use App\Enums\Product\Export\ProductExportItemsStatusEnum;
 use App\Enums\Product\Import\ProductImportBatchesStatusEnum;
 use App\Enums\Product\Import\ProductImportItemsStatusEnum;
 use App\Filament\Resources\ProductImports\ProductImportBatchResource;
-use App\Jobs\ProcessProductExportItemJob;
-use App\Jobs\ProcessProductShopBindingJob;
 use App\Models\Products\Exports\ProductExportItem;
 use App\Models\Products\Imports\ProductImportBatch;
 use App\Models\Products\Imports\ProductImportItem;
 use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
+use App\Services\Products\ProductExportQueueService;
 use App\Services\Products\ProductShopBindingQueueService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -273,7 +272,11 @@ class ProductImportBatchesTable
                                 return;
                             }
 
-                            $summary = self::queueExportForSelectedBatches($records, $shop_ids);
+                            $summary = app(ProductExportQueueService::class)->queueForImportBatches(
+                                $records,
+                                $shop_ids,
+                                is_numeric(auth()->id()) ? (int) auth()->id() : null,
+                            );
 
                             Notification::make()
                                 ->title(__('admin/product_imports/batches.messages.bulk_export_queued'))
@@ -289,7 +292,7 @@ class ProductImportBatchesTable
                         ->deselectRecordsAfterCompletion()
                         ->modalHeading(__('admin/product_imports/batches.actions.retry_failed_exports'))
                         ->action(function (Collection $records): void {
-                            $summary = self::retryFailedExportsForBatches($records);
+                            $summary = app(ProductExportQueueService::class)->retryFailedForImportBatches($records);
 
                             Notification::make()
                                 ->title(__('admin/product_imports/batches.messages.bulk_retry_queued'))
@@ -303,268 +306,4 @@ class ProductImportBatchesTable
             ->defaultSort('id', 'desc');
     }
 
-    /**
-     * @param  Collection<int, ProductImportBatch>  $records
-     * @param  list<int>  $shop_ids
-     * @return array<string, int>
-     */
-    private static function queueExportForSelectedBatches(Collection $records, array $shop_ids): array
-    {
-        $summary = [
-            'batches_selected'           => $records->count(),
-            'batches_skipped_processing' => 0,
-            'products_total'             => 0,
-            'exports_queued'             => 0,
-            'already_failed'             => 0,
-            'already_queued_or_exported' => 0,
-            'skipped_not_bound'          => 0,
-            'errors'                     => 0,
-        ];
-
-        foreach ($records as $batch) {
-            if ($batch->isProcessing()) {
-                $summary['batches_skipped_processing']++;
-
-                continue;
-            }
-
-            $product_ids = $batch->items()
-                ->whereNotNull('product_id')
-                ->whereIn('status', [
-                    ProductImportItemsStatusEnum::SUCCESSED->value,
-                    ProductImportItemsStatusEnum::NORMALIZED->value,
-                ])
-                ->pluck('product_id')
-                ->map(static fn ($product_id): int => (int) $product_id)
-                ->filter(static fn (int $product_id): bool => $product_id > 0)
-                ->unique()
-                ->values()
-                ->all();
-
-            $summary['products_total'] += count($product_ids);
-
-            foreach ($product_ids as $product_id) {
-                foreach ($shop_ids as $shop_id) {
-                    try {
-                        $product_shop = ProductShop::query()
-                            ->where('product_id', (int) $product_id)
-                            ->where('shop_id', $shop_id)
-                            ->orderByDesc('id')
-                            ->first();
-
-                        if (! $product_shop instanceof ProductShop) {
-                            self::markExportAsFailedForNotBoundShop(
-                                (int) $batch->id,
-                                (int) $product_id,
-                                $shop_id
-                            );
-                            $summary['skipped_not_bound']++;
-
-                            continue;
-                        }
-
-                        $target_product_id = (int) ($product_shop->product_id ?? 0);
-                        if ($target_product_id <= 0) {
-                            self::markExportAsFailedForNotBoundShop(
-                                (int) $batch->id,
-                                (int) $product_id,
-                                $shop_id
-                            );
-                            $summary['skipped_not_bound']++;
-
-                            continue;
-                        }
-
-                        $resolved_batch_id = (int) ($product_shop->product_import_batch_id ?? 0);
-                        if ($resolved_batch_id <= 0) {
-                            $resolved_batch_id = (int) $batch->id;
-                        }
-
-                        $existing_export_item = ProductExportItem::query()
-                            ->forBatchProductShop($resolved_batch_id, $target_product_id, $shop_id)
-                            ->orderByDesc('id')
-                            ->first();
-
-                        if ($existing_export_item !== null) {
-                            if ($existing_export_item->status === ProductExportItemsStatusEnum::FAILED->value) {
-                                $summary['already_failed']++;
-                            } else {
-                                $summary['already_queued_or_exported']++;
-                            }
-
-                            continue;
-                        }
-
-                        $export_item = ProductExportItem::query()->create([
-                            'batchable_type' => ProductImportBatch::class,
-                            'batchable_id'   => $resolved_batch_id,
-                            'product_id'     => $target_product_id,
-                            'payload'        => [
-                                'shop_id'              => $shop_id,
-                                'requested_product_id' => $product_id,
-                                'target_product_id'    => $target_product_id,
-                                'requested_by_user_id' => auth()->id(),
-                            ],
-                            'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
-                            'error_message' => null,
-                            'processed_at'  => null,
-                        ]);
-
-                        ProcessProductExportItemJob::dispatch((int) $export_item->id);
-                        $summary['exports_queued']++;
-
-                        $batch->update([
-                            'status'  => ProductImportBatchesStatusEnum::PROCESSING->value,
-                            'options' => [
-                                ...($batch->options ?? []),
-                                'export_state'       => 'processing',
-                                'export_started_at'  => now()->toDateTimeString(),
-                                'export_finished_at' => null,
-                            ],
-                        ]);
-                    } catch (Throwable) {
-                        $summary['errors']++;
-                    }
-                }
-            }
-
-            self::syncBatchTotalItems((int) $batch->id);
-        }
-
-        return $summary;
-    }
-
-    private static function markExportAsFailedForNotBoundShop(int $batch_id, int $product_id, int $shop_id): void
-    {
-        if ($batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
-            return;
-        }
-
-        $error_message = 'Product is not bound to selected shop. Export skipped.';
-
-        $existing_export_item = ProductExportItem::query()
-            ->forBatchProductShop($batch_id, $product_id, $shop_id)
-            ->orderByDesc('id')
-            ->first();
-
-        if ($existing_export_item instanceof ProductExportItem) {
-            $existing_export_item->update([
-                'status'        => ProductExportItemsStatusEnum::FAILED->value,
-                'error_message' => $error_message,
-                'processed_at'  => now(),
-                'payload'       => [
-                    ...(is_array($existing_export_item->payload) ? $existing_export_item->payload : []),
-                    'shop_id'              => $shop_id,
-                    'requested_product_id' => $product_id,
-                    'target_product_id'    => null,
-                    'failure_reason'       => 'not_bound_to_shop',
-                    'requested_by_user_id' => auth()->id(),
-                ],
-            ]);
-        } else {
-            ProductExportItem::query()->create([
-                'batchable_type' => ProductImportBatch::class,
-                'batchable_id'   => $batch_id,
-                'product_id'     => $product_id,
-                'payload'        => [
-                    'shop_id'              => $shop_id,
-                    'requested_product_id' => $product_id,
-                    'target_product_id'    => null,
-                    'failure_reason'       => 'not_bound_to_shop',
-                    'requested_by_user_id' => auth()->id(),
-                ],
-                'status'        => ProductExportItemsStatusEnum::FAILED->value,
-                'error_message' => $error_message,
-                'processed_at'  => now(),
-            ]);
-        }
-
-        Log::channel('stack')->warning('Batch export skipped: product is not bound to selected shop', [
-            'batch_id'             => $batch_id,
-            'product_id'           => $product_id,
-            'shop_id'              => $shop_id,
-            'requested_by_user_id' => auth()->id(),
-        ]);
-    }
-
-    /**
-     * @param  Collection<int, ProductImportBatch>  $records
-     * @return array<string, int>
-     */
-    private static function retryFailedExportsForBatches(Collection $records): array
-    {
-        $batch_ids = $records
-            ->map(static fn (ProductImportBatch $batch): int => (int) $batch->id)
-            ->filter(static fn (int $batch_id): bool => $batch_id > 0)
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($batch_ids === []) {
-            return [
-                'failed_found' => 0,
-                'queued'       => 0,
-            ];
-        }
-
-        $failed_export_items = ProductExportItem::query()
-            ->where('batchable_type', ProductImportBatch::class)
-            ->whereIn('batchable_id', $batch_ids)
-            ->where('status', ProductExportItemsStatusEnum::FAILED->value)
-            ->orderBy('id')
-            ->get();
-
-        $queued = 0;
-        foreach ($failed_export_items as $failed_export_item) {
-            $failed_export_item->update([
-                'status'        => ProductExportItemsStatusEnum::PROCESSING->value,
-                'error_message' => null,
-                'processed_at'  => null,
-            ]);
-
-            ProcessProductExportItemJob::dispatch((int) $failed_export_item->id);
-            $queued++;
-        }
-
-        if ($queued > 0) {
-            ProductImportBatch::query()
-                ->whereIn('id', $batch_ids)
-                ->update([
-                    'status' => ProductImportBatchesStatusEnum::PROCESSING->value,
-                ]);
-
-            foreach (ProductImportBatch::query()->whereIn('id', $batch_ids)->get() as $batch) {
-                $batch->update([
-                    'options' => [
-                        ...($batch->options ?? []),
-                        'export_state'       => 'processing',
-                        'export_started_at'  => now()->toDateTimeString(),
-                        'export_finished_at' => null,
-                    ],
-                ]);
-            }
-        }
-
-        return [
-            'failed_found' => $failed_export_items->count(),
-            'queued'       => $queued,
-        ];
-    }
-
-    private static function syncBatchTotalItems(int $batch_id): void
-    {
-        if ($batch_id <= 0) {
-            return;
-        }
-
-        $total_items = ProductImportItem::query()
-            ->where('product_import_batch_id', $batch_id)
-            ->count();
-
-        ProductImportBatch::query()
-            ->whereKey($batch_id)
-            ->update([
-                'total_items' => $total_items,
-            ]);
-    }
 }
