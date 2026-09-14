@@ -17,33 +17,35 @@
     "require": {
         "php": "^8.5",
         "ext-pdo": "*",
-        "filament/filament": "^5.0",
-        "laravel-lang/lang": "^15.26",
+        "filament/filament": "^v5.8",
+        "laravel-lang/lang": "^15.35",
         "laravel/framework": "^12.0",
-        "laravel/tinker": "^2.10.1",
-        "livewire/livewire": "^4.0",
-        "longman/telegram-bot": "^0.83.1",
+        "laravel/tinker": "^v3.0",
+        "livewire/livewire": "^v4.4",
+        "longman/telegram-bot": "^0.83",
         "nyholm/psr7": "^1.8",
-        "openai-php/client": "^0.18.0",
-        "phpoffice/phpspreadsheet": "^5.3",
-        "revolution/laravel-google-sheets": "^7.0",
-        "symfony/cache": "^8.0"
+        "openai-php/client": "^v0.20",
+        "phpoffice/phpspreadsheet": "^5.9",
+        "revolution/laravel-google-sheets": "^7.2",
+        "symfony/cache": "^v8.1"
     },
     "require-dev": {
-        "barryvdh/laravel-debugbar": "^3.16",
-        "buggregator/trap": "^1.15",
-        "fakerphp/faker": "^1.23",
-        "filament/upgrade": "^5.0",
-        "larastan/larastan": "^3.9",
-        "laravel/boost": "^1.8",
-        "laravel/pail": "^1.2.2",
-        "laravel/pint": "^1.24",
-        "laravel/sail": "^1.41",
+        "barryvdh/laravel-debugbar": "^v4.4",
+        "fakerphp/faker": "^v1.24",
+        "filament/upgrade": "^v5.8",
+        "larastan/larastan": "^v3.12",
+        "laravel/boost": "^v2.8",
+        "laravel/pail": "^v1.2",
+        "laravel/pint": "^v1.32",
+        "laravel/sail": "^v1.67",
         "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.6",
-        "phpunit/phpunit": "^11.5.3"
+        "nunomaduro/collision": "^v8.9",
+        "phpunit/phpunit": "^13.3"
     },
     "autoload": {
+        "files": [
+            "app/Supports/helpers.php"
+        ],
         "psr-4": {
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
@@ -78,11 +80,20 @@
             "@php artisan filament:upgrade",
             "@php artisan lang:update"
         ],
+        "post-install-cmd": [
+            "if [ -f config/filament.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Filament configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Filament configuration...'; php artisan vendor:publish --tag=filament-config --no-interaction; fi",
+            "if [ -f config/filament-shield.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Filament Shield configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Filament Shield configuration...'; php artisan vendor:publish --tag=filament-shield-config --no-interaction; fi",
+            "if [ -f config/livewire.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Livewire configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Livewire configuration...'; php artisan vendor:publish --tag=livewire:config --no-interaction; fi",
+            "@php artisan livewire:publish --assets"
+        ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
             "@php artisan livewire:publish --assets --no-interaction",
             "@php artisan lang:update",
-            "@php artisan boost:update --ansi"
+            "@php artisan boost:update --ansi",
+            "if [ -f config/filament.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Filament configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Filament configuration...'; php artisan vendor:publish --tag=filament-config --no-interaction; fi",
+            "if [ -f config/filament-shield.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Filament Shield configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Filament Shield configuration...'; php artisan vendor:publish --tag=filament-shield-config --no-interaction; fi",
+            "if [ -f config/livewire.php ]; then printf '\\033[32m%s\\033[0m\\n' 'Livewire configuration already exists.'; else printf '\\033[31m%s\\033[0m\\n' 'Publishing Livewire configuration...'; php artisan vendor:publish --tag=livewire:config --no-interaction; fi"
         ],
         "post-root-package-install": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
