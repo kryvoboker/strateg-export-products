@@ -34,7 +34,6 @@ services:
         condition: service_healthy
     networks:
       - dev-strateg-export-products-net
-      - buggregator-net
       - traefik-network
 
   dev-strateg-export-products-cron:
@@ -70,7 +69,6 @@ services:
         condition: service_healthy
     networks:
       - dev-strateg-export-products-net
-      - buggregator-net
 
   dev-strateg-export-products-nginx:
     build:
@@ -123,9 +121,10 @@ services:
     container_name: dev-strateg-export-products-postgresql
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready --username=$$POSTGRES_SIMPLE_USER --dbname=$$POSTGRES_DB" ]
-      interval: 3s
-      timeout: 3s
-      retries: 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     ports:
       - "3343:5432"
     restart: no
@@ -178,9 +177,5 @@ networks:
     external: true
   dev-strateg-export-products-net:
     name: dev-strateg-export-products-net
-    driver: bridge
-    external: true
-  buggregator-net:
-    name: buggregator-net
     driver: bridge
     external: true

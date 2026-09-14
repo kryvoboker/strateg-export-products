@@ -1,7 +1,6 @@
-FROM nginx:1.29.5-alpine3.23-slim
+FROM nginx:1.31.5-alpine3.24-slim
 
-RUN apk add --no-cache \
-    tzdata
+RUN apk add --no-cache tzdata
 
 ENV TZ=Europe/Kyiv
 
@@ -22,18 +21,22 @@ RUN deluser ${USERNAME} 2>/dev/null || true \
   && adduser -D -u ${UID} -G ${USERNAME} -s /bin/sh ${USERNAME}
 
 # Set proper permissions for nginx directories
-RUN mkdir -p /var/cache/nginx/ /var/log/nginx/ /var/run/nginx/ \
-  && chown -R ${UID}:${GID} /var/cache/nginx/ /var/log/nginx/ /var/run/nginx/ /etc/nginx/conf.d/ \
-  && chmod -R 755 /var/cache/nginx/ /var/log/nginx/ /var/run/nginx/
+RUN chown -R ${UID}:${GID} \
+    /var/cache/nginx/ \
+    /var/log/nginx/ \
+    /etc/nginx/conf.d/ \
+  && chmod -R 755 \
+    /var/cache/nginx/ \
+    /var/log/nginx/
 
 # Copy and set permissions for entrypoint script
 COPY --chown=${UID}:${GID} .docker/dev/nginx/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-WORKDIR /var/webroot/sites/export-products.strateg.ua/app
-
 EXPOSE 80
+
+WORKDIR /var/webroot/sites/export-products.strateg.ua/app
 
 USER ${USERNAME}
 

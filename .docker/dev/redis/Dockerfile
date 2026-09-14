@@ -1,4 +1,4 @@
-FROM redis:8.6.1-alpine3.23
+FROM redis:8.8.2-alpine3.23
 
 RUN apk add --no-cache tzdata
 
@@ -19,8 +19,12 @@ RUN deluser ${USERNAME} 2>/dev/null || true \
   && addgroup -g ${GID} ${USERNAME} \
   && adduser -D -u ${UID} -G ${USERNAME} -s /bin/bash ${USERNAME}
 
-RUN mkdir -p /data/ /var/log/ \
-  && chown -R ${UID}:${GID} /data/ /var/log/
+RUN mkdir -p \
+    /data/ \
+    /var/log/ \
+  && chown -R ${UID}:${GID} \
+    /data/ \
+    /var/log/
 
 COPY .docker/dev/redis/redis.conf /usr/local/etc/redis/redis.conf
 

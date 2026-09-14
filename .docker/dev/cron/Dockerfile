@@ -9,7 +9,10 @@ RUN apk add --no-cache \
   zip \
   tzdata \
   logrotate \
-  dos2unix
+  dos2unix \
+  fontconfig \
+  ttf-dejavu \
+  shadow
 
 ENV TZ=Europe/Kyiv
 
@@ -36,19 +39,22 @@ RUN install-php-extensions gd \
 
 FROM php-cli AS supercronic
 
-ARG TARGETARCH
-
 # Install supercronic (cron for containers)
 # Latest releases available at https://github.com/aptible/supercronic/releases
-ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.43/supercronic-linux-${TARGETARCH} \
-    SUPERCRONIC_SHA1SUM=f97b92132b61a8f827c3faf67106dc0e4467ccf2 \
-    SUPERCRONIC=supercronic-linux-${TARGETARCH}
+ARG TARGETARCH
 
-RUN curl -fsSLO "$SUPERCRONIC_URL" \
-  && echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - \
-  && chmod +x "$SUPERCRONIC" \
-  && mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" \
-  && ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic
+ENV SUPERCRONIC_VERSION=v0.2.45
+
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) SUPERCRONIC_ARCH="amd64" ;; \
+        arm64) SUPERCRONIC_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${SUPERCRONIC_ARCH}" \
+        -o /usr/local/bin/supercronic; \
+    chmod +x /usr/local/bin/supercronic
 
 FROM php-cli AS development
 
@@ -67,24 +73,45 @@ ENV HOME=/home/${USERNAME}
 ENV COMPOSER_HOME=${HOME}/.composer
 ENV COMPOSER_CACHE_DIR=${COMPOSER_HOME}/cache
 
-# Create www-data user with proper shell
-RUN deluser ${USERNAME} 2>/dev/null || true \
-  && delgroup ${USERNAME} 2>/dev/null || true \
-  && addgroup -g ${GID} ${USERNAME} \
-  && adduser -D -u ${UID} -G ${USERNAME} -s /bin/sh ${USERNAME}
+ARG DIR_LOG=/var/log
+
+RUN set -eux; \
+    if getent group "${USERNAME}" > /dev/null; then \
+        groupmod -o -g "${GID}" "${USERNAME}"; \
+    else \
+        groupadd -o -g "${GID}" "${USERNAME}"; \
+    fi; \
+    if id "${USERNAME}" > /dev/null 2>&1; then \
+        usermod -o -u "${UID}" -g "${GID}" -d "${HOME}" "${USERNAME}"; \
+    else \
+        useradd -o -u "${UID}" -g "${GID}" -d "${HOME}" -m -s /bin/sh "${USERNAME}"; \
+    fi; \
+    mkdir -p "${HOME}"; \
+    chown -R "${UID}:${GID}" "${HOME}"
+
+# For delete groupmod, groupadd, usermod and useradd from container
+RUN apk del shadow
 
 # Create crontab directory with proper permissions
-RUN mkdir -p /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ /var/lib/ \
-  && chown -R ${UID}:${GID} /etc/crontabs/ /var/log/cron/ ${COMPOSER_CACHE_DIR}/ /var/lib/ \
-  && chmod -R 755 /var/log/cron/ ${COMPOSER_CACHE_DIR}/ \
-  && touch /var/lib/logrotate.status \
-  && chmod 600 /var/lib/logrotate.status \
-  && chown ${UID}:${GID} /var/lib/logrotate.status
+RUN mkdir -p \
+    ${DIR_LOG}/ \
+    ${COMPOSER_CACHE_DIR}/ \
+  && chown ${UID}:${GID} \
+    ${DIR_LOG}/ \
+    ${COMPOSER_CACHE_DIR}/ \
+  && chmod -R 755 \
+    ${DIR_LOG}/ \
+    ${COMPOSER_CACHE_DIR}/
 
-COPY --chown=root:root .docker/dev/cron/redis.logrotate /etc/logrotate.d/redis
+# Rebuild the font cache after installing fonts
+RUN fc-cache -f -v
 
-RUN dos2unix /etc/logrotate.d/redis \
-  && chmod 644 /etc/logrotate.d/redis
+ARG APP_LOGROTATE=/etc/logrotate.d/app
+
+COPY --chown=root:root .docker/dev/cron/app.logrotate ${APP_LOGROTATE}
+
+RUN dos2unix ${APP_LOGROTATE} \
+  && chmod 644 ${APP_LOGROTATE}
 
 # Copy entrypoint script
 COPY --chown=${UID}:${GID} .docker/dev/cron/entrypoint.sh /usr/local/bin/entrypoint.sh

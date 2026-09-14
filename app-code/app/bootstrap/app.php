@@ -8,6 +8,22 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+if (!function_exists('string_to_array')) {
+    function string_to_array(?string $string, string $separator = ','): array
+    {
+        if ($string === null || Str::trim($string) === '') {
+            return [];
+        }
+
+        $values = array_map(
+            static fn (string $value): string => Str::trim($value),
+            explode($separator, $string),
+        );
+
+        return array_values(array_filter($values));
+    }
+}
+
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web     : __DIR__.'/../routes/web.php',
@@ -33,28 +49,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             return null;
         });
     })->create();
-
-/**
- * WARNING: The following code block is commented out. Uncomment and modify for PRODUCTION!!!
- */
-
-/*$app_env      = 'production';
-$new_storage_path = '/var/webroot/sites/export-products.strateg.ua/storage';
-$new_public_path  = '/var/webroot/sites/export-products.strateg.ua/httpdocs';
-
-$_ENV['APP_ENV']          = $app_env;
-$_ENV['NEW_STORAGE_PATH'] = $new_storage_path;
-$_ENV['NEW_PUBLIC_PATH']  = $new_public_path;
-
-putenv("APP_ENV=$app_env");
-putenv("NEW_STORAGE_PATH=$new_storage_path");
-putenv("NEW_PUBLIC_PATH=$new_public_path");
-
-// Override storage path immediately after app creation
-$app->useStoragePath($new_storage_path);
-
-// Override public path
-$app->usePublicPath($new_public_path);*/
 
 $new_storage_path = getenv('NEW_STORAGE_PATH');
 $new_public_path  = getenv('NEW_PUBLIC_PATH');
