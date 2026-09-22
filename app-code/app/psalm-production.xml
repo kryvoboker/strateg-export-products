@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="4"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="true"
+>
+    <projectFiles>
+        <directory name="app"/>
+        <directory name="routes"/>
+                <ignoreFiles>
+            <directory name="vendor"/>
+            <directory name="bootstrap/cache"/>
+            <directory name="node_modules"/>
+            <directory name="vite"/>
+            <directory name="resources"/>
+            <directory name="database"/>
+            <directory name="tests"/>
+            <directory name="config"/>
+            <directory name="app/Filament"/>
+            <directory name="app/Providers/Filament"/>
+            <file name="routes/console.php"/>
+            <directory name="Modules/BankTransfer/tests"/>
+            <directory name="Modules/BankTransfer/database"/>
+            <directory name="Modules/Carousel/tests"/>
+            <directory name="Modules/NovaPoshta/tests"/>
+            <directory name="Modules/NovaPoshta/database"/>
+            <directory name="Modules/PaymentUponDelivery/tests"/>
+            <directory name="Modules/PaymentUponDelivery/database"/>
+            <directory name="Modules/Pickup/tests"/>
+            <directory name="Modules/Pickup/database"/>
+            <directory name="Modules/ProductsCarousel/tests"/>
+            <directory name="Modules/UkrPoshta/tests"/>
+            <directory name="Modules/UkrPoshta/database"/>
+            <directory name="Modules/WayForPay/tests"/>
+            <directory name="Modules/WayForPay/database"/>
+            <directory name="Modules/BankTransfer/app/Filament"/>
+            <directory name="Modules/Carousel/app/Filament"/>
+            <directory name="Modules/NovaPoshta/app/Filament"/>
+            <directory name="Modules/PaymentUponDelivery/app/Filament"/>
+            <directory name="Modules/Pickup/app/Filament"/>
+            <directory name="Modules/ProductsCarousel/app/Filament"/>
+            <directory name="Modules/UkrPoshta/app/Filament"/>
+            <directory name="Modules/WayForPay/app/Filament"/>
+            <directory name="Modules/BankTransfer/app/Providers"/>
+            <directory name="Modules/Carousel/app/Providers"/>
+            <directory name="Modules/NovaPoshta/app/Providers"/>
+            <directory name="Modules/PaymentUponDelivery/app/Providers"/>
+            <directory name="Modules/Pickup/app/Providers"/>
+            <directory name="Modules/ProductsCarousel/app/Providers"/>
+            <directory name="Modules/UkrPoshta/app/Providers"/>
+            <directory name="Modules/WayForPay/app/Providers"/>
+        </ignoreFiles>
+    </projectFiles>
+    <stubs>
+        <file name="bootstrap/app.php"/>
+    </stubs>
+    <issueHandlers>
+        <!-- Laravel's Eloquent and container APIs resolve these members dynamically. -->
+        <UndefinedMagicMethod errorLevel="suppress"/>
+
+        <!-- Framework entry points are resolved by routes, the container, and queues. -->
+        <UnusedClass errorLevel="suppress"/>
+        <PossiblyUnusedMethod errorLevel="suppress"/>
+        <PossiblyUnusedProperty errorLevel="suppress"/>
+
+    </issueHandlers>
+</psalm>

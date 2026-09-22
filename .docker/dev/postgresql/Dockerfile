@@ -2,9 +2,12 @@ FROM postgres:18.1-alpine3.23
 
 WORKDIR /var/webroot/sites/export-products.strateg.ua/app
 
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache \
+    tzdata \
+    shadow
 
 ENV TZ=Europe/Kyiv
+ENV HOME=/home/${USERNAME}
 
 # Set time zone in container
 RUN cp /usr/share/zoneinfo/Europe/Kyiv /etc/localtime \
@@ -17,10 +20,19 @@ ARG UMASK
 ARG USERNAME
 
 # Create postgres group and user with specific UID/GID if they don't match
-RUN deluser ${USERNAME} 2>/dev/null || true \
-  && delgroup ${USERNAME} 2>/dev/null || true \
-  && addgroup -g ${GID} ${USERNAME} \
-  && adduser -D -u ${UID} -G ${USERNAME} -s /bin/bash ${USERNAME}
+RUN set -eux; \
+    if getent group "${USERNAME}" > /dev/null; then \
+        groupmod -o -g "${GID}" "${USERNAME}"; \
+    else \
+        groupadd -o -g "${GID}" "${USERNAME}"; \
+    fi; \
+    if id "${USERNAME}" > /dev/null 2>&1; then \
+        usermod -o -u "${UID}" -g "${GID}" -d "${HOME}" "${USERNAME}"; \
+    else \
+        useradd -o -u "${UID}" -g "${GID}" -d "${HOME}" -m -s /bin/sh "${USERNAME}"; \
+    fi; \
+    mkdir -p "${HOME}"; \
+    chown -R "${UID}:${GID}" "${HOME}"
 
 # Ensure proper ownership of PostgreSQL directories
 RUN chown -R ${UID}:${GID} /var/lib/postgresql/ \

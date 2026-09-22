@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="4"
+    resolveFromConfigFile="true"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns="https://getpsalm.org/schema/config"
+    xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="true"
+>
+    <projectFiles>
+        <directory name="app/Filament"/>
+        <directory name="app/Providers/Filament"/>
+        <directory name="Modules/BankTransfer/app/Filament"/>
+        <directory name="Modules/BankTransfer/app/Providers"/>
+        <directory name="Modules/Carousel/app/Filament"/>
+        <directory name="Modules/Carousel/app/Providers"/>
+        <directory name="Modules/NovaPoshta/app/Filament"/>
+        <directory name="Modules/NovaPoshta/app/Providers"/>
+        <directory name="Modules/PaymentUponDelivery/app/Filament"/>
+        <directory name="Modules/PaymentUponDelivery/app/Providers"/>
+        <directory name="Modules/Pickup/app/Filament"/>
+        <directory name="Modules/Pickup/app/Providers"/>
+        <directory name="Modules/ProductsCarousel/app/Filament"/>
+        <directory name="Modules/ProductsCarousel/app/Providers"/>
+        <directory name="Modules/UkrPoshta/app/Filament"/>
+        <directory name="Modules/UkrPoshta/app/Providers"/>
+        <directory name="Modules/WayForPay/app/Filament"/>
+        <directory name="Modules/WayForPay/app/Providers"/>
+        <ignoreFiles>
+            <directory name="vendor"/>
+            <directory name="bootstrap/cache"/>
+            <directory name="node_modules"/>
+            <directory name="vite"/>
+            <directory name="resources"/>
+            <directory name="database"/>
+            <directory name="tests"/>
+            <directory name="config"/>
+        </ignoreFiles>
+    </projectFiles>
+    <stubs>
+        <file name="bootstrap/app.php"/>
+    </stubs>
+    <issueHandlers>
+        <!-- These diagnostics are false positives around Laravel's relation generics and collection templates. -->
+        <InvalidDocblock errorLevel="suppress"/>
+        <LessSpecificImplementedReturnType errorLevel="suppress"/>
+        <TooManyTemplateParams errorLevel="suppress"/>
+        <InvalidTemplateParam errorLevel="suppress"/>
+        <MissingTemplateParam errorLevel="suppress"/>
+
+        <!-- Null-safe access is intentionally retained for request and persisted relation boundaries. -->
+        <RedundantCondition errorLevel="suppress"/>
+        <TypeDoesNotContainNull errorLevel="suppress"/>
+        <TypeDoesNotContainType errorLevel="suppress"/>
+
+        <MissingOverrideAttribute errorLevel="suppress"/>
+        <UndefinedThisPropertyFetch errorLevel="suppress"/>
+
+        <!-- Translation return values and Filament component signatures are dynamic. -->
+        <InvalidArgument errorLevel="suppress"/>
+        <InvalidArrayOffset errorLevel="suppress"/>
+        <InvalidReturnType errorLevel="suppress"/>
+        <InvalidReturnStatement errorLevel="suppress"/>
+        <NoValue errorLevel="suppress"/>
+        <ReservedWord errorLevel="suppress"/>
+        <UndefinedDocblockClass errorLevel="suppress"/>
+
+        <!-- Filament, Livewire, Eloquent, and the service container are dynamic APIs. -->
+        <UndefinedMagicPropertyFetch errorLevel="suppress"/>
+        <UndefinedMagicPropertyAssignment errorLevel="suppress"/>
+        <UndefinedMagicMethod errorLevel="suppress"/>
+        <UndefinedInterfaceMethod errorLevel="suppress"/>
+        <RedundantPropertyInitializationCheck errorLevel="suppress"/>
+        <TooManyArguments errorLevel="suppress"/>
+        <UnusedClass errorLevel="suppress"/>
+        <PossiblyUnusedMethod errorLevel="suppress"/>
+        <PossiblyUnusedProperty errorLevel="suppress"/>
+        <PossiblyUnusedReturnValue errorLevel="suppress"/>
+    </issueHandlers>
+</psalm>

@@ -27,7 +27,8 @@
         "openai-php/client": "^v0.20",
         "phpoffice/phpspreadsheet": "^5.9",
         "revolution/laravel-google-sheets": "^7.2",
-        "symfony/cache": "^v8.1"
+        "symfony/cache": "^v8.1",
+        "ext-xhprof": "*"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^v4.4",

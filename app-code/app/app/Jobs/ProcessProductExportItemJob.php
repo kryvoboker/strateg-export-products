@@ -323,8 +323,8 @@ class ProcessProductExportItemJob implements ShouldQueue
 
     protected function shopApiShouldApplyDebugCookieForDevelopment(): bool
     {
-        return (bool) config('app.debug', false)
-            && (bool) config('app.enable_xdebug_session', false)
+        return config('app.debug', false)
+            && config('app.enable_xdebug_session', false)
             && app()->isLocal();
     }
 

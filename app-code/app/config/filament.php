@@ -72,7 +72,7 @@ return [
     |
     */
 
-    'assets_path' => null,
+    'assets_path' => env('FILAMENT_ASSETS_PATH'),
 
     /*
     |--------------------------------------------------------------------------

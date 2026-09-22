@@ -84,6 +84,7 @@ return [
     */
 
     'locale' => env('APP_LOCALE', 'en'),
+    'allowed_locales' => string_to_array((string) env('APP_ALLOWED_LOCALES', 'en')),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 

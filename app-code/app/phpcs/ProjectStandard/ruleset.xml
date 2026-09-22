@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<ruleset name="ProjectStandard">
+    <description>Project custom PHP_CodeSniffer standard.</description>
+
+    <rule ref="ProjectStandard.Naming.NamingConvention"/>
+</ruleset>

@@ -13,6 +13,9 @@ services:
         USERNAME: www-data
     image: dev-strateg-export-products-php-fpm:1.0
     container_name: dev-strateg-export-products-php-fpm
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
@@ -20,15 +23,14 @@ services:
       - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs
       - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage
+      - ../../xhprof:/var/webroot/sites/xhprof
       - ../../.docker/dev/php/php.ini:/usr/local/etc/php/php.ini:ro
+    init: true # Ensures proper signal handling and zombie reaping
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system
     cap_drop:
       - ALL # Removes Linux capabilities
-    tmpfs:
-      - /tmp # PHP temporary files (file_put_contents, tmpfile())
-      - /var/run # PHP-FPM sockets and pid files
     depends_on:
       dev-strateg-export-products-postgresql:
         condition: service_healthy
@@ -57,6 +59,7 @@ services:
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
       - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage
       - ../../.docker/dev/cron/crontabs:/etc/crontabs
+    init: true # Ensures proper signal handling and zombie reaping
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system
@@ -81,20 +84,18 @@ services:
         USERNAME: www-data
     image: dev-strateg-export-products-nginx:1.0-alpine-slim
     container_name: dev-strateg-export-products-nginx
-    env_file:
-      - ../../.docker/dev/env/.env
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.network=traefik-network"
       - "traefik.http.routers.dev-strateg-export-products-nginx.rule=Host(`dev.strateg-export-products.com`)"
       - "traefik.http.routers.dev-strateg-export-products-nginx.entrypoints=web"
       - "traefik.http.services.dev-strateg-export-products-nginx.loadbalancer.server.port=80"
-#      - "traefik.http.routers.dev-strateg-export-products-nginx.middlewares=global-ratelimit@file,global-inflight@file"
     volumes:
       - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app:ro
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
       - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage:ro
       - ../../.docker/dev/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    init: true # Ensures proper signal handling and zombie reaping
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system
@@ -119,6 +120,7 @@ services:
         USERNAME: postgres
     image: dev-strateg-export-products-postgresql:1.0-alpine
     container_name: dev-strateg-export-products-postgresql
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready --username=$$POSTGRES_SIMPLE_USER --dbname=$$POSTGRES_DB" ]
       interval: 10s
@@ -127,44 +129,14 @@ services:
       start_period: 30s
     ports:
       - "3343:5432"
-    restart: no
     env_file:
-      - ../../.docker/dev/env/.env
       - ../../.docker/dev/env/.env.postgresql
     volumes:
       - ../../.db/postgresql:/var/lib/postgresql
+    init: true # Ensures proper signal handling and zombie reaping
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid
       - apparmor=docker-default      # Limits syscalls and file system
-    cap_drop:
-      - ALL # Removes Linux capabilities
-    networks:
-      - dev-strateg-export-products-net
-
-  dev-strateg-export-products-redis:
-    build:
-      context: ${PWD}
-      dockerfile: .docker/dev/redis/Dockerfile
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-        UMASK: ${UMASK:-0002}
-        USERNAME: redis
-    image: dev-strateg-export-products-redis:1.0-alpine
-    container_name: dev-strateg-export-products-redis
-    restart: unless-stopped
-    ports:
-      - "42604:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    volumes:
-      - ../../.db/redis:/data
-    security_opt:
-      - no-new-privileges:true
-      - apparmor=docker-default
     cap_drop:
       - ALL # Removes Linux capabilities
     networks:

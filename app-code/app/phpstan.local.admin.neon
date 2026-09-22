@@ -1,0 +1,5 @@
+includes:
+    - phpstan.production.admin.neon
+
+parameters:
+    level: 8

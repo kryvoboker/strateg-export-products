@@ -1,0 +1,49 @@
+@layer theme, base, utilities, components, app;
+
+@import "../../../../../vendor/filament/filament/resources/css/theme.css";
+
+@source "../../../../../app/Filament/**/*";
+@source "../../../../../resources/views/filament/**/*";
+
+@layer app {
+    .fi-header > div:first-of-type {
+        @apply shrink-0;
+    }
+
+    .fi-header-actions-ctn {
+        @apply sm:max-w-9/12;
+
+        & .fi-ac {
+            @apply sm:justify-end;
+        }
+    }
+
+    .fi-sidebar-nav-groups {
+        @apply gap-y-1;
+    }
+
+    .promo-code-products-repeater {
+        @apply w-full overflow-x-auto;
+
+        & > table {
+            @apply w-max min-w-full;
+        }
+    }
+
+    .total-row input.fi-input {
+        @apply font-semibold text-lg lg:text-xl disabled:text-primary-600 dark:disabled:text-primary-400;
+        -webkit-text-fill-color: inherit;
+    }
+
+    tr:has(.total-row) > td > div {
+        @apply border-2 border-primary-600 dark:border-primary-400 rounded;
+    }
+
+    /*input.fi-input {
+        &:where(.dark, .dark *) {
+            &:disabled {
+                color: var(--gray-400);
+            }
+        }
+    }*/
+}

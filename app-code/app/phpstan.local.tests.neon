@@ -1,0 +1,15 @@
+includes:
+    - phpstan.base.neon
+
+parameters:
+    paths:
+        - tests
+        - app/BankTransfer/tests
+        - app/Carousel/tests
+        - app/NovaPoshta/tests
+        - app/PaymentUponDelivery/tests
+        - app/Pickup/tests
+        - app/ProductsCarousel/tests
+        - app/UkrPoshta/tests
+        - app/WayForPay/tests
+    level: 5

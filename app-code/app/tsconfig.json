@@ -1,11 +1,53 @@
 {
     "compilerOptions": {
-        "target": "ES2022",
+        "baseUrl": ".",
+        "target": "ES2024",
+        "useDefineForClassFields": true,
         "module": "ESNext",
-        "moduleResolution": "Bundler",
+        "lib": [
+            "es2015",
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "skipLibCheck": true,
+        "downlevelIteration": true,
+        /* Bundler mode */
+        "sourceMap": true,
+        "declaration": true,
+        // maybe it need remove
+        "noImplicitAny": true,
+        // maybe it need remove
         "allowJs": true,
+        "ignoreDeprecations": "6.0",
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        /* Linting */
         "strict": true,
-        "types": ["node"]
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "types": [
+            "node"
+        ],
+        "typeRoots": [
+            "node_modules/@types"
+        ]
     },
-    "include": ["vite.config.ts"]
+    "include": [
+        "./resources/assets/filament/ts/**/*.ts",
+        "./resources/assets/filament/ts/**/*.d.ts",
+        "./vite.config.ts",
+        "./vite-env.d.ts",
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
 }

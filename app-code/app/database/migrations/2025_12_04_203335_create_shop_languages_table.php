@@ -12,6 +12,8 @@ return new class() extends Migration
     public function up(): void
     {
         Schema::create('shop_languages', function (Blueprint $table) {
+            $db_prefix = config('database.db_prefix');
+
             $table->id();
 
             $table->foreignId('shop_id')
@@ -29,7 +31,7 @@ return new class() extends Migration
             $table->unique(['shop_id', 'code']);
             $table->index(['shop_id', 'is_default']);
 
-            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS '.config('database.db_prefix').'shop_languages_shop_id_default_unique ON '.config('database.db_prefix').'shop_languages (shop_id) WHERE is_default = true');
+            DB::statement("CREATE UNIQUE INDEX IF NOT EXISTS {$db_prefix}shop_languages_shop_id_default_unique ON {$db_prefix}shop_languages (shop_id) WHERE is_default = true");
         });
     }
 

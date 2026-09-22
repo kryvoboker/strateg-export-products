@@ -38,27 +38,16 @@ class OpaChirikPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->maxContentWidth(Width::Full)
-            ->viteTheme('resources/assets/filament/opa-chirik/theme.css')
+            ->viteTheme('resources/assets/filament/opa-chirik/css/theme.css')
             // Show group menu list if user visited page from group
             ->collapsibleNavigationGroups()
             // Show group menu list if user visited page from group
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([
-                NavigationGroup::make()
-                    ->label(AdminNavigationGroupEnum::ProductManagement->getLabel())
-                    ->collapsed(),
-
-                NavigationGroup::make()
-                    ->label(AdminNavigationGroupEnum::Catalog->getLabel())
-                    ->collapsed(),
-
-                NavigationGroup::make()
-                    ->label(AdminNavigationGroupEnum::Shops->getLabel())
-                    ->collapsed(),
-
-                NavigationGroup::make()
-                    ->label(AdminNavigationGroupEnum::Users->getLabel())
-                    ->collapsed(false),
+                AdminNavigationGroupEnum::ProductManagement->getLabel(),
+                AdminNavigationGroupEnum::Catalog->getLabel(),
+                AdminNavigationGroupEnum::Shops->getLabel(),
+                AdminNavigationGroupEnum::Users->getLabel(),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')

@@ -1,0 +1,19 @@
+includes:
+    - phpstan.base.neon
+
+parameters:
+    paths:
+        - app
+        - routes
+        - config
+    excludePaths:
+        analyse:
+            - database
+            - tests
+            - app/*/tests/**
+            - app/Filament/**
+            - app/Providers/Filament/**
+            - app/*/app/Filament/**
+            - app/*/app/Services/Filament/**
+            - app/*/app/Livewire/**
+    level: 10

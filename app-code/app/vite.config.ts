@@ -1,25 +1,25 @@
-import { defineConfig } from 'vite';
-import laravel          from 'laravel-vite-plugin';
 import tailwindcss      from '@tailwindcss/vite';
+import laravel          from 'laravel-vite-plugin';
+import { defineConfig } from 'vite';
 
-export default defineConfig(({ mode }) => {
-    const isFilamentThemeOnlyMode = mode === 'filament-theme';
+const isProduction: boolean = process.env.NODE_ENV === 'production';
 
-    return {
-        plugins: [
-            laravel({
-                input:           isFilamentThemeOnlyMode
-                                     ? ['resources/assets/filament/opa-chirik/theme.css']
-                                     : [
-                        'resources/css/app.css',
-                        'resources/js/app.js',
-                        'resources/assets/filament/opa-chirik/theme.css',
-                    ],
-                refresh:         true,
-                publicDirectory: '../httpdocs',
-                buildDirectory:  'build',
-            }),
-            tailwindcss(),
-        ],
-    };
+export default defineConfig({
+    build:   {
+        sourcemap: isProduction,
+    },
+    plugins: [
+        laravel({
+            input:   [
+                'resources/assets/filament/opa-chirik/css/theme.css'
+            ],
+            refresh: [
+                'resources/views/**',
+                'app/Filament/**'
+            ],
+            publicDirectory: '../httpdocs',
+            buildDirectory:  'build',
+        }),
+        tailwindcss(),
+    ],
 });

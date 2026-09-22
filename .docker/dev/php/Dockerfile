@@ -34,7 +34,6 @@ RUN install-php-extensions gd \
     bcmath \
     apcu \
     pcntl \
-    redis \
   && rm -f /usr/local/bin/install-php-extensions
 
 RUN docker-php-ext-enable xdebug xhprof

@@ -7,8 +7,15 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Str;
 
 if (!function_exists('string_to_array')) {
+    /**
+     * @param string|null $string
+     * @param string      $separator
+     *
+     * @return array
+     */
     function string_to_array(?string $string, string $separator = ','): array
     {
         if ($string === null || Str::trim($string) === '') {

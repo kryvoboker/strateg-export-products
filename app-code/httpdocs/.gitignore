@@ -1,2 +1,3 @@
-storage
-build
+/storage
+/build
+/*.log
