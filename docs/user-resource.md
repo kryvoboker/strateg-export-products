@@ -1,21 +1,33 @@
-# UserResource (Користувачі)
+[← Store Languages](shop-language-resource.md) · [Back to README](../README.md)
 
-## Для чого ресурс
-Керування користувачами адмінки: профільні дані, пароль, активність, аватар, верифікація email.
+# UserResource (Users)
 
-## Сторінки ресурсу
-- `index` (`ListUsers`): список користувачів.
-- `create` (`CreateUser`): створення користувача.
-- `edit` (`EditUser`): редагування користувача.
+## Purpose
 
-Разом: **3 сторінки**.
+The resource manages administration-panel users: profile data, password, active state, avatar, and email verification.
 
-## Як користуватись
-- Заповніть `name`, `lastname`, `email`, `telephone`.
-- За потреби завантажте `avatar`.
-- Встановіть пароль + підтвердження.
-- Увімкніть/вимкніть активність користувача.
+## Resource Pages
 
-## Важливі обмеження
-- Масове видалення перевіряє список `app.denied_delete_emails`.
-- Якщо серед вибраних є спеціальний користувач, видалення скасовується і показується помилка.
+- index (ListUsers): user list.
+- create (CreateUser): create a user.
+- edit (EditUser): edit a user.
+
+Total: 3 pages.
+
+## How to Use
+
+- Enter name, lastname, email, and telephone.
+- Optionally upload an avatar.
+- Set and confirm a password.
+- Enable or disable the user's active state.
+
+## Important Constraints
+
+- Bulk deletion checks the app.denied_delete_emails list.
+- If the selection contains a protected user, deletion is cancelled and an error is shown.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Stores](shop-resource.md) — related administration settings.
+- [Product Catalog](product-resource.md) — catalog workflows.

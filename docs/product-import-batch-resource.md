@@ -1,76 +1,56 @@
+[← Helper Functions](helpers.md) · [Back to README](../README.md) · [Product Updates →](product-update-batch-resource.md)
+
 # ProductImportBatchResource
 
-## Для чого ресурс
-Ресурс `ProductImports` керує імпортом товарів у систему (з Excel, Google Sheets або вручну через адмінку), показує стан обробки пакетів і дозволяє запускати прив'язку/вигрузку товарів у магазини.
+## Purpose
 
-## Сторінки ресурсу
-- `index` (`ListProductImportBatches`): список пакетів імпорту.
-- `create` (`CreateProductImportBatch`): створення нового пакета імпорту.
-- `view` (`ViewProductImportBatch`): деталі пакета + список позицій імпорту (`ProductImportItemsRelationManager`).
+The ProductImports resource manages product imports from Excel, Google Sheets, or manual administration-panel input. It shows batch processing state and supports binding and exporting products to stores.
 
-Разом: **3 сторінки**.
+## Resource Pages
 
-## Як користуватись
-1. Відкрийте `Імпорт товарів` -> `Завантажити нові товари`.
-2. Оберіть спосіб:
-- `EXCEL файл`.
-- `Google Sheets` (URL таблиці).
-- `Через адмінку` (ручне заповнення).
-3. Після створення пакет обробляється job-ом `ProcessProductImportBatchJob`.
-4. У списку або на сторінці перегляду пакета:
-- переглядайте статуси;
-- відкривайте payload позицій;
-- редагуйте товар;
-- робіть масову прив'язку товарів до магазинів;
-- запускайте масову/поштучну вигрузку в магазини;
-- запускайте retry для невдалих вигрузок.
+- index (ListProductImportBatches): import batch list.
+- create (CreateProductImportBatch): create an import batch.
+- view (ViewProductImportBatch): batch details and import items (ProductImportItemsRelationManager).
 
-## Статуси та позначення
-### Джерело (`source_type`)
-- `EXCEL` — імпорт із завантаженого файлу.
-- `Google Sheets` — імпорт із Google таблиці.
-- `Адмінка` — ручне створення записів.
+Total: 3 pages.
 
-### Статус пакета
-- `Новий`.
-- `В обробці`.
-- `Експорт в API`.
-- `Завершено`.
-- `Помилка`.
-- `Частково з помилками`.
-- `Скасовано`.
+## How to Use
 
-### Статус позиції імпорту
-- `Новий`.
-- `В обробці`.
-- `Нормалізовано`.
-- `Успішно`.
-- `Помилка`.
+1. Open Product Imports → Upload New Products.
+2. Select Excel file, Google Sheets, or Administration panel.
+3. The batch is processed by ProcessProductImportBatchJob.
+4. Review statuses, payloads, product edits, store bindings, exports, and retries on the list or view page.
 
-### Статус вигрузки позиції
-- `Не в черзі`.
-- `Вигружається`.
-- `Вигружено`.
-- `Помилка вигрузки`.
-- `Частково з помилками`.
+## Statuses
 
-## Основні дії
-- `Переглянути результат`.
-- `Завантажити лог помилок` / `Видалити лог помилок`.
-- `Масово прив'язати товари до магазинів`.
-- `Масово вигрузити товари в магазини`.
-- `Повторити невдалі вигрузки`.
-- На рівні позиції: `Переглянути payload`, `Редагувати товар`, `Вигрузити товар в магазини`, `Повторити невдалі вигрузки`.
+Source values: EXCEL, Google Sheets, and Administration panel.
 
-## Типові помилки/валідації
-- Відсутній Excel файл.
-- Некоректний URL Google Sheets.
-- Відсутній обов'язковий лист або колонки.
-- Лист `Product` не містить даних.
-- Користувач не авторизований.
-- Спроба вигрузити товар, не прив'язаний до магазину.
+Batch statuses: New, Processing, Exporting to API, Completed, Failed, Partially failed, and Cancelled.
 
-## Повідомлення (нотифікації)
-- Про постановку задач у чергу (bind/export/retry).
-- Про підсумок масових операцій (скільки вибрано/пропущено/помилок).
-- Про неможливість дії (`оберіть магазин`, `немає товарів`, `товар не прив'язаний`).
+Import item statuses: New, Processing, Normalized, Succeeded, and Failed.
+
+Export statuses: Not queued, Exporting, Exported, Export failed, and Partially failed.
+
+## Main Actions
+
+- View result.
+- Download or delete the error log.
+- Bulk-link products to stores.
+- Bulk-export products to stores.
+- Retry failed exports.
+- For an item: view payload, edit the product, export to stores, or retry failed exports.
+
+## Common Validation Messages
+
+- Excel file is missing.
+- Google Sheets URL is invalid.
+- A required sheet or column is missing.
+- The Product sheet has no data.
+- The user is not authenticated.
+- The product is not linked to a store.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Product Catalog](product-resource.md) — local product operations.
+- [Stores](shop-resource.md) — store integrations.

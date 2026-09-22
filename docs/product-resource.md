@@ -1,45 +1,36 @@
-# ProductResource (Каталог -> Товари)
+[← Product Updates](product-update-batch-resource.md) · [Back to README](../README.md) · [Categories →](category-resource.md)
 
-## Для чого ресурс
-Ресурс показує всі локальні товари і дозволяє:
-- редагувати товар;
-- масово прив'язувати товари до магазинів;
-- масово вигружати товари;
-- масово/поштучно ставити оновлення по API в чергу.
+# ProductResource (Catalog → Products)
 
-## Сторінки ресурсу
-- `index` (`ListProducts`): список товарів.
-- `create` (`CreateProduct`): створення товару.
-- `edit` (`EditProduct`): редагування товару.
+## Purpose
 
-Разом: **3 сторінки**.
+The resource lists local products and allows users to edit products, bind products to stores, export products, and queue API updates.
 
-## Як користуватись
-1. У списку товарів використовуйте фільтри/пошук (name, sku, model, ean, external_product_id, quantity, price, category, attribute, shop).
-2. Для масових операцій використовуйте toolbar actions:
-- прив'язка до магазинів;
-- вигрузка в магазини;
-- оновлення в магазинах.
-3. На сторінці редагування:
-- змініть локальні дані товару;
-- за потреби натисніть `Оновити по API в інтернет-магазині`.
+## Resource Pages
 
-## Спеціальна вкладка API-оновлення
-У формі є вкладка `Налаштування API-оновлення`.
-Для кожного поля можна вибрати режим:
-- `Пропустити`;
-- `Видалити`;
-- `Оновити`.
+- index (ListProducts): product list.
+- create (CreateProduct): create a product.
+- edit (EditProduct): edit a product.
 
-Ці режими впливають на `update_instructions` для API-оновлення.
+Total: 3 pages.
 
-## Колонки та індикатори списку
-- Магазини, до яких прив'язаний товар.
-- Batch ID, до яких прив'язаний товар.
-- `Оброблено` (стан імпортної обробки).
-- `Вивантажено` (наявність external_product_id у прив'язках).
+## How to Use
 
-## Типові повідомлення/помилки
-- Не обрано магазин для масової дії.
-- Товар не поставлено в чергу на API-оновлення.
-- Помилка збереження перед запуском API-оновлення.
+Use filters and search for name, SKU, model, EAN, external product ID, quantity, price, category, attribute, or store. Toolbar actions support binding, export, and updates. On the edit page, save local changes and optionally select Update through API in online store.
+
+## API Update Settings
+
+The API Update Settings tab provides Skip, Delete, and Update modes for each field. These modes become update_instructions for API updates.
+
+## List Columns and Indicators
+
+- Stores linked to the product.
+- Batch IDs linked to the product.
+- Processed import state.
+- Exported state based on external_product_id.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Product Updates](product-update-batch-resource.md) — update batches.
+- [Stores](shop-resource.md) — store integrations.

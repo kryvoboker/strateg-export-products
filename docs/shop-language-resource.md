@@ -1,24 +1,35 @@
-# ShopLanguageResource (Мови магазинів)
+[← Stores](shop-resource.md) · [Back to README](../README.md) · [Users →](user-resource.md)
 
-## Для чого ресурс
-Керування мовами кожного магазину (код, назва, активність, мова за замовчуванням).
+# ShopLanguageResource (Store Languages)
 
-## Сторінки ресурсу
-- `index` (`ListShopLanguages`): список мов.
-- `create` (`CreateShopLanguage`): створення мови.
-- `edit` (`EditShopLanguage`): редагування мови.
+## Purpose
 
-Разом: **3 сторінки**.
+The resource manages each store's language code, name, active state, and default language.
 
-## Як користуватись
-1. Оберіть магазин.
-2. Вкажіть `code` (uk/en/de...), `name`, активність.
-3. За потреби позначте мову як `за замовчуванням`.
+## Resource Pages
 
-## Обмеження та помилки
-- Код мови має бути унікальний в межах конкретного магазину.
-- Є бізнес-правило: у магазина має бути хоча б одна мова за замовчуванням, і одночасно лише одна default-мова.
-- При порушенні валідації показується danger-нотифікація.
+- index (ListShopLanguages): language list.
+- create (CreateShopLanguage): create a language.
+- edit (EditShopLanguage): edit a language.
 
-## Де ще видно default-мову
-На сторінці магазину (`ShopResource`) у relation manager `ShopLanguagesRelationManager` таблиця показує колонку `За замовчуванням`.
+Total: 3 pages.
+
+## How to Use
+
+1. Select a store.
+2. Enter code (uk, en, de, and so on), name, and active state.
+3. Optionally mark the language as default.
+
+## Constraints and Errors
+
+- A language code must be unique within a store.
+- Each store must have at least one default language and cannot have more than one default language.
+- Validation failures display a danger notification.
+
+The Store Languages relation manager on the store page also displays the default-language column.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Stores](shop-resource.md) — parent store settings.
+- [Product Catalog](product-resource.md) — multilingual catalog data.

@@ -1,56 +1,45 @@
 # Strateg Export Products
 
-Сервіс для імпорту, обробки, прив'язки, вигрузки та оновлення товарів між локальним каталогом і інтернет-магазинами (через Excel / Google Sheets / API).
+A service for importing, processing, binding, exporting, and updating products between the local catalog and online stores through Excel, Google Sheets, and APIs.
 
-## Запуск у dev
-```bash
-# із кореня проєкту
-make build-dev
-make up-dev
-```
+## Development
 
-Альтернатива без `make`:
-```bash
-docker compose -f .docker/dev/docker-compose.yml build
-docker compose -f .docker/dev/docker-compose.yml up -d
-```
+From the repository root:
 
-## Запуск у prod
-```bash
-# із кореня проєкту
-make build-prod
-make up-prod
-```
+    make build-dev
+    make up-dev
 
-Якщо використовуються slim-образи:
-```bash
-make up-prod-slim
-```
+Alternatively:
 
-## Зупинка контейнерів
-```bash
-make down-dev
-make down-prod
-```
+    docker compose -f .docker/dev/docker-compose.yml build
+    docker compose -f .docker/dev/docker-compose.yml up -d
+
+## Production
+
+    make build-prod
+    make up-prod
+
+## Stop Containers
+
+    make down-dev
+    make down-prod
 
 ## Frontend
-```bash
-# dev watch
-make vite
 
-# production build
-make vite-build
-```
+Run the development watcher:
 
-## Тести
-```bash
-# у php-контейнері
-docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml \
-  exec -T dev-strateg-export-products-php-fpm php artisan test --compact
-```
+    make vite
 
-Окремий файл тестів:
-```bash
-docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml \
-  exec -T dev-strateg-export-products-php-fpm php artisan test --compact tests/Feature/SomeTest.php
-```
+Build production assets:
+
+    make vite-build
+
+## Tests
+
+Run the full test suite in the PHP container:
+
+    docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-php-fpm php artisan test --compact
+
+Run one test file:
+
+    docker compose -f /home/kamaz/www/strateg-projects/strateg-export-products/.docker/dev/docker-compose.yml exec -T dev-strateg-export-products-php-fpm php artisan test --compact tests/Feature/SomeTest.php

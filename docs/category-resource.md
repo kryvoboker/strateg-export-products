@@ -1,35 +1,39 @@
-# CategoryResource (Каталог -> Категорії)
+[← Product Catalog](product-resource.md) · [Back to README](../README.md) · [Attributes →](attribute-resource.md)
 
-## Для чого ресурс
-Керування категоріями каталогу: назви, ієрархія, статус, сортування, прив'язка до магазинів, перегляд дерева дочірніх категорій.
+# CategoryResource (Catalog → Categories)
 
-## Сторінки ресурсу
-- `index` (`ListCategories`): список категорій.
-- `create` (`CreateCategory`): створення категорії.
-- `edit` (`EditCategory`): редагування категорії.
+## Purpose
 
-Разом: **3 сторінки**.
+The resource manages category names, hierarchy, status, sorting, store bindings, and child-category tree views.
 
-## Як користуватись
-1. Створіть або відредагуйте категорію:
-- назва;
-- parent category;
-- sort order;
-- магазини;
-- активність.
-2. У списку можна:
-- відкрити модалку `Показати дочірні категорії`;
-- зробити масову прив'язку категорій до магазинів.
-3. При create/update автоматично запускається `ProcessCategoryNameTranslationJob`.
+## Resource Pages
 
-## Фільтри і статуси
-- Фільтр по магазину.
-- Фільтр по статусу (`Активна` / `Неактивна`).
+- index (ListCategories): category list.
+- create (CreateCategory): create a category.
+- edit (EditCategory): edit a category.
 
-## Важливі дії
-- `Показати дочірні категорії` (modal tree view).
-- `Показати всі категорії` (скидання subtree-фільтра).
-- Масова прив'язка до магазинів.
+Total: 3 pages.
 
-## Видалення
-На edit-сторінці видалення має підтвердження з попередженням про кількість дочірніх категорій.
+## How to Use
+
+Create or edit the name, parent category, sort order, stores, and active state. The list can show child categories and bulk-link categories to stores. ProcessCategoryNameTranslationJob runs after create or update.
+
+## Filters and Statuses
+
+Filter by store or by Active / Inactive status.
+
+## Main Actions
+
+- Show child categories.
+- Show all categories to clear the subtree filter.
+- Bulk-link categories to stores.
+
+## Deletion
+
+Deletion on the edit page requires confirmation and displays the number of child categories.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Attributes](attribute-resource.md) — related catalog attributes.
+- [Stores](shop-resource.md) — store bindings.

@@ -1,60 +1,48 @@
+[← Product Import](product-import-batch-resource.md) · [Back to README](../README.md) · [Product Catalog →](product-resource.md)
+
 # ProductUpdateBatchResource
 
-## Для чого ресурс
-Ресурс `ProductUpdates` призначений для завантаження пакетів оновлення і подальшого масового або точкового оновлення товарів у магазинах через API.
+## Purpose
 
-## Сторінки ресурсу
-- `index` (`ListProductUpdateBatches`): список пакетів оновлень.
-- `create` (`CreateProductUpdateBatch`): створення пакета оновлення (Excel або Google Sheets).
-- `view` (`ViewProductUpdateBatch`): деталі пакета + позиції оновлення (`ProductUpdateItemsRelationManager`).
+The ProductUpdates resource uploads update batches and performs bulk or individual product updates in stores through their APIs.
 
-Разом: **3 сторінки**.
+## Resource Pages
 
-## Як користуватись
-1. Відкрийте `Оновлення товарів` -> `Завантажити товари на оновлення`.
-2. Завантажте Excel або вкажіть Google Sheets URL.
-3. Після створення пакет обробляється job-ом `ProcessProductUpdateBatchJob`.
-4. На сторінці пакета:
-- переглядайте позиції;
-- дивіться payload;
-- запускайте оновлення в магазини масово/поштучно;
-- запускайте retry для невдалих оновлень.
+- index (ListProductUpdateBatches): update batch list.
+- create (CreateProductUpdateBatch): create an update batch from Excel or Google Sheets.
+- view (ViewProductUpdateBatch): batch details and update items (ProductUpdateItemsRelationManager).
 
-## Статуси та позначення
-### Джерела (`source_type`)
-- `CSV файл`.
-- `Excel файл`.
-- `Google Sheet`.
-- `Локальні товари`.
-- `Точкове API-оновлення (Edit Product)`.
+Total: 3 pages.
 
-### Статус пакета
-- `Новий`.
-- `В обробці`.
-- `Оновлення через API`.
-- `Завершено`.
-- `Помилка`.
-- `Частково з помилками`.
-- `Скасовано`.
+## How to Use
 
-### Статус позиції
-- `Новий`.
-- `В обробці`.
-- `Нормалізовано`.
-- `Успішно`.
-- `Помилка`.
-- `Не в черзі`.
+1. Open Product Updates → Upload Products for Update.
+2. Upload an Excel file or enter a Google Sheets URL.
+3. The batch is processed by ProcessProductUpdateBatchJob.
+4. Inspect items and payloads, update stores in bulk or individually, and retry failed updates.
 
-## Основні дії
-- `Масово оновити товари в магазинах`.
-- `Повторити невдалі оновлення`.
-- На позиції: `Переглянути payload`, `Оновити товар в магазинах`, `Повторити невдалі оновлення`.
+## Statuses
 
-## Типові причини пропуску оновлення
-- Товар не прив'язаний до вибраного магазину.
-- У прив'язці немає `external_product_id`.
-- Запис уже в черзі/оновлений або вже існує failed-запис.
+Sources: CSV file, Excel file, Google Sheet, Local products, and Individual API update from Edit Product.
 
-## Повідомлення
-- Про постановку задач на оновлення в чергу.
-- Підсумки по масових діях (`queued`, `skipped_not_bound`, `skipped_without_external_id`, `errors`).
+Batch statuses: New, Processing, Updating through API, Completed, Failed, Partially failed, and Cancelled.
+
+Item statuses: New, Processing, Normalized, Succeeded, Failed, and Not queued.
+
+## Main Actions
+
+- Bulk-update products in stores.
+- Retry failed updates.
+- For an item: view payload, update stores, or retry failed updates.
+
+## Common Skip Reasons
+
+- The product is not linked to the selected store.
+- The binding has no external_product_id.
+- The record is already queued, updated, or already has a failed record.
+
+## See Also
+
+- [Documentation Contents](README.md) — complete documentation index.
+- [Product Catalog](product-resource.md) — catalog update actions.
+- [Stores](shop-resource.md) — store integrations.
