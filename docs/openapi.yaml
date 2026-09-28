@@ -1,0 +1,447 @@
+openapi: 3.1.0
+info:
+  title: Strateg Export Products Remote Shop Integration API
+  version: 1.0.0
+  description: |
+    OpenAPI documentation for the remote shop operations implemented by Strateg Export Products.
+
+    The application is an outbound API client. Remote endpoint paths are configurable per shop,
+    so the paths in this document are stable logical operation names. Map them to the values of
+    part_api_url_login, part_api_url_export_prods, part_api_url_update_prods,
+    part_api_url_backup_prods, part_api_url_delete_prods, and part_api_url_restore_prods.
+
+    The remote shop may add integration-specific fields. The schemas therefore describe the
+    fields produced and consumed by this application while allowing additional properties.
+  contact:
+    name: Strateg Export Products
+servers:
+  - url: https://{shopHost}{basePath}
+    description: Configured remote shop API base URL
+    variables:
+      shopHost:
+        default: shop.example.com
+        description: Remote shop host configured in the Shop resource
+      basePath:
+        default: /api
+        description: Optional API path prefix
+tags:
+  - name: Authentication
+    description: Authentication for OpenCart-like shops
+  - name: Products
+    description: Product export, update, backup, delete, and restore operations
+paths:
+  /login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate with a remote shop
+      description: Logical path mapped from the shop's part_api_url_login setting.
+      operationId: authenticateShop
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShopLoginRequest'
+      responses:
+        '200':
+          description: Authentication succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /products/export:
+    post:
+      tags: [Products]
+      summary: Export a product to the remote shop
+      description: Logical path mapped from product_export_endpoint or part_api_url_export_prods.
+      operationId: exportProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+      responses:
+        '200':
+          description: Product exported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductExportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '5XX':
+          $ref: '#/components/responses/RemoteError'
+
+  /products/update:
+    post:
+      tags: [Products]
+      summary: Update a product in the remote shop
+      description: Logical path mapped from product_update_endpoint or part_api_url_update_prods.
+      operationId: updateProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '5XX':
+          $ref: '#/components/responses/RemoteError'
+
+  /products/backup:
+    post:
+      tags: [Products]
+      summary: Create a remote product backup
+      description: Logical path mapped from product_backup_endpoint or part_api_url_backup_prods.
+      operationId: backupProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductIdentifierRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductIdentifierRequest'
+      responses:
+        '200':
+          description: Product backup returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoteBackupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '5XX':
+          $ref: '#/components/responses/RemoteError'
+
+  /products/delete:
+    post:
+      tags: [Products]
+      summary: Delete a product from the remote shop
+      description: Logical path mapped from product_delete_endpoint or part_api_url_delete_prods.
+      operationId: deleteProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductIdentifierRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductIdentifierRequest'
+      responses:
+        '200':
+          description: Product deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '5XX':
+          $ref: '#/components/responses/RemoteError'
+
+  /products/restore:
+    post:
+      tags: [Products]
+      summary: Restore a product in the remote shop
+      description: Logical path mapped from product_restore_endpoint or part_api_url_restore_prods.
+      operationId: restoreProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductOperationRequest'
+      responses:
+        '200':
+          description: Product restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '5XX':
+          $ref: '#/components/responses/RemoteError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API token
+
+  schemas:
+    ShopLoginRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        username:
+          type: string
+        key:
+          type: string
+          writeOnly: true
+        api_token:
+          type: string
+          writeOnly: true
+      description: |
+        OpenCart-like integrations may accept username/key or api_token depending on the
+        configured shop implementation.
+
+    AuthTokenResponse:
+      type: object
+      required: [api_token]
+      additionalProperties: true
+      properties:
+        api_token:
+          type: string
+          description: Token used by subsequent remote requests
+
+    ProductIdentifierRequest:
+      type: object
+      additionalProperties: true
+      required: [external_product_id]
+      properties:
+        product_id:
+          type: integer
+          minimum: 1
+          description: Remote or local product identifier, depending on the shop contract
+        external_product_id:
+          type: integer
+          minimum: 1
+          description: Product identifier assigned by the remote shop
+        shop_id:
+          type: integer
+          minimum: 1
+          description: Local shop identifier used by the integration layer
+
+    ProductOperationRequest:
+      allOf:
+        - $ref: '#/components/schemas/ProductIdentifierRequest'
+        - type: object
+          additionalProperties: true
+          properties:
+            product:
+              $ref: '#/components/schemas/Product'
+            categories:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            attributes:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            descriptions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductDescription'
+            images:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            manufacturer_brand:
+              type: object
+              additionalProperties: true
+            specials:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            discounts:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            shop_languages:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+
+    Product:
+      type: object
+      additionalProperties: true
+      properties:
+        product_id:
+          type: integer
+        external_product_id:
+          type: integer
+        model:
+          type: string
+        sku:
+          type: string
+        ean:
+          type: string
+        quantity:
+          type: number
+        minimum:
+          type: number
+        image:
+          type: string
+        price:
+          type: number
+        is_active:
+          type: boolean
+        date_available:
+          type: string
+          format: date-time
+        date_added:
+          type: string
+          format: date-time
+
+    ProductDescription:
+      type: object
+      additionalProperties: true
+      properties:
+        shop_language_id:
+          type: integer
+        language_code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        meta_title:
+          type: string
+        meta_description:
+          type: string
+        meta_keywords:
+          type: string
+
+    ProductExportResponse:
+      allOf:
+        - $ref: '#/components/schemas/OperationResponse'
+        - type: object
+          required: [external_product_id]
+          properties:
+            external_product_id:
+              type: integer
+              minimum: 1
+              description: Identifier saved to the local product/shop binding
+
+    RemoteBackupResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        product_id:
+          type: integer
+        external_product_id:
+          type: integer
+        data:
+          type: object
+          additionalProperties: true
+
+    OperationResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        product_id:
+          type: integer
+        external_product_id:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: The remote shop rejected the request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or the token expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The remote product was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: The remote shop rejected one or more fields
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RemoteError:
+      description: Remote shop or gateway failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

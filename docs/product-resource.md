@@ -1,4 +1,4 @@
-[← Product Updates](product-update-batch-resource.md) · [Back to README](../README.md) · [Categories →](category-resource.md)
+[← Product Deletes](product-delete-batch-resource.md) · [Back to README](../README.md) · [Remote API Integration →](remote-api-integration.md)
 
 # ProductResource (Catalog → Products)
 
@@ -16,7 +16,7 @@ Total: 3 pages.
 
 ## How to Use
 
-Use filters and search for name, SKU, model, EAN, external product ID, quantity, price, category, attribute, or store. Toolbar actions support binding, export, and updates. On the edit page, save local changes and optionally select Update through API in online store.
+Use filters and search for name, SKU, model, EAN, external product ID, quantity, price, category, attribute, or store. Toolbar actions support binding, export, updates, and restore. The delete action queues remote deletion through the shared Product Deletes service after a shop is selected. On the edit page, save local changes and optionally select Update through API in an online store.
 
 ## API Update Settings
 

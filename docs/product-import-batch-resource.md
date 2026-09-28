@@ -1,4 +1,4 @@
-[← Helper Functions](helpers.md) · [Back to README](../README.md) · [Product Updates →](product-update-batch-resource.md)
+[← Product Data Workflows](product-data-workflows.md) · [Back to README](../README.md) · [Product Updates →](product-update-batch-resource.md)
 
 # ProductImportBatchResource
 
@@ -14,10 +14,14 @@ The ProductImports resource manages product imports from Excel, Google Sheets, o
 
 Total: 3 pages.
 
+## Input modes
+
+The create form accepts an Excel file, a Google Sheets URL, or a manual admin form. Excel files must be `.xlsx` or `.xls` and contain the required worksheets and headers described in [Product Data Workflows](product-data-workflows.md). Google Sheets must expose the same worksheet structure to the configured Google service account.
+
 ## How to Use
 
 1. Open Product Imports → Upload New Products.
-2. Select Excel file, Google Sheets, or Administration panel.
+2. Select an Excel file, a Google Sheets URL, or Administration panel input.
 3. The batch is processed by ProcessProductImportBatchJob.
 4. Review statuses, payloads, product edits, store bindings, exports, and retries on the list or view page.
 
@@ -39,6 +43,8 @@ Export statuses: Not queued, Exporting, Exported, Export failed, and Partially f
 - Bulk-export products to stores.
 - Retry failed exports.
 - For an item: view payload, edit the product, export to stores, or retry failed exports.
+
+Export is shop-specific. A product must be bound to the selected shop before it can be exported. A successful remote response must provide an external product ID, which is saved for later updates, deletion, and restoration.
 
 ## Common Validation Messages
 

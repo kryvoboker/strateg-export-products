@@ -11,6 +11,12 @@ The project imports products from Excel, Google Sheets, and the administration p
 
 Open the administration panel at the address configured for the development environment. Stop the containers with make down-dev.
 
+## Example workflow
+
+1. Create a Product Import batch from an Excel file or Google Sheets URL.
+2. Wait for normalization, then bind successful products to a store.
+3. Export the bound products and use the saved external IDs for later updates, deletion, or restore.
+
 ## Features
 
 - Import products from Excel, Google Sheets, and manual entries.
@@ -35,9 +41,13 @@ Open the administration panel at the address configured for the development envi
 | [Configuration](docs/configuration.md)                   | Environment and store settings                |
 | [Helper Functions](docs/helpers.md)                      | Functions from app/Supports/helpers.php       |
 | [Supports Reference](docs/supports.md)                   | All Supports service methods                  |
+| [Product Data Workflows](docs/product-data-workflows.md) | Import, export, update, delete, and restore  |
 | [Product Import](docs/product-import-batch-resource.md)  | Import batches and item processing            |
 | [Product Updates](docs/product-update-batch-resource.md) | Batch and point updates                       |
+| [Product Deletes](docs/product-delete-batch-resource.md) | Remote shop deletion batches                 |
 | [Product Catalog](docs/product-resource.md)              | Local catalog operations                      |
+| [Remote API Integration](docs/remote-api-integration.md) | Outbound shop requests and API status        |
+| [OpenAPI Specification](docs/openapi.yaml)               | Swagger-readable remote integration contract |
 | [Categories](docs/category-resource.md)                  | Category hierarchy and binding                |
 | [Attributes](docs/attribute-resource.md)                 | Attribute management and binding              |
 | [Stores](docs/shop-resource.md)                          | External store configuration                  |

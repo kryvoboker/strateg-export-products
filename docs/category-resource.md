@@ -1,4 +1,4 @@
-[← Product Catalog](product-resource.md) · [Back to README](../README.md) · [Attributes →](attribute-resource.md)
+[← Remote API Integration](remote-api-integration.md) · [Back to README](../README.md) · [Attributes →](attribute-resource.md)
 
 # CategoryResource (Catalog → Categories)
 

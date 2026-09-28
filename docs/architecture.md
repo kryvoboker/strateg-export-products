@@ -44,6 +44,8 @@ The spme_product_shop table is the source of truth for local product-to-store re
 - ProductPayloadBuilderService builds export and update payloads.
 - Product binding operations go through binding services.
 - Long-running operations do not run synchronously inside UI actions.
+- Remote API jobs resolve configured shop endpoints, authenticate OpenCart-like integrations, validate responses, and persist remote IDs; Filament resources do not call shop APIs directly.
+- The repository has no inbound `routes/api.php`. `docs/openapi.yaml` documents the outbound remote-shop integration as a configurable contract template; each shop's external contract remains authoritative.
 
 ## Supports Layer
 
@@ -56,6 +58,8 @@ The `app/Supports` tree contains shared helpers and domain services that are reu
 - `Services/Ai` owns prompt normalization, translation calls, caching, and rate limiting.
 
 See the [Supports reference](supports.md) for every helper function and public service method.
+
+See the [Remote API Integration](remote-api-integration.md) page for implemented outbound shop operations and API availability status.
 
 ## See Also
 

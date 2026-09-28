@@ -1,4 +1,4 @@
-[← Contents](README.md) · [Back to README](../README.md) · [Architecture →](architecture.md)
+[Back to README](../README.md) · [Architecture →](architecture.md)
 
 # Getting Started
 
