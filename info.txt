@@ -1,1 +1,21 @@
-path to site - /var/webroot/sites/export-products.strateg.ua
+For run Google Chrome in WSL 2:
+
+dbus-daemon --session --address=unix:path=$XDG_RUNTIME_DIR/bus --fork
+
+export XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
+export WAYLAND_DISPLAY=wayland-0
+export DISPLAY=:0
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/mnt/wslg/runtime-dir/bus
+
+google-chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-profile \
+  --no-sandbox \
+  --disable-dev-shm-usage \
+  https://www.example.com
+
+
+For run Google Chrome only for mcp server:
+
+Xvfb :99 -screen 0 1920x1080x24 & export DISPLAY=:99
