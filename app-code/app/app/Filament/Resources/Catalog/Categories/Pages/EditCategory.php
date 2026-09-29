@@ -9,6 +9,7 @@ use App\Filament\Resources\Catalog\Categories\Schemas\CategoryForm;
 use App\Filament\Resources\Trait\EditPageTrait;
 use App\Jobs\ProcessCategoryNameTranslationJob;
 use App\Models\Categories\Category;
+use App\Models\Categories\CategoryShop;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -43,7 +44,14 @@ class EditCategory extends EditRecord
     {
         if ($this->record instanceof Category) {
             $data['category_name'] = (string) ($this->record->descriptions()->orderByRaw('shop_language_id IS NULL DESC')->value('name') ?? '');
-            $data['shop_ids']      = $this->record->shops()->pluck('shops.id')->map(static fn ($shop_id): int => (int) $shop_id)->all();
+            $data['shop_bindings'] = $this->record->categoryShops()
+                ->orderBy('shop_id')
+                ->get(['shop_id', 'external_category_id'])
+                ->map(static fn (CategoryShop $category_shop): array => [
+                    'shop_id'              => (int) $category_shop->shop_id,
+                    'external_category_id' => $category_shop->external_category_id,
+                ])
+                ->all();
         }
 
         return $data;
@@ -63,12 +71,7 @@ class EditCategory extends EditRecord
         CategoryForm::syncCategoryAdditionalData($category, $data);
         ProcessCategoryNameTranslationJob::dispatch(
             (int) $category->id,
-            collect(Arr::get($data, 'shop_ids', []))
-                ->map(static fn ($shop_id): int => (int) $shop_id)
-                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-                ->unique()
-                ->values()
-                ->all()
+            CategoryForm::getSelectedShopIds($data),
         );
 
         return $category;

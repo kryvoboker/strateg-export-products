@@ -1,15 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'navigation_label' => 'Категорії',
 
     'labels' => [
-        'model'        => 'Категорія',
-        'plural_model' => 'Категорії',
-        'name'         => 'Назва категорії',
-        'parent'       => 'Батьківська категорія',
-        'sort_order'   => 'Порядок сортування',
-        'shops'        => 'Магазини',
+        'model'                => 'Категорія',
+        'plural_model'         => 'Категорії',
+        'name'                 => 'Назва категорії',
+        'parent'               => 'Батьківська категорія',
+        'sort_order'           => 'Порядок сортування',
+        'shops'                => 'Магазини',
+        'shop'                 => 'Магазин',
+        'external_category_id' => 'ID категорії у зовнішньому магазині',
     ],
 
     'columns' => [
@@ -21,6 +25,7 @@ return [
     ],
 
     'actions' => [
+        'add_shop_binding'         => 'Додати магазин',
         'view_children_tree'       => 'Показати дочірні категорії',
         'children_of'              => 'Дочірні категорії: :name',
         'show_all_categories'      => 'Показати всі категорії',

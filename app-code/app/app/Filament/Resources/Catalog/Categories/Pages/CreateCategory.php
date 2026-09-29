@@ -9,7 +9,6 @@ use App\Filament\Resources\Catalog\Categories\Schemas\CategoryForm;
 use App\Jobs\ProcessCategoryNameTranslationJob;
 use App\Models\Categories\Category;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Arr;
 
 class CreateCategory extends CreateRecord
 {
@@ -30,12 +29,7 @@ class CreateCategory extends CreateRecord
         CategoryForm::syncCategoryAdditionalData($category, $data);
         ProcessCategoryNameTranslationJob::dispatch(
             (int) $category->id,
-            collect(Arr::get($data, 'shop_ids', []))
-                ->map(static fn ($shop_id): int => (int) $shop_id)
-                ->filter(static fn (int $shop_id): bool => $shop_id > 0)
-                ->unique()
-                ->values()
-                ->all()
+            CategoryForm::getSelectedShopIds($data),
         );
 
         return $category;
