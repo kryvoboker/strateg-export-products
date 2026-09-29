@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Catalog\Categories\Tables;
 
 use App\Models\Categories\Category;
+use App\Models\Categories\CategoryDescription;
 use App\Models\Shops\Shop;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -21,7 +22,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
-use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class CategoriesTable
@@ -46,12 +46,9 @@ class CategoriesTable
                     }
                 }
 
-                return $query
-                    ->orderByRaw('parent_id IS NOT NULL')
-                    ->orderBy('parent_id')
-                    ->orderBy('sort_order')
-                    ->orderBy('id');
+                return $query;
             })
+            ->defaultSort('id')
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
@@ -60,27 +57,64 @@ class CategoriesTable
                 TextColumn::make('category_name')
                     ->label(__('admin/categories/categories.columns.name'))
                     ->state(static fn (Category $record): string => self::resolveCategoryDisplayName($record))
-                    ->searchable(
-                        query: static fn (Builder $query, string $search): Builder => $query->whereHas(
-                            'descriptions',
-                            static fn (Builder $description_query): Builder => $description_query->whereRaw(
-                                'LOWER(name) LIKE ?',
-                                ['%'.mb_strtolower(trim($search)).'%']
-                            )
-                        )
-                    )
-                    ->wrap(),
+                    ->searchable(query: static function (Builder $query, string $search): Builder {
+                        $normalized_search = trim($search);
+
+                        return $query->where(static function (Builder $search_query) use ($normalized_search): void {
+                            $search_query->whereHas(
+                                'descriptions',
+                                static fn (Builder $description_query): Builder => $description_query->whereRaw(
+                                    'LOWER(name) LIKE ?',
+                                    ['%' . mb_strtolower($normalized_search) . '%'],
+                                ),
+                            );
+
+                            if (ctype_digit($normalized_search)) {
+                                $search_query->orWhereKey((int)$normalized_search);
+                            }
+                        });
+                    })
+                    ->wrap()
+                    ->sortable(query: static function (Builder $query, string $direction): Builder {
+                        $category_table = $query->getModel()->getTable();
+
+                        return $query->orderBy(
+                            CategoryDescription::query()
+                                ->select('name')
+                                ->whereColumn('category_id', "{$category_table}.id")
+                                ->whereNotNull('name')
+                                ->where('name', '!=', '')
+                                ->orderByRaw('shop_language_id IS NULL DESC')
+                                ->orderBy('id')
+                                ->limit(1),
+                            $direction,
+                        );
+                    }),
 
                 TextColumn::make('shops')
                     ->label(__('admin/categories/categories.columns.shops'))
                     ->state(static fn (Category $record): string => self::resolveCategoryShopsText($record))
-                    ->wrap(),
+                    ->wrap()
+                    ->sortable(query: static fn (Builder $query, string $direction): Builder => $query->orderBy(
+                        Shop::query()
+                            ->select('name')
+                            ->whereColumn('id', $query->getModel()->qualifyColumn('shop_id'))
+                            ->limit(1),
+                        $direction,
+                    )),
 
                 TextColumn::make('shop_context')
                     ->label('Shop Scope')
                     ->state(static fn (Category $record): string => self::resolveDirectShopContext($record))
                     ->badge()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->sortable(query: static fn (Builder $query, string $direction): Builder => $query->orderBy(
+                        Shop::query()
+                            ->select('name')
+                            ->whereColumn('id', $query->getModel()->qualifyColumn('shop_id'))
+                            ->limit(1),
+                        $direction,
+                    )),
 
                 TextColumn::make('family_ulid')
                     ->label('Family ULID')
@@ -110,7 +144,7 @@ class CategoriesTable
                         ->pluck('name', 'id')
                         ->toArray())
                     ->query(static function (Builder $query, array $data): Builder {
-                        $shop_id = (int) ($data['value'] ?? 0);
+                        $shop_id = (int)($data['value'] ?? 0);
                         if ($shop_id <= 0) {
                             return $query;
                         }
@@ -126,26 +160,21 @@ class CategoriesTable
                     ->query(static function (Builder $query, array $data): Builder {
                         $value = Arr::get($data, 'value');
 
-                        if (! in_array((string) $value, ['0', '1'], true)) {
+                        if (!in_array((string)$value, ['0', '1'], true)) {
                             return $query;
                         }
 
-                        return $query->where('is_active', (bool) ((int) $value));
+                        return $query->where('is_active', (bool)((int)$value));
                     }),
             ])
             ->recordActions([
                 Action::make('viewChildrenTree')
                     ->label(__('admin/categories/categories.actions.view_children_tree'))
                     ->icon('heroicon-o-chevron-down')
-                    ->visible(static fn (Category $record): bool => (int) ($record->children_count ?? 0) > 0)
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel(__('actions.close'))
-                    ->modalHeading(static fn (Category $record): string => __('admin/categories/categories.actions.children_of', [
-                        'name' => self::resolveCategoryDisplayName($record),
-                    ]))
-                    ->modalDescription(static fn (Category $record): HtmlString => new HtmlString(
-                        self::renderChildrenTreeHtml((int) $record->id)
-                    )),
+                    ->visible(static fn (Category $record): bool => (int)($record->children_count ?? 0) > 0)
+                    ->dispatch('category-children-selected', static fn (Category $record): array => [
+                        'category_id' => (int)$record->id,
+                    ]),
                 EditAction::make(),
             ])
             ->headerActions([
@@ -179,7 +208,7 @@ class CategoriesTable
                         ])
                         ->action(function (Collection $records, array $data): void {
                             $shop_ids = collect(Arr::get($data, 'shop_ids', []))
-                                ->map(static fn ($shop_id): int => (int) $shop_id)
+                                ->map(static fn ($shop_id): int => (int)$shop_id)
                                 ->filter(static fn (int $shop_id): bool => $shop_id > 0)
                                 ->unique()
                                 ->values()
@@ -198,13 +227,13 @@ class CategoriesTable
                             $created_total    = 0;
                             $reused_total     = 0;
                             foreach ($records as $record) {
-                                if (! $record instanceof Category) {
+                                if (!$record instanceof Category) {
                                     continue;
                                 }
 
                                 foreach ($shop_ids as $shop_id) {
                                     $resolved_category = self::duplicateCategoryTreeForShop($record, $shop_id);
-                                    if ((int) $resolved_category->id === (int) $record->id) {
+                                    if ((int)$resolved_category->id === (int)$record->id) {
                                         $reused_total++;
                                     } else {
                                         $created_total++;
@@ -217,9 +246,9 @@ class CategoriesTable
                             Notification::make()
                                 ->title(__('admin/categories/categories.messages.bulk_bind_completed'))
                                 ->body(__('admin/categories/categories.messages.bulk_bind_result', [
-                                    'categories_total' => $categories_total,
-                                    'shops_total'      => count($shop_ids),
-                                ]).', created: '.$created_total.', reused: '.$reused_total)
+                                        'categories_total' => $categories_total,
+                                        'shops_total'      => count($shop_ids),
+                                    ]) . ', created: ' . $created_total . ', reused: ' . $reused_total)
                                 ->success()
                                 ->send();
                         }),
@@ -232,14 +261,14 @@ class CategoriesTable
     private static function resolveCategoryDisplayName(Category $category): string
     {
         $description_name = collect($category->descriptions)
-            ->map(static fn ($description): string => Str::trim((string) Arr::get($description, 'name', '')))
+            ->map(static fn ($description): string => Str::trim((string)Arr::get($description, 'name', '')))
             ->first(static fn (string $name): bool => $name !== '');
 
         if (is_string($description_name) && $description_name !== '') {
             return $description_name;
         }
 
-        $name_from_db = Str::trim((string) ($category->descriptions()
+        $name_from_db = Str::trim((string)($category->descriptions()
             ->whereNotNull('name')
             ->where('name', '!=', '')
             ->orderByRaw('shop_language_id IS NULL DESC')
@@ -250,7 +279,7 @@ class CategoriesTable
             return $name_from_db;
         }
 
-        return '#'.(int) $category->id;
+        return '#' . (int)$category->id;
     }
 
     private static function resolveCategoryShopsText(Category $category): string
@@ -260,80 +289,9 @@ class CategoriesTable
 
     private static function resolveDirectShopContext(Category $category): string
     {
-        $shop_name = Str::trim((string) ($category->shop?->name ?? ''));
+        $shop_name = Str::trim((string)($category->shop?->name ?? ''));
 
         return $shop_name !== '' ? $shop_name : __('admin/default.messages.created');
-    }
-
-    private static function renderChildrenTreeHtml(int $root_category_id): string
-    {
-        if ($root_category_id <= 0) {
-            return '<p>'.e(__('admin/categories/categories.messages.no_children')).'</p>';
-        }
-
-        $children = Category::query()
-            ->with([
-                'descriptions' => static fn ($description_query) => $description_query
-                    ->orderByRaw('shop_language_id IS NULL DESC')
-                    ->orderBy('id'),
-            ])
-            ->where('parent_id', $root_category_id)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get(['id', 'parent_id', 'sort_order']);
-
-        if ($children->isEmpty()) {
-            return '<p>'.e(__('admin/categories/categories.messages.no_children')).'</p>';
-        }
-
-        return self::renderTreeListHtml($children->all());
-    }
-
-    /**
-     * @param  array<int, Category>  $categories
-     */
-    private static function renderTreeListHtml(array $categories): string
-    {
-        if ($categories === []) {
-            return '';
-        }
-
-        $html = '<ul style="margin-left: 1rem; list-style: disc;">';
-
-        foreach ($categories as $category) {
-            if (! $category instanceof Category) {
-                continue;
-            }
-
-            $child_categories = Category::query()
-                ->with([
-                'descriptions' => static fn ($description_query) => $description_query
-                    ->orderByRaw('shop_language_id IS NULL DESC')
-                    ->orderBy('id'),
-            ])
-            ->where('parent_id', (int) $category->id)
-            ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get()
-                ->all();
-
-            $category_name = self::resolveCategoryDisplayName($category);
-            $shops_text    = self::resolveCategoryShopsText($category);
-
-            $html .= '<li>';
-            $html .= '<span style="font-weight: 600;">'.e($category_name).'</span>';
-            $html .= '<span style="color: #6b7280;"> ('.e($shops_text).')</span>';
-
-            if ($child_categories !== []) {
-                $html .= self::renderTreeListHtml($child_categories);
-            }
-
-            $html .= '</li>';
-        }
-
-        $html .= '</ul>';
-
-        return $html;
     }
 
     /**
@@ -349,12 +307,12 @@ class CategoriesTable
         $queue        = [$root_category_id];
 
         while ($queue !== []) {
-            $current_parent_id = (int) array_shift($queue);
+            $current_parent_id = (int)array_shift($queue);
 
             $child_ids = Category::query()
                 ->where('parent_id', $current_parent_id)
                 ->pluck('id')
-                ->map(static fn ($category_id): int => (int) $category_id)
+                ->map(static fn ($category_id): int => (int)$category_id)
                 ->filter(static fn (int $category_id): bool => $category_id > 0)
                 ->values()
                 ->all();
@@ -378,12 +336,12 @@ class CategoriesTable
             return $category;
         }
 
-        $parent_id        = (int) ($category->parent_id ?? 0);
+        $parent_id        = (int)($category->parent_id ?? 0);
         $target_parent_id = null;
         if ($parent_id > 0) {
             $parent = Category::query()->find($parent_id);
             if ($parent instanceof Category) {
-                $target_parent_id = (int) self::duplicateCategoryTreeForShop($parent, $shop_id)->id;
+                $target_parent_id = (int)self::duplicateCategoryTreeForShop($parent, $shop_id)->id;
             }
         }
 
