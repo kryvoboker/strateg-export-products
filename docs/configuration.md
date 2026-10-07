@@ -14,17 +14,17 @@ Do not add passwords, API tokens, or other secrets to documentation or Git. Use 
 
 Configure a store in the administration panel through the Shops resource.
 
-| Field | Purpose |
-|---|---|
-| name | Store name |
-| type | Integration type, for example opencart 4 |
-| base_url | External store base URL |
-| api_url | Custom API URL |
-| part_api_url_login | Relative authentication endpoint |
-| part_api_url_export_prods | Product export endpoint |
-| api_token | Token when required by the integration |
-| options | Additional endpoints and integration parameters |
-| is_active | Whether the store participates in operations |
+| Field                     | Purpose                                         |
+|---------------------------|-------------------------------------------------|
+| name                      | Store name                                      |
+| type                      | Integration type, for example opencart 4        |
+| base_url                  | External store base URL                         |
+| api_url                   | Custom API URL                                  |
+| part_api_url_login        | Relative authentication endpoint                |
+| part_api_url_export_prods | Product export endpoint                         |
+| api_token                 | Token when required by the integration          |
+| options                   | Additional endpoints and integration parameters |
+| is_active                 | Whether the store participates in operations    |
 
 For OpenCart-like APIs, configure update, restore, deletion, and backup endpoints through options. The external product identifier is stored separately for each product-to-store relationship.
 

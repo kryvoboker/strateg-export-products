@@ -1,4 +1,4 @@
-[← Product Catalog](product-resource.md) · [Back to README](../README.md) · [Categories →](category-resource.md)
+[← Product Catalog](product-resource.md) · [Back to README](../README.md) · [OpenCart API Token Lifecycle →](opencart-api-token-lifecycle.md)
 
 # Remote API Integration
 
@@ -22,16 +22,16 @@ The default client sends form-encoded `POST` requests. A configured `api_token` 
 
 ## Remote operations
 
-| Operation | Endpoint source | Payload builder or job | Success requirement |
-|---|---|---|---|
-| Authentication for OpenCart-like shops | `part_api_url_login` | `InteractsWithShopApi` | Response contains `api_token` |
-| Export | `product_export_endpoint` or `part_api_url_export_prods` | `ProcessProductExportItemJob` and `ProductPayloadBuilderService` | Response contains an external product ID |
-| Update | `product_update_endpoint`, `part_api_url_update_prods`, or the export endpoint fallback | `ProcessProductUpdateItemJob` | Successful HTTP response |
-| Backup before update/delete | `product_backup_endpoint` or `part_api_url_backup_prods` in options | Update/delete item jobs | Successful backup response is persisted as an external snapshot |
-| Delete | `product_delete_endpoint` or `part_api_url_delete_prods` | `ProcessProductDeleteItemJob` | Successful HTTP response |
-| Restore | `product_restore_endpoint` or `part_api_url_restore_prods` | `ProcessCatalogProductRestoreItemJob` | Successful HTTP response |
+| Operation                              | Endpoint source                                                                         | Payload builder or job                                           | Success requirement                                             |
+|----------------------------------------|-----------------------------------------------------------------------------------------|------------------------------------------------------------------|-----------------------------------------------------------------|
+| Authentication for OpenCart-like shops | `part_api_url_login`                                                                    | `InteractsWithShopApi`                                           | Response contains `api_token`                                   |
+| Export                                 | `product_export_endpoint` or `part_api_url_export_prods`                                | `ProcessProductExportItemJob` and `ProductPayloadBuilderService` | Response contains an external product ID                        |
+| Update                                 | `product_update_endpoint`, `part_api_url_update_prods`, or the export endpoint fallback | `ProcessProductUpdateItemJob`                                    | Successful HTTP response                                        |
+| Backup before update/delete            | `product_backup_endpoint` or `part_api_url_backup_prods` in options                     | Update/delete item jobs                                          | Successful backup response is persisted as an external snapshot |
+| Delete                                 | `product_delete_endpoint` or `part_api_url_delete_prods`                                | `ProcessProductDeleteItemJob`                                    | Successful HTTP response                                        |
+| Restore                                | `product_restore_endpoint` or `part_api_url_restore_prods`                              | `ProcessCatalogProductRestoreItemJob`                            | Successful HTTP response                                        |
 
-For OpenCart-like shops, the job obtains or reuses an auth API token, retries once after an invalid-token response, and stores the refreshed token in shop options.
+For OpenCart-like shops, the job obtains or reuses an auth API token, retries once after an invalid-token response, and stores the refreshed token in shop options. See [OpenCart API Token Lifecycle](opencart-api-token-lifecycle.md) for the full login, expiry, retry, and known-gap details.
 
 ## Payload identity and scope
 

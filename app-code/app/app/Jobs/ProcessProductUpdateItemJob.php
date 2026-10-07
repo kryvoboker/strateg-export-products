@@ -33,10 +33,15 @@ use Throwable;
 
 class ProcessProductUpdateItemJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
     use InteractsWithShopApi;
 
-    public function __construct(public int $product_update_item_id) {}
+    public function __construct(public int $product_update_item_id)
+    {
+    }
 
     public function handle(): void
     {
@@ -121,7 +126,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             $request_payload     = $this->buildRequestPayload(
                 $product,
                 $shop_id,
-                is_array($update_instructions) ? $update_instructions : []
+                is_array($update_instructions) ? $update_instructions : [],
             );
             Log::channel('daily')->info('Prepared update payload with shop-scoped catalog entities', [
                 'product_id'        => $product_id,
@@ -171,7 +176,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
                 ]);
             }
         } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to update product with id '.$product_id.' for shop with id '.$shop_id, [
+            Log::channel('stack')->error('Failed to update product with id ' . $product_id . ' for shop with id ' . $shop_id, [
                 'error_msg'  => $exception->getMessage(),
                 'file'       => $exception->getFile(),
                 'line'       => $exception->getLine(),
@@ -209,7 +214,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
         ProductUpdateItem $product_update_item,
         int $product_id,
         int $shop_id,
-        array $payload
+        array $payload,
     ): ?ProductExportItem {
         $batch_id = (int) ($product_update_item->product_update_batch_id ?? 0);
         if ($batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
@@ -368,7 +373,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product backup');
+        $url      = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product backup');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -410,7 +415,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product update');
+        $url      = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product update');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -437,12 +442,6 @@ class ProcessProductUpdateItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $backup_url   = $this->resolveBackupUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
         $payload = [
             'shop_id'             => (int) $shop->id,
             'product_id'          => (int) $product->id,
@@ -450,15 +449,13 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             'operation'           => 'backup',
         ];
 
-        $response = $this->sendOpenCartRequestWithAuthApiToken($backup_url, $auth_api_token, $payload, $timeout);
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($backup_url, $refreshed_auth_api_token, $payload, $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Update backup API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken($backup_url, $auth_api_token, $payload, $timeout),
+        );
     }
 
     /**
@@ -473,30 +470,19 @@ class ProcessProductUpdateItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $update_url   = $this->resolveUpdateUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
-        $response = $this->sendOpenCartRequestWithAuthApiToken($update_url, $auth_api_token, [
+        $payload = [
             ...$request_payload,
             'operation'           => 'update',
             'external_product_id' => $external_product_id,
-        ], $timeout);
+        ];
 
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($update_url, $refreshed_auth_api_token, [
-            ...$request_payload,
-            'operation'           => 'update',
-            'external_product_id' => $external_product_id,
-        ], $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Update API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken($update_url, $auth_api_token, $payload, $timeout),
+        );
     }
 
     private function resolveProductIdFromBackupPayload(array $backup_payload): int
@@ -602,7 +588,7 @@ class ProcessProductUpdateItemJob implements ShouldQueue
             $url,
             $auth_api_token,
             $request_payload,
-            $timeout
+            $timeout,
         );
     }
 

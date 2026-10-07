@@ -33,11 +33,11 @@ Every long-running operation is represented by a batch and item model. Jobs upda
 
 The Product Imports form accepts three input modes:
 
-| Source | Form input | Preparation job | Result |
-|---|---|---|---|
-| Local Excel | `.xlsx` or `.xls` upload | `ProcessProductImportBatchJob` | One normalized import item per product row |
-| Google Sheets | Spreadsheet URL containing the document ID | `ProcessProductImportBatchJob` | Sheets are read through `revolution/laravel-google-sheets`, exported to local Excel chunks, then normalized |
-| Admin form | Product fields, multilingual descriptions, images, discounts, specials, categories, attributes, and SEO values | `ProcessProductImportBatchJob` | One manual import item with a normalized payload |
+| Source        | Form input                                                                                                     | Preparation job                | Result                                                                                                      |
+|---------------|----------------------------------------------------------------------------------------------------------------|--------------------------------|-------------------------------------------------------------------------------------------------------------|
+| Local Excel   | `.xlsx` or `.xls` upload                                                                                       | `ProcessProductImportBatchJob` | One normalized import item per product row                                                                  |
+| Google Sheets | Spreadsheet URL containing the document ID                                                                     | `ProcessProductImportBatchJob` | Sheets are read through `revolution/laravel-google-sheets`, exported to local Excel chunks, then normalized |
+| Admin form    | Product fields, multilingual descriptions, images, discounts, specials, categories, attributes, and SEO values | `ProcessProductImportBatchJob` | One manual import item with a normalized payload                                                            |
 
 Excel imports are checked before the batch is created. The required worksheets are `Product`, `Description`, `Image`, `Product Category`, `Product Attribute`, `Seo Url`, `Special`, and `Discount`. The import job performs the same sheet and header checks for Google Sheets and records row-level failures.
 
@@ -82,21 +82,21 @@ Delete preparation creates `ProductDeleteItem` records. The operator then queues
 
 Restore has two scopes:
 
-| Scope | Input | Job/service | Effect |
-|---|---|---|---|
-| Local catalog restore | Existing import items or catalog products | `ProductRestoreQueueService`, restore jobs, `ProductBackupRestoreService` | Replaces local product and related rows from a local snapshot |
-| Remote shop restore | Exported product binding with a valid external ID | Update/restore queue and remote restore job | Sends an external backup payload back to the selected shop |
+| Scope                 | Input                                             | Job/service                                                               | Effect                                                        |
+|-----------------------|---------------------------------------------------|---------------------------------------------------------------------------|---------------------------------------------------------------|
+| Local catalog restore | Existing import items or catalog products         | `ProductRestoreQueueService`, restore jobs, `ProductBackupRestoreService` | Replaces local product and related rows from a local snapshot |
+| Remote shop restore   | Exported product binding with a valid external ID | Update/restore queue and remote restore job                               | Sends an external backup payload back to the selected shop    |
 
 Restore is available only when a valid, unused backup exists for the relevant product and shop context. The tuple `(product_id, shop_id, external_product_id)` identifies external snapshots.
 
 ## Status and audit behavior
 
-| Layer | Typical states | Stored in |
-|---|---|---|
-| Import/update/delete batch | `new`, `processing`, `completed`, `failed`, `partial_failed`, `canceled` | Batch table |
-| Import/update item | `new`, `processing`, `normalized`, `successed`, `failed`, `not_queued` | Item table |
-| Delete item | `new`, `processing`, `deleted`, `failed` | Delete item table |
-| Export item | `processing`, `normalized`, `exported`, `partial_failed`, `failed` | Export item table |
+| Layer                      | Typical states                                                           | Stored in         |
+|----------------------------|--------------------------------------------------------------------------|-------------------|
+| Import/update/delete batch | `new`, `processing`, `completed`, `failed`, `partial_failed`, `canceled` | Batch table       |
+| Import/update item         | `new`, `processing`, `normalized`, `successed`, `failed`, `not_queued`   | Item table        |
+| Delete item                | `new`, `processing`, `deleted`, `failed`                                 | Delete item table |
+| Export item                | `processing`, `normalized`, `exported`, `partial_failed`, `failed`       | Export item table |
 
 Use the batch counters and item records as the operational source of truth. Check `options.last_error`, `options.error_log_path`, and the linked error-log snapshot when a batch is partially or fully failed.
 

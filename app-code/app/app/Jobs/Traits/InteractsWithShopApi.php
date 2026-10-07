@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Jobs\Traits;
 
 use App\Models\Shops\Shop;
+use Closure;
 use DateTimeInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -25,15 +27,15 @@ trait InteractsWithShopApi
         $clean_endpoint = Str::trim($endpoint);
 
         if ($clean_endpoint === '') {
-            throw new RuntimeException('Missing endpoint for '.$operation);
+            throw new RuntimeException('Missing endpoint for ' . $operation);
         }
 
         $resolved_url = Str::startsWith($clean_endpoint, ['http://', 'https://'])
             ? $clean_endpoint
-            : $clean_base_url.'/'.Str::ltrim($clean_endpoint, '/');
+            : $clean_base_url . '/' . Str::ltrim($clean_endpoint, '/');
 
         if (validate_url($resolved_url) === false) {
-            throw new RuntimeException('Invalid URL for '.$operation.' request');
+            throw new RuntimeException('Invalid URL for ' . $operation . ' request');
         }
 
         return $resolved_url;
@@ -92,7 +94,7 @@ trait InteractsWithShopApi
             return $part_api_url_login;
         }
 
-        return Str::rtrim($api_base_url, '/').'/'.Str::ltrim($part_api_url_login, '/');
+        return Str::rtrim($api_base_url, '/') . '/' . Str::ltrim($part_api_url_login, '/');
     }
 
     protected function shopApiResolveStoredAuthApiToken(Shop $shop): string
@@ -118,6 +120,90 @@ trait InteractsWithShopApi
     }
 
     /**
+     * @param  Closure(string): Response  $send_request
+     * @throws ConnectionException
+     */
+    protected function shopApiSendAuthenticatedOpenCartRequest(
+        Shop $shop,
+        string $api_base_url,
+        int $timeout,
+        string $operation,
+        Closure $send_request,
+    ): Response {
+        $auth_api_token = $this->shopApiResolveStoredAuthApiToken($shop);
+
+        if ($auth_api_token === '') {
+            $auth_api_token = $this->shopApiRefreshOpenCartAuthApiToken($shop, $api_base_url, $timeout);
+        }
+
+        $response = $send_request($auth_api_token);
+
+        if ($this->shopApiIsInvalidOpenCartAuthTokenResponse($response)) {
+            $auth_api_token = $this->shopApiRefreshOpenCartAuthApiToken($shop, $api_base_url, $timeout, $auth_api_token);
+            $response       = $send_request($auth_api_token);
+        }
+
+        $this->shopApiAssertOpenCartResponseHasNoMessages($operation, $response);
+
+        return $response;
+    }
+
+    /**
+     * @throws ConnectionException
+     */
+    protected function shopApiRefreshOpenCartAuthApiToken(
+        Shop $shop,
+        string $api_base_url,
+        int $timeout,
+        ?string $rejected_auth_api_token = null,
+    ): string {
+        $lock = Cache::lock('shop-opencart-auth-token:' . $shop->getKey(), max($timeout * 2, 60));
+
+        return $lock->block(max($timeout, 5), function () use ($shop, $api_base_url, $timeout, $rejected_auth_api_token): string {
+            $fresh_shop = $shop->fresh();
+
+            if (! $fresh_shop instanceof Shop) {
+                throw new RuntimeException('Shop no longer exists while refreshing OpenCart API token');
+            }
+
+            $stored_auth_api_token = $this->shopApiResolveStoredAuthApiToken($fresh_shop);
+
+            if ($stored_auth_api_token !== '' && ($rejected_auth_api_token === null || ! hash_equals($rejected_auth_api_token, $stored_auth_api_token))) {
+                return $stored_auth_api_token;
+            }
+
+            $auth_api_token = $this->shopApiRequestOpenCartAuthApiTokenWithKey($fresh_shop, $api_base_url, $timeout);
+            $this->shopApiPersistOpenCartAuthApiToken($fresh_shop, $auth_api_token);
+
+            return $auth_api_token;
+        });
+    }
+
+    protected function shopApiAssertOpenCartResponseHasNoMessages(string $operation, Response $response): void
+    {
+        $response_data = $response->json();
+
+        if (is_array($response_data)) {
+            foreach (['error', 'warning'] as $message_type) {
+                $message = Arr::get($response_data, $message_type);
+
+                if ($message === null || $message === '' || $message === false || $message === []) {
+                    continue;
+                }
+
+                $message_text = is_scalar($message) ? (string) $message : json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $message_text = $this->shopApiSanitizeSensitiveText($message_text === false ? '[unreadable response message]' : $message_text);
+
+                throw new RuntimeException('OpenCart response contained ' . $message_type . ': ' . Str::limit($message_text, 2000));
+            }
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException($this->shopApiBuildFailedResponseMessage($operation, $response));
+        }
+    }
+
+    /**
      * @throws ConnectionException
      */
     protected function shopApiRequestOpenCartAuthApiTokenWithKey(Shop $shop, string $api_base_url, int $timeout): string
@@ -140,46 +226,13 @@ trait InteractsWithShopApi
             'key'      => $api_token,
         ]);
 
-        if (! $response->successful()) {
-            throw new RuntimeException($this->shopApiBuildFailedResponseMessage('OpenCart login API', $response));
-        }
+        $this->shopApiAssertOpenCartResponseHasNoMessages('OpenCart login API', $response);
 
         $response_data  = $response->json();
         $auth_api_token = Str::trim((string) Arr::get($response_data, 'api_token', ''));
 
         if ($auth_api_token === '') {
             throw new RuntimeException('OpenCart login API did not return api_token');
-        }
-
-        return $auth_api_token;
-    }
-
-    /**
-     * @throws ConnectionException
-     */
-    protected function shopApiRequestOpenCartAuthApiTokenWithApiToken(Shop $shop, string $api_base_url, int $timeout): string
-    {
-        $login_url = $this->shopApiResolveOpenCartLoginUrl($shop, $api_base_url);
-        $api_token = Str::trim((string) ($shop->api_token ?? ''));
-
-        if ($api_token === '') {
-            throw new RuntimeException('Shop API token is missing');
-        }
-
-        $request = Http::timeout($timeout)->asForm();
-        $request = $this->shopApiApplyDebugCookieForDevelopment($request);
-
-        $response = $request->post($login_url, [
-            'api_token' => $api_token,
-        ]);
-
-        if (! $response->successful()) {
-            throw new RuntimeException($this->shopApiBuildFailedResponseMessage('OpenCart auth API', $response));
-        }
-
-        $auth_api_token = Str::trim((string) Arr::get($response->json(), 'api_token', ''));
-        if ($auth_api_token === '') {
-            throw new RuntimeException('OpenCart auth API token is empty');
         }
 
         return $auth_api_token;
@@ -194,11 +247,11 @@ trait InteractsWithShopApi
         string $request_url,
         string $auth_api_token,
         array $payload,
-        int $timeout
+        int $timeout,
     ): Response {
         $url = $request_url;
         $url .= Str::contains($request_url, '?') ? '&' : '?';
-        $url .= 'api_token='.urlencode($auth_api_token);
+        $url .= 'api_token=' . urlencode($auth_api_token);
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->shopApiApplyDebugCookieForDevelopment($request);
@@ -215,7 +268,7 @@ trait InteractsWithShopApi
         string $request_url,
         string $auth_api_token,
         array $payload,
-        int $timeout
+        int $timeout,
     ): Response {
         $request = Http::timeout($timeout)->asForm();
         $request = $this->shopApiApplyDebugCookieForDevelopment($request);
@@ -244,6 +297,39 @@ trait InteractsWithShopApi
 
     protected function shopApiIsInvalidOpenCartAuthTokenResponse(Response $response): bool
     {
+        $response_data = $response->json();
+
+        if (is_array($response_data)) {
+            $has_invalid_auth_token_message = false;
+
+            foreach (['error', 'warning'] as $message_type) {
+                $message = Arr::get($response_data, $message_type);
+
+                if ($message === null || $message === '' || $message === false || $message === []) {
+                    continue;
+                }
+
+                $message_text = is_scalar($message)
+                    ? (string) $message
+                    : json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $message_text = Str::lower(Str::squish($message_text === false ? '' : $message_text));
+
+                $is_invalid_auth_token_message = Str::contains($message_text, 'token')
+                    && Str::contains($message_text, ['invalid', 'missing', 'expired', 'unauthorized', 'not valid', 'required']);
+                $is_expired_session_message = Str::contains($message_text, ['session expired', 'session has expired']);
+
+                if (! $is_invalid_auth_token_message && ! $is_expired_session_message) {
+                    return false;
+                }
+
+                $has_invalid_auth_token_message = true;
+            }
+
+            if ($has_invalid_auth_token_message) {
+                return true;
+            }
+        }
+
         if ($response->status() === 401 || $response->status() === 403) {
             return true;
         }
@@ -268,7 +354,6 @@ trait InteractsWithShopApi
             return true;
         }
 
-        $response_data = $response->json();
         if (! is_array($response_data)) {
             return false;
         }
@@ -277,9 +362,16 @@ trait InteractsWithShopApi
             return true;
         }
 
-        $error_text = Str::lower(Str::trim((string) Arr::get($response_data, 'error', '')));
+        $message_text = Str::lower(implode(' ', array_filter([
+            (string) Arr::get($response_data, 'error', ''),
+            (string) Arr::get($response_data, 'warning', ''),
+        ])));
 
-        return $error_text !== '' && Str::contains($error_text, 'token');
+        $is_invalid_auth_token_message = Str::contains($message_text, 'token')
+            && Str::contains($message_text, ['invalid', 'missing', 'expired', 'unauthorized', 'not valid', 'required']);
+
+        return $is_invalid_auth_token_message
+            || Str::contains($message_text, ['session expired', 'session has expired']);
     }
 
     protected function shopApiTruncateResponseBody(string $response_body): string
@@ -294,7 +386,7 @@ trait InteractsWithShopApi
     {
         $safe_response_body = $this->shopApiSanitizeSensitiveText($response->body());
 
-        return $operation.' failed with status '.$response->status().': '.$this->shopApiTruncateResponseBody($safe_response_body);
+        return $operation . ' failed with status ' . $response->status() . ': ' . $this->shopApiTruncateResponseBody($safe_response_body);
     }
 
     /**

@@ -16,16 +16,16 @@ The application is a Laravel modular monolith. Filament provides the administrat
 
 ## Main Directories
 
-| Directory | Purpose |
-|---|---|
-| app/Filament | Administration resources, forms, tables, and actions |
-| app/Jobs | Batch preparation and background operations |
-| app/Models | Eloquent models for domain entities |
-| app/Services | API and product application services |
-| app/Supports | Shared services and helper functions |
-| app/Enums | Operation types and statuses |
-| database/migrations | PostgreSQL schema |
-| docs | User and technical documentation |
+| Directory           | Purpose                                              |
+|---------------------|------------------------------------------------------|
+| app/Filament        | Administration resources, forms, tables, and actions |
+| app/Jobs            | Batch preparation and background operations          |
+| app/Models          | Eloquent models for domain entities                  |
+| app/Services        | API and product application services                 |
+| app/Supports        | Shared services and helper functions                 |
+| app/Enums           | Operation types and statuses                         |
+| database/migrations | PostgreSQL schema                                    |
+| docs                | User and technical documentation                     |
 
 ## Catalog Flows
 

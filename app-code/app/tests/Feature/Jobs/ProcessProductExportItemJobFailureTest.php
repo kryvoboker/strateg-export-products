@@ -17,6 +17,7 @@ use App\Models\Products\ProductShop;
 use App\Models\Shops\Shop;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -50,7 +51,7 @@ class ProcessProductExportItemJobFailureTest extends TestCase
             ProductShop::query()
                 ->where('product_id', (int) $export_item->product_id)
                 ->where('shop_id', (int) $shop->id)
-                ->value('external_product_id')
+                ->value('external_product_id'),
         );
         Http::assertNothingSent();
     }
@@ -76,7 +77,7 @@ class ProcessProductExportItemJobFailureTest extends TestCase
         $export_item->refresh();
 
         self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
-        self::assertStringContainsString('Export API failed with status 500', (string) $export_item->error_message);
+        self::assertStringContainsString('OpenCart response contained error: export failed', (string) $export_item->error_message);
         Http::assertSentCount(2);
         Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/login'));
         Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/export'));
@@ -105,6 +106,164 @@ class ProcessProductExportItemJobFailureTest extends TestCase
 
         self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
         self::assertStringContainsString('does not contain external product id', (string) $export_item->error_message);
+    }
+
+    public function test_it_stops_when_login_response_contains_an_error_even_with_success_status(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'shop-export-test.local/api/login'   => Http::response(['error' => 'Access denied for this IP'], 200),
+            'shop-export-test.local/api/export*' => Http::response(['id' => 777], 200),
+        ]);
+
+        [$export_item, $shop] = $this->makeOpenCartExportItem(['api_token' => 'master-token']);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('OpenCart response contained error: Access denied for this IP', (string) $export_item->error_message);
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_stops_when_login_response_contains_a_warning_even_with_success_status(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'shop-export-test.local/api/login'   => Http::response(['warning' => 'Maintenance in progress'], 200),
+            'shop-export-test.local/api/export*' => Http::response(['id' => 777], 200),
+        ]);
+
+        [$export_item, $shop] = $this->makeOpenCartExportItem(['api_token' => 'master-token']);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('OpenCart response contained warning: Maintenance in progress', (string) $export_item->error_message);
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_does_not_treat_an_opencart_warning_as_a_successful_export(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'shop-export-test.local/api/login'   => Http::response(['api_token' => 'auth-token-warning'], 200),
+            'shop-export-test.local/api/export*' => Http::response(['warning' => 'Product requires review', 'id' => 777], 200),
+        ]);
+
+        [$export_item, $shop] = $this->makeOpenCartExportItem(['api_token' => 'master-token']);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('OpenCart response contained warning: Product requires review', (string) $export_item->error_message);
+        self::assertNull(
+            ProductShop::query()
+                ->where('product_id', (int) $export_item->product_id)
+                ->where('shop_id', (int) $shop->id)
+                ->value('external_product_id'),
+        );
+        Http::assertSentCount(2);
+    }
+
+    public function test_it_refreshes_the_session_token_once_after_an_unauthorized_response(): void
+    {
+        Cache::store('array')->flush();
+        Http::preventStrayRequests();
+
+        $login_sequence = Http::sequence()
+            ->push(['api_token' => 'auth-token-1'], 200)
+            ->push(['api_token' => 'auth-token-2'], 200);
+        $export_sequence = Http::sequence()
+            ->push('Unauthorized', 401)
+            ->push(['success' => true, 'id' => 777], 200);
+
+        Http::fake([
+            'shop-export-test.local/api/login'   => $login_sequence,
+            'shop-export-test.local/api/export*' => $export_sequence,
+        ]);
+
+        [$export_item, $shop] = $this->makeOpenCartExportItem(['api_token' => 'master-token']);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+        $shop->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::EXPORTED->value, (string) $export_item->status);
+        self::assertSame('auth-token-2', data_get($shop->options, 'auth_api_token'));
+        Http::assertSentCount(4);
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/login')
+            && $request['username'] === 'api-user'
+            && $request['key'] === 'master-token');
+    }
+
+    public function test_it_refreshes_the_session_token_once_when_opencart_returns_an_invalid_token_error_message(): void
+    {
+        Cache::store('array')->flush();
+        Http::preventStrayRequests();
+
+        $login_sequence = Http::sequence()
+            ->push(['api_token' => 'auth-token-2'], 200);
+        $export_sequence = Http::sequence()
+            ->push(['error' => 'API token is missing or invalid!'], 200)
+            ->push(['success' => true, 'id' => 777], 200);
+
+        Http::fake([
+            'shop-export-test.local/api/login'   => $login_sequence,
+            'shop-export-test.local/api/export*' => $export_sequence,
+        ]);
+
+        [$export_item, $shop] = $this->makeOpenCartExportItem([
+            'api_token' => 'master-token',
+            'options'   => [
+                'api_timeout'    => 10,
+                'api_username'   => 'api-user',
+                'auth_api_token' => 'rejected-auth-token',
+            ],
+        ]);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+        $shop->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::EXPORTED->value, (string) $export_item->status);
+        self::assertSame('auth-token-2', data_get($shop->options, 'auth_api_token'));
+        Http::assertSentCount(3);
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/login')
+            && $request['username'] === 'api-user'
+            && $request['key'] === 'master-token');
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/export')
+            && str_contains($request->url(), 'api_token=rejected-auth-token'));
+        Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/api/export')
+            && str_contains($request->url(), 'api_token=auth-token-2'));
+    }
+
+    public function test_it_does_not_refresh_the_session_token_for_a_non_authentication_error_message(): void
+    {
+        Cache::store('array')->flush();
+        Http::preventStrayRequests();
+
+        Http::fake([
+            'shop-export-test.local/api/login'   => Http::response(['api_token' => 'auth-token-1'], 200),
+            'shop-export-test.local/api/export*' => Http::response(['error' => 'Product data was rejected'], 200),
+        ]);
+
+        [$export_item] = $this->makeOpenCartExportItem(['api_token' => 'master-token']);
+
+        (new ProcessProductExportItemJob((int) $export_item->id))->handle();
+
+        $export_item->refresh();
+
+        self::assertSame(ProductExportItemsStatusEnum::FAILED->value, (string) $export_item->status);
+        self::assertStringContainsString('OpenCart response contained error: Product data was rejected', (string) $export_item->error_message);
+        Http::assertSentCount(2);
     }
 
     public function test_it_marks_export_as_failed_when_default_export_url_is_invalid(): void
@@ -140,7 +299,7 @@ class ProcessProductExportItemJobFailureTest extends TestCase
             ], 200),
             'shop-export-test.local/api/export*' => Http::response(
                 'error=failed api_token=secret-token-123 token=another-secret Bearer eyJhbGciOiJIUzI1NiJ9',
-                500
+                500,
             ),
         ]);
 

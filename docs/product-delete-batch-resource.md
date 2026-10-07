@@ -12,10 +12,10 @@ Deletion can be started from a Product Deletes batch, an import or update item, 
 
 The create form accepts an Excel file or a Google Sheets URL. The source document must contain a `Product` worksheet. Each row must identify a product with one of these strategies:
 
-| Strategy | Required values |
-|---|---|
-| Direct local lookup | `Product Id` |
-| Remote lookup | `Shop Id` plus `External Product Id`, `Model`, or `EAN` |
+| Strategy            | Required values                                         |
+|---------------------|---------------------------------------------------------|
+| Direct local lookup | `Product Id`                                            |
+| Remote lookup       | `Shop Id` plus `External Product Id`, `Model`, or `EAN` |
 
 When several lookup values are supplied, they are intersected and must resolve to one product. An ambiguous or unresolved row becomes a failed delete item with its source row and error message retained.
 

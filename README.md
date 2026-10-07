@@ -47,6 +47,7 @@ Open the administration panel at the address configured for the development envi
 | [Product Deletes](docs/product-delete-batch-resource.md) | Remote shop deletion batches                 |
 | [Product Catalog](docs/product-resource.md)              | Local catalog operations                      |
 | [Remote API Integration](docs/remote-api-integration.md) | Outbound shop requests and API status        |
+| [OpenCart API Token Lifecycle](docs/opencart-api-token-lifecycle.md) | Session token login, reuse, and refresh |
 | [OpenAPI Specification](docs/openapi.yaml)               | Swagger-readable remote integration contract |
 | [Categories](docs/category-resource.md)                  | Category hierarchy and binding                |
 | [Attributes](docs/attribute-resource.md)                 | Attribute management and binding              |

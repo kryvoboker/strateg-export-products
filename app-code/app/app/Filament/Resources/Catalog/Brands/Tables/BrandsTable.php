@@ -46,7 +46,7 @@ class BrandsTable
                             'descriptions',
                             static fn (Builder $description_query): Builder => $description_query->whereRaw(
                                 'LOWER(name) LIKE ?',
-                                ['%'.mb_strtolower(trim($search)).'%']
+                                ['%'.Str::lower(Str::trim($search)).'%']
                             )
                         )
                     )

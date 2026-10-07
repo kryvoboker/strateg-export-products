@@ -29,10 +29,15 @@ use Throwable;
 
 class ProcessProductDeleteItemJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
     use InteractsWithShopApi;
 
-    public function __construct(public int $product_delete_item_id) {}
+    public function __construct(public int $product_delete_item_id)
+    {
+    }
 
     public function handle(ProductDeleteQueueService $product_delete_queue_service): void
     {
@@ -212,7 +217,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product backup');
+        $url      = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product backup');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -250,7 +255,7 @@ class ProcessProductDeleteItemJob implements ShouldQueue
 
         $base_url = $this->resolveBaseUrlForDefaultApi($shop);
         $timeout  = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product delete');
+        $url      = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product delete');
 
         $request = Http::timeout($timeout)->asForm();
         $request = $this->applyDebugCookieForDevelopment($request);
@@ -278,12 +283,6 @@ class ProcessProductDeleteItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $backup_url   = $this->resolveBackupUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
         $payload = [
             'shop_id'             => (int) $shop->id,
             'product_id'          => (int) $product->id,
@@ -291,15 +290,13 @@ class ProcessProductDeleteItemJob implements ShouldQueue
             'operation'           => 'backup',
         ];
 
-        $response = $this->sendOpenCartRequestWithAuthApiToken($backup_url, $auth_api_token, $payload, $timeout);
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($backup_url, $refreshed_auth_api_token, $payload, $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Delete backup API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken($backup_url, $auth_api_token, $payload, $timeout),
+        );
     }
 
     /**
@@ -312,12 +309,6 @@ class ProcessProductDeleteItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $delete_url   = $this->resolveDeleteUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
         $payload = [
             'shop_id'             => (int) $shop->id,
             'product_id'          => (int) $product->id,
@@ -325,15 +316,13 @@ class ProcessProductDeleteItemJob implements ShouldQueue
             'operation'           => 'delete',
         ];
 
-        $response = $this->sendOpenCartRequestWithAuthApiToken($delete_url, $auth_api_token, $payload, $timeout);
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($delete_url, $refreshed_auth_api_token, $payload, $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Delete API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken($delete_url, $auth_api_token, $payload, $timeout),
+        );
     }
 
     private function resolveDeleteUrl(Shop $shop, string $api_base_url): string
@@ -366,27 +355,19 @@ class ProcessProductDeleteItemJob implements ShouldQueue
         string $request_url,
         string $auth_api_token,
         array $payload,
-        int $timeout
+        int $timeout,
     ): Response {
         return $this->shopApiSendOpenCartRequestWithBodyAuthToken(
             $request_url,
             $auth_api_token,
             $payload,
-            $timeout
+            $timeout,
         );
     }
 
     private function isInvalidOpenCartAuthTokenResponse(Response $response): bool
     {
         return $this->shopApiIsInvalidOpenCartAuthTokenResponse($response);
-    }
-
-    /**
-     * @throws ConnectionException
-     */
-    private function requestOpenCartAuthApiToken(Shop $shop, string $api_base_url, int $timeout): string
-    {
-        return $this->shopApiRequestOpenCartAuthApiTokenWithApiToken($shop, $api_base_url, $timeout);
     }
 
     private function resolveLoginUrl(Shop $shop, string $api_base_url): string

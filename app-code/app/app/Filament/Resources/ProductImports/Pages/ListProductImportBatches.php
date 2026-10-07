@@ -14,7 +14,7 @@ class ListProductImportBatches extends ListRecords
 
     protected function getTablePollingInterval(): ?string
     {
-        return '5s';
+        return '30s';
     }
 
     protected function getHeaderActions(): array

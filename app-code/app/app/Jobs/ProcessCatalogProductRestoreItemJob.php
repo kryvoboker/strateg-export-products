@@ -33,7 +33,10 @@ use Throwable;
 
 class ProcessCatalogProductRestoreItemJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
     use InteractsWithShopApi;
 
     /**
@@ -42,7 +45,9 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
      */
     private const string RESTORE_PAYLOAD_MODE = 'full';
 
-    public function __construct(public int $product_update_item_id) {}
+    public function __construct(public int $product_update_item_id)
+    {
+    }
 
     public function handle(ProductBackupRestoreService $backup_restore_service): void
     {
@@ -104,7 +109,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
             $backup = $backup_restore_service->resolveLatestValidExternalSnapshotForProductShop(
                 $product_id,
                 $shop_id,
-                $external_product_id
+                $external_product_id,
             );
 
             if ($backup === null) {
@@ -116,7 +121,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
             $product_payload = $this->buildRestoreProductPayload(
                 $product,
                 $shop_id,
-                $external_product_id
+                $external_product_id,
             );
 
             $request_payload = [
@@ -170,7 +175,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
                 ]);
             }
         } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to restore product with id '.$product_id.' for shop with id '.$shop_id, [
+            Log::channel('stack')->error('Failed to restore product with id ' . $product_id . ' for shop with id ' . $shop_id, [
                 'error_msg'  => $exception->getMessage(),
                 'file'       => $exception->getFile(),
                 'line'       => $exception->getLine(),
@@ -208,7 +213,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
         ProductUpdateItem $product_update_item,
         int $product_id,
         int $shop_id,
-        array $payload
+        array $payload,
     ): ?ProductExportItem {
         $batch_id = (int) ($product_update_item->product_update_batch_id ?? 0);
         if ($batch_id <= 0 || $product_id <= 0 || $shop_id <= 0) {
@@ -244,7 +249,7 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
     private function buildRestoreProductPayload(
         Product $product,
         int $shop_id,
-        int $external_product_id
+        int $external_product_id,
     ): array {
         $payload = app(ProductPayloadBuilderService::class)->build($product, $shop_id, [
             'include_product_binding_fields' => true,
@@ -331,21 +336,13 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $restore_url  = $this->resolveRestoreUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
-        $response = $this->sendOpenCartRequestWithAuthApiToken($restore_url, $auth_api_token, $request_payload, $timeout);
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($restore_url, $refreshed_auth_api_token, $request_payload, $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Restore API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken($restore_url, $auth_api_token, $request_payload, $timeout),
+        );
     }
 
     private function syncBatchStatusByRestoreItems(int $batch_id): void
@@ -463,13 +460,13 @@ class ProcessCatalogProductRestoreItemJob implements ShouldQueue
         string $request_url,
         string $auth_api_token,
         array $request_payload,
-        int $timeout
+        int $timeout,
     ): Response {
         return $this->shopApiSendOpenCartRequestWithQueryAuthToken(
             $request_url,
             $auth_api_token,
             $request_payload,
-            $timeout
+            $timeout,
         );
     }
 

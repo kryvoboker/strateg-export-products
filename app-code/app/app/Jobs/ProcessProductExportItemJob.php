@@ -30,10 +30,15 @@ use Throwable;
 
 class ProcessProductExportItemJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
     use InteractsWithShopApi;
 
-    public function __construct(public int $product_export_item_id) {}
+    public function __construct(public int $product_export_item_id)
+    {
+    }
 
     public function handle(): void
     {
@@ -111,7 +116,7 @@ class ProcessProductExportItemJob implements ShouldQueue
                 ],
             ]);
         } catch (Throwable $exception) {
-            Log::channel('stack')->error('Failed to export product with id '.$product_id.' for shop with id '.$shop_id, [
+            Log::channel('stack')->error('Failed to export product with id ' . $product_id . ' for shop with id ' . $shop_id, [
                 'error_msg'  => $exception->getMessage(),
                 'file'       => $exception->getFile(),
                 'line'       => $exception->getLine(),
@@ -200,7 +205,7 @@ class ProcessProductExportItemJob implements ShouldQueue
             : Str::trim((string) $shop->base_url);
 
         $timeout = max((int) Arr::get($options, 'api_timeout', 30), 5);
-        $url = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product export');
+        $url     = $this->resolveAbsoluteEndpointUrl($base_url, $endpoint, 'product export');
 
         $request = Http::timeout($timeout)
             ->asForm();
@@ -237,21 +242,18 @@ class ProcessProductExportItemJob implements ShouldQueue
         $api_base_url = $this->resolveApiBaseUrl($shop);
         $export_url   = $this->resolveExportUrl($shop, $api_base_url);
 
-        $auth_api_token = $this->resolveStoredAuthApiToken($shop);
-        if ($auth_api_token === '') {
-            $auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-            $this->persistOpenCartAuthApiToken($shop, $auth_api_token);
-        }
-
-        $response = $this->sendOpenCartRequestWithAuthApiToken($export_url, $auth_api_token, $request_payload, $timeout);
-        if (! $this->isInvalidOpenCartAuthTokenResponse($response)) {
-            return $response;
-        }
-
-        $refreshed_auth_api_token = $this->requestOpenCartAuthApiToken($shop, $api_base_url, $timeout);
-        $this->persistOpenCartAuthApiToken($shop, $refreshed_auth_api_token);
-
-        return $this->sendOpenCartRequestWithAuthApiToken($export_url, $refreshed_auth_api_token, $request_payload, $timeout);
+        return $this->shopApiSendAuthenticatedOpenCartRequest(
+            $shop,
+            $api_base_url,
+            $timeout,
+            'Export API',
+            fn (string $auth_api_token): Response => $this->sendOpenCartRequestWithAuthApiToken(
+                $export_url,
+                $auth_api_token,
+                $request_payload,
+                $timeout,
+            ),
+        );
     }
 
     private function isOpenCartShop(Shop $shop): bool
@@ -306,13 +308,13 @@ class ProcessProductExportItemJob implements ShouldQueue
         string $export_url,
         string $auth_api_token,
         array $request_payload,
-        int $timeout
+        int $timeout,
     ): Response {
         return $this->shopApiSendOpenCartRequestWithQueryAuthToken(
             $export_url,
             $auth_api_token,
             $request_payload,
-            $timeout
+            $timeout,
         );
     }
 
