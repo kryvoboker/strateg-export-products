@@ -24,6 +24,8 @@ The project documentation is organized by workflow and administration-panel reso
 | [Stores](shop-resource.md)                                      | External stores                              |
 | [Store Languages](shop-language-resource.md)                    | Language settings                            |
 | [Users](user-resource.md)                                       | Administration users                         |
+| [Agent Collaboration](agent-collaboration.md)                   | Delegation and Git handoff                    |
+| [Code Intelligence](ai-code-intelligence.md)                    | Safe project-scoped code search               |
 
 ## See Also
 

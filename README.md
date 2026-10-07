@@ -54,6 +54,8 @@ Open the administration panel at the address configured for the development envi
 | [Stores](docs/shop-resource.md)                          | External store configuration                  |
 | [Store Languages](docs/shop-language-resource.md)        | Languages and the default language            |
 | [Users](docs/user-resource.md)                           | Administration panel users                    |
+| [Agent Collaboration](docs/agent-collaboration.md)         | Delegation and Git handoff                    |
+| [Code Intelligence](docs/ai-code-intelligence.md)          | Safe project-scoped code search               |
 
 ## License
 

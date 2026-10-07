@@ -4,7 +4,7 @@
 
 ## Application API status
 
-The repository does not define an inbound JSON API. `routes/web.php` contains only the welcome route, and there is no `routes/api.php` or checked-in OpenAPI/Swagger specification. The administration interface is provided by Filament and Livewire.
+The repository does not define an inbound JSON API: it has no `routes/api.php`. The administration interface is provided by Filament and Livewire. The checked-in [OpenAPI specification](openapi.yaml) describes the application's configurable outbound integration with remote shops; it is not an OpenAPI contract for inbound endpoints served by this Laravel application.
 
 This page explains how the outbound integration is configured. The Swagger-readable contract is in [openapi.yaml](openapi.yaml).
 
@@ -31,7 +31,7 @@ The default client sends form-encoded `POST` requests. A configured `api_token` 
 | Delete                                 | `product_delete_endpoint` or `part_api_url_delete_prods`                                | `ProcessProductDeleteItemJob`                                    | Successful HTTP response                                        |
 | Restore                                | `product_restore_endpoint` or `part_api_url_restore_prods`                              | `ProcessCatalogProductRestoreItemJob`                            | Successful HTTP response                                        |
 
-For OpenCart-like shops, the job obtains or reuses an auth API token, retries once after an invalid-token response, and stores the refreshed token in shop options. See [OpenCart API Token Lifecycle](opencart-api-token-lifecycle.md) for the full login, expiry, retry, and known-gap details.
+For OpenCart-like shops, item jobs reuse the saved session token, obtain one when absent, and refresh and retry once when the response indicates an invalid token. A cache lock coordinates refreshes per shop. Responses containing a non-empty `error` or `warning` are treated as failures even when the HTTP status is successful. See [OpenCart API Token Lifecycle](opencart-api-token-lifecycle.md) for the authentication and retry details.
 
 ## Payload identity and scope
 

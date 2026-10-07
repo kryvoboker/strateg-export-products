@@ -23,7 +23,7 @@ Configure name, type, base_url, api_url, `part_api_url_login`, `part_api_url_exp
 - If api_url is empty, the API logic uses base_url.
 - Manage each store's languages through the Store Languages relation manager.
 - Store-specific external product identifiers are required for later update, deletion, and restoration.
-- The project has no inbound OpenAPI document; these fields configure outbound requests to a remote shop. See [Remote API Integration](remote-api-integration.md).
+- The OpenAPI document describes outbound requests from this application; it is not an inbound API contract. See [Remote API Integration](remote-api-integration.md).
 
 ## See Also
 

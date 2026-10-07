@@ -4,13 +4,13 @@
 
 ## Overview
 
-The application is a Laravel modular monolith. Filament provides the administration interface, queued jobs process long-running operations, and services contain catalog rules and external-store integrations.
+The application is a Laravel 13 modular monolith. Filament 5 and Livewire 4 provide the administration interface; queued jobs execute long-running catalog workflows, while application and shared services own queue preparation, product rules, translation, and remote-shop integration.
 
     Filament actions
           ↓
-    Batch / queue preparation services
+    Queue preparation services
           ↓
-    Queued item jobs
+    Queued batch and item jobs
           ↓
     Local PostgreSQL + external store API
 
@@ -27,6 +27,8 @@ The application is a Laravel modular monolith. Filament provides the administrat
 | database/migrations | PostgreSQL schema                                    |
 | docs                | User and technical documentation                     |
 
+The Laravel application source is under `app-code/app/`; the paths above are relative to `app-code/app/app/` unless they refer to repository-level configuration or documentation.
+
 ## Catalog Flows
 
 1. An import batch loads data from a file, Google Sheets, or a form.
@@ -40,12 +42,15 @@ The spme_product_shop table is the source of truth for local product-to-store re
 ## Module Boundaries
 
 - Filament actions collect input and dispatch jobs.
-- Jobs coordinate operations and statuses without duplicating service rules.
+- Batch jobs prepare item records; item jobs execute individual local or remote operations and persist their outcomes.
+- Queue-preparation services own eligibility checks, duplicate prevention, retry selection, and dispatch.
 - ProductPayloadBuilderService builds export and update payloads.
 - Product binding operations go through binding services.
 - Long-running operations do not run synchronously inside UI actions.
 - Remote API jobs resolve configured shop endpoints, authenticate OpenCart-like integrations, validate responses, and persist remote IDs; Filament resources do not call shop APIs directly.
-- The repository has no inbound `routes/api.php`. `docs/openapi.yaml` documents the outbound remote-shop integration as a configurable contract template; each shop's external contract remains authoritative.
+- OpenCart session tokens are stored in shop options; a per-shop cache lock coordinates refresh, and a rejected operation is retried once after refresh.
+- A non-empty remote `error` or `warning` message is a failed response, even when the HTTP status is successful.
+- The repository has no inbound `routes/api.php`. `docs/openapi.yaml` describes the configurable outbound remote-shop integration, not an API served by this application; each shop's external contract remains authoritative.
 
 ## Supports Layer
 

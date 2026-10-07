@@ -1,4 +1,4 @@
-[← Store Languages](shop-language-resource.md) · [Back to README](../README.md)
+[← Store Languages](shop-language-resource.md) · [Back to README](../README.md) · [Agent Collaboration →](agent-collaboration.md)
 
 # UserResource (Users)
 

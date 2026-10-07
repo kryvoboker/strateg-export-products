@@ -1,4 +1,4 @@
-[Back to README](../README.md) · [Code Intelligence →](ai-code-intelligence.md)
+[← Users](user-resource.md) · [Back to README](../README.md) · [Code Intelligence →](ai-code-intelligence.md)
 
 # Agent Collaboration
 

@@ -1,4 +1,4 @@
-[← Remote API Integration](remote-api-integration.md) · [Back to README](../README.md) · [Attributes →](attribute-resource.md)
+[← OpenCart API Token Lifecycle](opencart-api-token-lifecycle.md) · [Back to README](../README.md) · [Attributes →](attribute-resource.md)
 
 # CategoryResource (Catalog → Categories)
 

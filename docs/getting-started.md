@@ -8,7 +8,7 @@
 - GNU Make.
 - Access to the local domain configured in .docker/dev/docker-compose.yml.
 
-The application runs in Docker containers with PHP 8.5, Laravel 12, Filament 5, Livewire 4, and PostgreSQL 18.
+The application runs in Docker containers with PHP 8.5, Laravel 13, Filament 5, Livewire 4, and PostgreSQL 18.
 
 ## Start the Development Environment
 
