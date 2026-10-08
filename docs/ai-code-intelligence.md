@@ -1,4 +1,4 @@
-[← Agent Collaboration](agent-collaboration.md) · [Back to README](../README.md)
+[← Agent Collaboration](ai-agent-collaboration.md) · [Back to README](../README.md)
 
 # AI Code Intelligence
 
@@ -8,8 +8,8 @@ This project is indexed in the shared [AI Code Intelligence repository](../../..
 
 | Item                | Value                                         |
 |---------------------|-----------------------------------------------|
-| Display name        | Strateg Export Products                                    |
-| Stable project slug | `strateg-export-products`                                  |
+| Display name        | Strateg Export Products                       |
+| Stable project slug | `strateg-export-products`                     |
 | Shared repository   | `/home/kamaz/www/hobby/ai-code-intelligence/` |
 | Embedding model     | `text-embedding-3-small` (1536 dimensions)    |
 
@@ -112,5 +112,5 @@ Safe database sequence: resolve the slug and model; persist project-scoped files
 ## See Also
 
 - [Project architecture](architecture.md) — application boundaries and data flow
-- [Agent Collaboration](agent-collaboration.md) — delegation and shared-workspace rules
+- [Agent Collaboration](ai-agent-collaboration.md) — delegation and shared-workspace rules
 - [Shared retrieval and indexing guide](../../../hobby/ai-code-intelligence/docs/retrieval-and-indexing.md) — authoritative operational details

@@ -142,10 +142,10 @@ A subagent may already own investigation, implementation, and verification for i
 
 ## Roles and authority
 
-| Role | Responsibility |
-|---|---|
+| Role          | Responsibility                                                                                                                                                                                                                                                                                    |
+|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Primary agent | Understands the user's goal, performs initial reconnaissance, divides work into bounded tasks, controls subagent count, assigns ownership, integrates and reviews results, resolves conflicts, performs final verification, reports to the user, and is the only agent allowed to run `git push`. |
-| Subagent | Completes its assigned work within the defined scope, uses available project tools, may modify authorized files or services, verifies its result, and reports evidence and remaining risks to the primary agent. |
+| Subagent      | Completes its assigned work within the defined scope, uses available project tools, may modify authorized files or services, verifies its result, and reports evidence and remaining risks to the primary agent.                                                                                  |
 
 Subagents are full contributors, not inherently read-only reviewers.
 
