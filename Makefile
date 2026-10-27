@@ -9,7 +9,7 @@ down-dev:
 	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) down
 
 build-dev:
-	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) build
+	docker compose -f $(DEV_DOCKER_COMPOSE_FILE) build --pull --no-cache
 
 restart-dev: down-dev up-dev
 rebuild-dev: down-dev build-dev up-dev
@@ -21,7 +21,7 @@ down-prod:
 	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) down
 
 build-prod:
-	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) build
+	docker compose -f $(PROD_DOCKER_COMPOSE_FILE) build --pull --no-cache
 
 restart-prod: down-prod up-prod
 rebuild-prod: down-prod build-prod up-prod
