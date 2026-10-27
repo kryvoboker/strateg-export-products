@@ -34,6 +34,6 @@ Deletion on the edit page requires confirmation and displays the number of child
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Attributes](attribute-resource.md) — related catalog attributes.
 - [Stores](shop-resource.md) — store bindings.

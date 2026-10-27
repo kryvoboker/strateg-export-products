@@ -1,4 +1,4 @@
-[← Store Languages](shop-language-resource.md) · [Back to README](../README.md) · [Agent Collaboration →](ai-agent-collaboration.md)
+[← Store Languages](shop-language-resource.md) · [Back to README](../README.md) · [Project Description →](DESCRIPTION.md)
 
 # UserResource (Users)
 
@@ -28,6 +28,6 @@ Total: 3 pages.
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Stores](shop-resource.md) — related administration settings.
 - [Product Catalog](product-resource.md) — catalog workflows.

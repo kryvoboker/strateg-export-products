@@ -30,6 +30,6 @@ The Store Languages relation manager on the store page also displays the default
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Stores](shop-resource.md) — parent store settings.
 - [Product Catalog](product-resource.md) — multilingual catalog data.

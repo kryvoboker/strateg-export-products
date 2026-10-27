@@ -1,4 +1,4 @@
-[← Architecture](architecture.md) · [Back to README](../README.md) · [Helper Functions →](helpers.md)
+[← Architecture](ARCHITECTURE.md) · [Back to README](../README.md) · [Helper Functions →](helpers.md)
 
 # Configuration
 
@@ -34,7 +34,19 @@ Create store languages through Store Languages. Each store must have one default
 
 ## Queues and Background Tasks
 
-Import, binding, export, update, deletion, and restoration run as queued jobs. Check batch and item statuses in the administration panel. External API errors are stored at operation level so the operation can be retried.
+Import, binding, export, update, deletion, and restoration run as queued jobs.
+
+| Setting            | Value                                                                                               |
+|--------------------|-----------------------------------------------------------------------------------------------------|
+| Queue driver       | `QUEUE_CONNECTION`, default `database`                                                              |
+| Cache store        | `CACHE_STORE`, default `database`                                                                   |
+| Worker             | The `cron` container runs `php artisan schedule:run` every minute                                   |
+| Scheduled command  | `ProcessQueueOnceCommand` (`app:process-queue-once-command`) runs `queue:work` once and exits       |
+| Overlap protection | `withoutOverlapping(181)` prevents a second worker from starting for up to 181 minutes              |
+
+No separate queue worker container is defined in `.docker/dev/docker-compose.yml`; jobs start within a minute after dispatch while the `cron` container is running.
+
+Check batch and item statuses in the administration panel. External API errors are stored at operation level so the operation can be retried.
 
 ## See Also
 

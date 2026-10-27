@@ -27,6 +27,6 @@ Configure name, type, base_url, api_url, `part_api_url_login`, `part_api_url_exp
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Store Languages](shop-language-resource.md) — language configuration.
 - [Product Catalog](product-resource.md) — store bindings.

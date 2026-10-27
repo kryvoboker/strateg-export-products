@@ -47,6 +47,6 @@ See [Product Data Workflows](product-data-workflows.md) for the full update and 
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Product Catalog](product-resource.md) — catalog update actions.
 - [Stores](shop-resource.md) — store integrations.

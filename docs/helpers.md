@@ -74,4 +74,4 @@ The file app-code/app/app/Supports/helpers.php is loaded through autoload.files 
 
 - [Configuration](configuration.md) — application and store settings.
 - [Product Import](product-import-batch-resource.md) — normalization in import flows.
-- [Architecture](architecture.md) — the place of helpers in the application.
+- [Architecture](ARCHITECTURE.md) — the place of helpers in the application.

@@ -57,6 +57,6 @@ Export is shop-specific. A product must be bound to the selected shop before it 
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Product Catalog](product-resource.md) — local product operations.
 - [Stores](shop-resource.md) — store integrations.

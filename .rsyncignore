@@ -1,0 +1,30 @@
+.git/
+.idea/
+
+/**.env
+/**.env.*
+/!**.env.example
+/!**.env.*.example
+
+/**/.phpunit.cache/
+/**/graphify-out/
+/graphify-out/
+/**/*.log
+/**/debugbar/*.json
+/**/framework/cache/*
+/**/framework/cache/!.gitignore
+/**/framework/views/*.php
+/**/framework/testing/*
+/**/framework/testing/.gitignore
+/**/framework/sessions/*
+/**/framework/sessions/.gitignore
+
+# Dependency and database artifacts
+/vendor/
+
+# Editor and operating-system clutter
+/**/.DS_Store
+/**/Thumbs.db
+/**/*~
+/**/*.swp
+/**/*.swo

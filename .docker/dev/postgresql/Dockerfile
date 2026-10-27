@@ -1,4 +1,4 @@
-FROM postgres:18.1-alpine3.23
+FROM postgres:18.6-alpine3.24
 
 WORKDIR /var/webroot/sites/export-products.strateg.ua/app
 

@@ -1,4 +1,4 @@
-[Back to README](../README.md) · [Architecture →](architecture.md)
+[Back to README](../README.md) · [Architecture →](ARCHITECTURE.md)
 
 # Getting Started
 
@@ -17,13 +17,13 @@ Run from the repository root:
     make build-dev
     make up-dev
 
-build-dev builds local images. up-dev starts PHP-FPM, Nginx, PostgreSQL, Redis, and cron. If images already exist, run only make up-dev.
+build-dev builds local images. up-dev starts PHP-FPM, Nginx, PostgreSQL, and cron. If images already exist, run only make up-dev.
 
 ## Check the Status
 
     docker compose -f .docker/dev/docker-compose.yml ps
 
-PHP-FPM and Nginx should be Up; PostgreSQL and Redis should pass their health checks.
+PHP-FPM, Nginx, and cron should be Up; PostgreSQL should pass its health check (`pg_isready`).
 
 ## Application Commands
 
@@ -39,9 +39,9 @@ Run tests with the same command and php artisan test --compact.
 
 ## Next Steps
 
-Configure the environment and stores using [Configuration](configuration.md), then read [Architecture](architecture.md).
+Configure the environment and stores using [Configuration](configuration.md), then read [Architecture](ARCHITECTURE.md).
 
 ## See Also
 
 - [Configuration](configuration.md) — environment and store settings.
-- [Architecture](architecture.md) — modules and queues.
+- [Architecture](ARCHITECTURE.md) — modules and queues.

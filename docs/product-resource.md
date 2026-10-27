@@ -31,6 +31,6 @@ The API Update Settings tab provides Skip, Delete, and Update modes for each fie
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Product Updates](product-update-batch-resource.md) — update batches.
 - [Stores](shop-resource.md) — store integrations.

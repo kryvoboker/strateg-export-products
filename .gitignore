@@ -1,12 +1,11 @@
 .idea
 /.db
 
-1.png
-2.png
-3.png
-4.png
+/*.png
 
 **.env
 **.env.*
 !**.env.example
 !**.env.*.example
+
+login-credentials.md

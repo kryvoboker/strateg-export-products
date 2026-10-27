@@ -28,6 +28,6 @@ The resource reports missing store selections and summarizes the number of attri
 
 ## See Also
 
-- [Documentation Contents](README.md) — complete documentation index.
+- [Documentation Contents](../README.md) — complete documentation index.
 - [Categories](category-resource.md) — related catalog categories.
 - [Stores](shop-resource.md) — store bindings.

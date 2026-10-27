@@ -23,7 +23,7 @@ services:
       - ../../app-code/app:/var/webroot/sites/export-products.strateg.ua/app
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs
       - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage
-      - ../../xhprof:/var/webroot/sites/xhprof
+      - ../../app-code/xhprof:/var/webroot/sites/xhprof
       - ../../.docker/dev/php/php.ini:/usr/local/etc/php/php.ini:ro
     init: true # Ensures proper signal handling and zombie reaping
     security_opt:
@@ -95,6 +95,7 @@ services:
       - ../../app-code/httpdocs:/var/webroot/sites/export-products.strateg.ua/httpdocs:ro
       - ../../app-code/storage:/var/webroot/sites/export-products.strateg.ua/storage:ro
       - ../../.docker/dev/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../app-code/xhprof:/var/webroot/sites/xhprof:ro
     init: true # Ensures proper signal handling and zombie reaping
     security_opt:
       - no-new-privileges:true       # Disables setuid/setgid

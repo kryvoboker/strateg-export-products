@@ -294,6 +294,6 @@ File: app-code/app/app/Supports/Services/Translations/Product/ProductNameAiTrans
 
 ## See Also
 
-- [Architecture](architecture.md) — module boundaries and data flow.
+- [Architecture](ARCHITECTURE.md) — module boundaries and data flow.
 - [Configuration](configuration.md) — store and queue settings.
 - [Product Import](product-import-batch-resource.md) — workflows that consume these services.
