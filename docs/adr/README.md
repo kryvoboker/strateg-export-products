@@ -7,6 +7,7 @@ Durable decision history. Path pattern: `docs/adr/<YYYY>/<MM>/<NNNN>-<short-titl
 | ADR                                                                  | Date       | Status   | Decision                                                  |
 |----------------------------------------------------------------------|------------|----------|-----------------------------------------------------------|
 | [0001](2026/10/0001-canonical-documentation-structure.md)            | 2026-10-22 | Accepted | Canonical documentation structure and single architecture file |
+| [0002](2026/10/0002-cache-only-shop-language-data.md)                 | 2026-10-27 | Accepted | Cache shop-language option rows as scalar arrays |
 
 ## See Also
 

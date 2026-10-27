@@ -298,7 +298,7 @@ class ProductResourceOptionsService
     }
 
     /**
-     * @return Collection<int, ShopLanguage>
+     * @return Collection<int, array{id:int, name:string, code:string}>
      */
     public function getShopLanguages(int $shop_id): Collection
     {
@@ -306,19 +306,25 @@ class ProductResourceOptionsService
             return collect();
         }
 
-        $cache_key = "products:options:shop_languages:rows:{$shop_id}";
+        $cache_key = "products:options:shop_languages:rows:v2:{$shop_id}";
 
-        /** @var Collection<int, ShopLanguage> $cached */
-        $cached = Cache::remember($cache_key, self::CACHE_TTL_SECONDS, static function () use ($shop_id): Collection {
+        /** @var list<array{id:int, name:string, code:string}> $cached_rows */
+        $cached_rows = Cache::remember($cache_key, self::CACHE_TTL_SECONDS, static function () use ($shop_id): array {
             return ShopLanguage::query()
                 ->where('shop_id', $shop_id)
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->orderBy('is_default')
-                ->get();
+                ->get(['id', 'name', 'code'])
+                ->map(static fn (ShopLanguage $shop_language): array => [
+                    'id' => (int) $shop_language->id,
+                    'name' => (string) $shop_language->name,
+                    'code' => (string) $shop_language->code,
+                ])
+                ->all();
         });
 
-        return $cached;
+        return collect($cached_rows);
     }
 
     /**
@@ -329,13 +335,7 @@ class ProductResourceOptionsService
     {
         $shop_languages = $this->getShopLanguages($shop_id);
         if ($shop_languages->isNotEmpty()) {
-            return $shop_languages
-                ->map(static fn (ShopLanguage $shop_language): array => [
-                    'id'   => (int) $shop_language->id,
-                    'name' => (string) $shop_language->name,
-                    'code' => (string) $shop_language->code,
-                ])
-                ->values();
+            return $shop_languages->values();
         }
 
         $normalized_language_ids = collect($attribute_language_ids)

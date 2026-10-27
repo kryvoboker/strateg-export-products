@@ -18,6 +18,8 @@ Total: 3 pages.
 
 Use filters and search for name, SKU, model, EAN, external product ID, quantity, price, category, attribute, or store. Toolbar actions support binding, export, updates, and restore. The delete action queues remote deletion through the shared Product Deletes service after a shop is selected. On the edit page, save local changes and optionally select Update through API in an online store.
 
+Product description and SEO URL fields in the catalog editor and product import-item editor are built from the selected shop's active languages, ordered by language ID. Language metadata is cached as scalar ID, name, and code values; inactive languages are excluded from these generated fields.
+
 ## API Update Settings
 
 The API Update Settings tab provides Skip, Delete, and Update modes for each field. These modes become update_instructions for API updates.

@@ -2014,11 +2014,11 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $tabs = [];
         foreach ($shop_languages as $shop_language) {
-            $language_id = (int) $shop_language->id;
+            $language_id = (int) $shop_language['id'];
 
             $tabs[] = Tab::make('description_language_'.$language_id)
-                ->label((string) $shop_language->name)
-                ->badge((string) $shop_language->code)
+                ->label($shop_language['name'])
+                ->badge($shop_language['code'])
                 ->schema([
                     TextInput::make("descriptions_by_language.$language_id.name")
                         ->label(__('admin/product_imports/batches.product_edit.fields.name'))
@@ -2143,7 +2143,12 @@ class ProductImportItemsRelationManager extends RelationManager
                 $shop_languages = ShopLanguage::query()
                     ->whereIn('id', $normalized_language_ids)
                     ->orderBy('name')
-                    ->get();
+                    ->get(['id', 'name', 'code'])
+                    ->map(static fn (ShopLanguage $shop_language): array => [
+                        'id' => (int) $shop_language->id,
+                        'name' => (string) $shop_language->name,
+                        'code' => (string) $shop_language->code,
+                    ]);
             }
         }
 
@@ -2161,11 +2166,11 @@ class ProductImportItemsRelationManager extends RelationManager
 
         $tabs = [];
         foreach ($shop_languages as $shop_language) {
-            $language_id = (int) $shop_language->id;
+            $language_id = (int) $shop_language['id'];
 
             $tabs[] = Tab::make('seo_urls_language_'.$language_id)
-                ->label((string) $shop_language->name)
-                ->badge((string) $shop_language->code)
+                ->label($shop_language['name'])
+                ->badge($shop_language['code'])
                 ->schema([
                     TextInput::make("seo_urls_by_language.$language_id.0.query_key")
                         ->label(__('admin/product_imports/batches.product_edit.fields.query_key'))
@@ -2187,7 +2192,7 @@ class ProductImportItemsRelationManager extends RelationManager
     }
 
     /**
-     * @return Collection<int, ShopLanguage>
+     * @return Collection<int, array{id:int, name:string, code:string}>
      */
     private function getShopLanguages(int $shop_id): Collection
     {
