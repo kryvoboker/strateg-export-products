@@ -3,7 +3,7 @@
   "checkpoint_id": "01M5Z8E6KDV2718JBJX5WG6G8B",
   "strategy": "manual-commit",
   "branch": "dev/sync-prods",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "Makefile"
   ],
@@ -14,25 +14,32 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 4370046,
+    "input_tokens": 4386290,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 163602688,
-    "output_tokens": 717075,
-    "api_call_count": 1464,
+    "cache_read_tokens": 164421120,
+    "output_tokens": 722632,
+    "api_call_count": 1475,
     "subagent_tokens_complete": true
   },
   "redaction": {
-    "replacements": 80404,
+    "replacements": 86799,
     "layers": {
-      "betterleaks": 806,
+      "betterleaks": 1006,
       "connection_string": 0,
       "credential_key": 0,
-      "credential_value": 2866,
-      "credentialed_uri": 116,
-      "entropy": 77090,
+      "credential_value": 3026,
+      "credentialed_uri": 152,
+      "entropy": 85440,
       "key_context": 0,
       "provider_token": 0,
       "shell_stdin": 0
