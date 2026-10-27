@@ -41,6 +41,17 @@ The shared response validator checks the JSON `error` and `warning` fields befor
 
 For an incident, check the shop's API username/key and allowed source IP, then capture the login response status, content type, and safe error fields. Never log or display the API key or returned session token.
 
+## Credential alignment and safe verification
+
+When aligning a shop with a remote OpenCart API account:
+
+1. Confirm that the target account is active and accepts the exact username and API key configured for the shop.
+2. Allow-list only the actual source runtime IP. In containerized development, inspect the cron container itself; if its address is dynamically assigned, re-check it after container recreation and update the target allow-list before the next authenticated operation.
+3. Remove only `auth_api_token` from the corresponding shop's `options` after target credentials are aligned. The next operation will authenticate again and store a fresh session token.
+4. Treat login as successful only when the response has no non-empty `error` or `warning` and contains a non-empty `api_token`, regardless of an HTTP 2xx status.
+
+For diagnostics, retain the HTTP status, content type, and a safe error category. Do not log the login request body, API key, returned session token, or full operation URL with query parameters. Before a synthetic product import, verify the target's documented transaction prerequisites and use an isolated or transaction-safe database; defer the POST when partial writes cannot be safely cleaned up.
+
 ## Bulk processing considerations
 
 Each export item is handled by a queued job. Refresh uses a cache lock keyed by shop ID and re-reads the saved token while holding the lock. When multiple jobs reject the same token, a later job can reuse the token refreshed by the first job instead of repeating the login. The operation is retried at most once after refresh; a second failure is persisted as a failed item.
